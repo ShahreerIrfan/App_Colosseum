@@ -1,9 +1,18 @@
+import 'dart:io';
+
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
 import 'package:colosseum_client/app/routes/app_pages.dart';
 
+import '../helpers/mock_http_overrides.dart';
+
 void main() {
+  setUpAll(() {
+    HttpOverrides.global = MockHttpOverrides();
+  });
+
   setUp(() {
     Get.reset();
   });
@@ -47,12 +56,12 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
-    // 6. Home/Main screen is now visible
-    expect(find.text('Welcome to the\nColosseum'), findsOneWidget);
-    expect(find.text('Main Tour Experience Coming Next'), findsOneWidget);
+    // 6. Home/Main screen with map is now visible
+    expect(find.byType(FlutterMap), findsOneWidget);
+    expect(find.text('Colosseum'), findsOneWidget);
 
-    // 7. Verify previous screens are not on the stack
+    // 7. Verify previous onboarding screens are not on the stack
     expect(find.text('Choose your language'), findsNothing);
-    expect(find.text('COLOSSEUM'), findsNothing);
+    expect(find.text('AUDIO GUIDE'), findsNothing);
   });
 }
