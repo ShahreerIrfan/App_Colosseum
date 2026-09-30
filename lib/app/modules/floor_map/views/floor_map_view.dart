@@ -24,14 +24,18 @@ class FloorMapView extends GetView<FloorMapController> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Dominant Interactive Floor Map Canvas (Anchored fixed position)
+            // 1. Dominant Interactive Floor Map Canvas (Interactive Pinch & Pan)
             Positioned.fill(
               child: InteractiveViewer(
                 transformationController: controller.transformationController,
-                panEnabled: false,
-                scaleEnabled: false,
+                panEnabled: true,
+                scaleEnabled: true,
                 minScale: 0.8,
                 maxScale: 3.5,
+                boundaryMargin: const EdgeInsets.symmetric(
+                  horizontal: 140.0,
+                  vertical: 180.0,
+                ),
                 alignment: Alignment.center,
                 child: Center(
                   child: LayoutBuilder(
