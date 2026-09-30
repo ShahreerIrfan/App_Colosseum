@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
-import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/theme_extensions.dart';
+import '../../../routes/app_pages.dart';
 import '../controllers/home_controller.dart';
-import '../widgets/poi_marker_widget.dart';
+import '../widgets/map_marker_widget.dart';
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
@@ -45,7 +45,6 @@ class HomeView extends GetView<HomeController> {
                     minZoom: 13.0,
                     maxZoom: 18.5,
                     onPositionChanged: controller.onPositionChanged,
-                    onTap: (_, point) => controller.onMapTap(point),
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                     ),
@@ -53,63 +52,37 @@ class HomeView extends GetView<HomeController> {
                   children: [
                     // Base Map: Crisp Google Maps standard tiles
                     TileLayer(
-                      urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                      urlTemplate:
+                          'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
                       subdomains: const ['0', '1', '2', '3'],
                       userAgentPackageName: 'com.example.colosseum_client',
                       maxZoom: 20,
                     ),
 
-                    // Georeferenced Architectural Ground Overlay (Direct transparent PNG over Google Map)
-                    Obx(
-                      () => OverlayImageLayer(
-                        overlayImages: controller.landmarks
-                            .where(
-                              (poi) =>
-                                  poi.bounds != null &&
-                                  poi.overlayAssetPath != null &&
-                                  controller.isOverlayActive(poi),
-                            )
-                            .map(
-                              (poi) => OverlayImage(
-                                bounds: poi.bounds!,
-                                imageProvider: AssetImage(
-                                  poi.overlayAssetPath!,
-                                ),
-                                opacity: 1.0,
-                                gaplessPlayback: true,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
-
-                    // Layer 3: POI Markers (For far-zoom discovery or point landmarks)
-                    Obx(
-                      () => MarkerLayer(
-                        markers: controller.landmarks
-                            .where((poi) => controller.isMarkerVisible(poi))
-                            .map((poi) {
-                              final isSelected =
-                                  controller.selectedPoi.value?.id == poi.id;
-                              return Marker(
-                                point: LatLng(poi.latitude, poi.longitude),
-                                width: 140,
-                                height: 140,
-                                alignment: Alignment.topCenter,
-                                child: PoiMarkerWidget(
-                                  poi: poi,
-                                  isSelected: isSelected,
-                                  currentZoom: controller.currentZoom.value,
-                                  onTap: () => controller.selectPoi(poi),
-                                ),
-                              );
-                            })
-                            .toList(),
-                      ),
+                    // Exact Colosseum Center UI Map Marker
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: HomeController.colosseumCoordinates,
+                          width: 120,
+                          height: 100,
+                          alignment: Alignment.topCenter,
+                          child: MapMarkerWidget(
+                            label: 'Colosseum',
+                            number: '1',
+                            onTap: () => Get.toNamed(
+                              Routes.floors,
+                              arguments: {'landmarkName': 'Colosseum'},
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
+
+
 
               // Top Controls Overlay (Recenter on Colosseum)
               Positioned(
@@ -153,82 +126,6 @@ class HomeView extends GetView<HomeController> {
                   ),
                 ),
               ),
-
-              // Bottom Selected POI Info Card Overlay
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: Obx(() {
-                  final poi = controller.selectedPoi.value;
-                  if (poi == null) return const SizedBox.shrink();
-
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOut,
-                    padding: const EdgeInsets.all(16.0),
-                    decoration: BoxDecoration(
-                      color: colors.card,
-                      borderRadius: AppRadius.borderLg,
-                      border: Border.all(color: colors.primary, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colors.foreground.withValues(alpha: 0.12),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 48,
-                              height: 48,
-                              child: Image.asset(
-                                poi.assetPath,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    poi.name,
-                                    style: textTheme.titleMedium?.copyWith(
-                                      color: colors.foreground,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  if (poi.description.isNotEmpty)
-                                    Text(
-                                      poi.description,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: colors.mutedForeground,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close_rounded, size: 20),
-                              color: colors.mutedForeground,
-                              onPressed: controller.clearSelection,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ),
             ],
           ),
         ),
@@ -236,3 +133,4 @@ class HomeView extends GetView<HomeController> {
     );
   }
 }
+

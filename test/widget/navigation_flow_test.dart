@@ -58,7 +58,7 @@ void main() {
 
     // 6. Home/Main screen with map is now visible
     expect(find.byType(FlutterMap), findsOneWidget);
-    expect(find.text('Colosseum'), findsOneWidget);
+    expect(find.text('Colosseum'), findsNWidgets(2)); // Recenter button + Map Marker label
 
     // 7. Verify previous onboarding screens are not on the stack
     expect(find.text('Choose your language'), findsNothing);

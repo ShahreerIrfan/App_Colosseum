@@ -7,6 +7,8 @@ import 'package:get/get.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
 import 'package:colosseum_client/app/modules/home/controllers/home_controller.dart';
 import 'package:colosseum_client/app/modules/home/views/home_view.dart';
+import 'package:colosseum_client/app/routes/app_pages.dart';
+
 
 import '../helpers/mock_http_overrides.dart';
 
@@ -23,30 +25,61 @@ void main() {
     Get.reset();
   });
 
-  testWidgets('HomeView renders FlutterMap, layers, and controls', (
-    WidgetTester tester,
-  ) async {
-    final controller = Get.put(HomeController());
+  testWidgets(
+    'HomeView renders FlutterMap with TileLayer, Colosseum UI marker, and recenter control',
+    (WidgetTester tester) async {
+      Get.put(HomeController());
 
-    await tester.pumpWidget(
-      GetMaterialApp(theme: AppTheme.lightTheme, home: const HomeView()),
-    );
+      await tester.pumpWidget(
+        GetMaterialApp(theme: AppTheme.lightTheme, home: const HomeView()),
+      );
 
-    // Verify FlutterMap and its overlay layers are rendered
-    expect(find.byType(FlutterMap), findsOneWidget);
-    expect(find.byType(OverlayImageLayer), findsOneWidget);
-    expect(find.byType(MarkerLayer), findsOneWidget);
+      // Verify FlutterMap is rendered with TileLayer and MarkerLayer
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(find.byType(TileLayer), findsOneWidget);
+      expect(find.byType(MarkerLayer), findsOneWidget);
 
-    // Verify Colosseum recenter button is visible
-    expect(find.text('Colosseum'), findsOneWidget);
-    expect(find.byIcon(Icons.center_focus_strong_rounded), findsOneWidget);
+      // Verify no raster overlay image layers exist
+      expect(find.byType(OverlayImageLayer), findsNothing);
 
-    // Select Colosseum programmatically and pump
-    controller.selectPoi(controller.landmarks.first);
-    await tester.pumpAndSettle();
+      // Verify UI Marker with label 'Colosseum' and number '1'
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('Colosseum'), findsNWidgets(2)); // Button + Marker Label
+      expect(find.byIcon(Icons.center_focus_strong_rounded), findsOneWidget);
 
-    // Verify selected POI card details are displayed (Button + Card Title)
-    expect(find.text('Colosseum'), findsNWidgets(2));
-    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-  });
+      // Tap recenter button
+      await tester.tap(find.byIcon(Icons.center_focus_strong_rounded));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'Tapping Colosseum map marker navigates to FloorsView',
+    (WidgetTester tester) async {
+      Get.put(HomeController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          initialRoute: Routes.home,
+          getPages: AppPages.routes,
+        ),
+      );
+
+      // Verify Home is visible with map marker
+      expect(find.text('1'), findsOneWidget);
+
+      // Tap on the map marker
+      await tester.tap(find.text('1'));
+      await tester.pumpAndSettle();
+
+      // Verify navigated to FloorsView
+      expect(find.text('Floor 1'), findsOneWidget);
+      expect(find.text('Floor 2'), findsOneWidget);
+      expect(find.text('Floor 3'), findsOneWidget);
+    },
+  );
 }
+
+
+
