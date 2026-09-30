@@ -232,14 +232,14 @@ class FloorMapView extends GetView<FloorMapController> {
               ),
             ),
 
-            // 3. Floating Map Controls (Zoom In, Zoom Out, Recenter)
+            // 3. Compact Horizontal Map Toolbar (Zoom In, Zoom Out, Recenter) in Upper-Left Zone
             Positioned(
-              right: 16.0,
-              top: 76.0,
+              left: 16.0,
+              top: 68.0,
               child: Container(
                 decoration: BoxDecoration(
                   color: colors.card,
-                  borderRadius: BorderRadius.circular(14.0),
+                  borderRadius: BorderRadius.circular(10.0),
                   border: Border.all(
                     color: colors.border,
                     width: 1.0,
@@ -247,46 +247,52 @@ class FloorMapView extends GetView<FloorMapController> {
                   boxShadow: [
                     BoxShadow(
                       color: colors.foreground.withValues(alpha: 0.08),
-                      blurRadius: 10.0,
-                      offset: const Offset(0, 3),
+                      blurRadius: 8.0,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Zoom In Button
-                    _FloatingControlButton(
-                      icon: Icons.add_rounded,
-                      tooltip: 'Zoom In',
-                      onPressed: controller.zoomIn,
-                      colors: colors,
-                    ),
-                    Divider(
-                      height: 1.0,
-                      thickness: 1.0,
-                      color: colors.border,
-                    ),
-                    // Zoom Out Button
-                    _FloatingControlButton(
-                      icon: Icons.remove_rounded,
-                      tooltip: 'Zoom Out',
-                      onPressed: controller.zoomOut,
-                      colors: colors,
-                    ),
-                    Divider(
-                      height: 1.0,
-                      thickness: 1.0,
-                      color: colors.border,
-                    ),
-                    // Recenter on Location Button
-                    _FloatingControlButton(
-                      icon: Icons.my_location_rounded,
-                      tooltip: 'Recenter',
-                      onPressed: controller.recenter,
-                      colors: colors,
-                    ),
-                  ],
+                child: IntrinsicHeight(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Zoom In Button
+                      _ToolbarButton(
+                        icon: Icons.add_rounded,
+                        tooltip: 'Zoom In',
+                        onPressed: controller.zoomIn,
+                        colors: colors,
+                      ),
+                      VerticalDivider(
+                        width: 1.0,
+                        thickness: 1.0,
+                        color: colors.border,
+                        indent: 6.0,
+                        endIndent: 6.0,
+                      ),
+                      // Zoom Out Button
+                      _ToolbarButton(
+                        icon: Icons.remove_rounded,
+                        tooltip: 'Zoom Out',
+                        onPressed: controller.zoomOut,
+                        colors: colors,
+                      ),
+                      VerticalDivider(
+                        width: 1.0,
+                        thickness: 1.0,
+                        color: colors.border,
+                        indent: 6.0,
+                        endIndent: 6.0,
+                      ),
+                      // Recenter on Location Button
+                      _ToolbarButton(
+                        icon: Icons.my_location_rounded,
+                        tooltip: 'Recenter',
+                        onPressed: controller.recenter,
+                        colors: colors,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -340,13 +346,13 @@ class FloorMapView extends GetView<FloorMapController> {
   }
 }
 
-class _FloatingControlButton extends StatelessWidget {
+class _ToolbarButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
   final dynamic colors;
 
-  const _FloatingControlButton({
+  const _ToolbarButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
@@ -355,16 +361,23 @@ class _FloatingControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: Icon(icon, size: 20.0, color: colors.foreground),
-      tooltip: tooltip,
-      onPressed: onPressed,
-      splashRadius: 18.0,
-      constraints: const BoxConstraints(
-        minWidth: 42.0,
-        minHeight: 42.0,
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(9.0),
+        child: SizedBox(
+          width: 38.0,
+          height: 35.0,
+          child: Center(
+            child: Icon(
+              icon,
+              size: 18.0,
+              color: colors.foreground,
+            ),
+          ),
+        ),
       ),
-      padding: EdgeInsets.zero,
     );
   }
 }
