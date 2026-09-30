@@ -2,22 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../data/models/itinerary_segment_model.dart';
+import '../../../data/models/tour_navigation_state.dart';
 import '../../../data/models/user_location_model.dart';
 import '../../../data/models/viewpoint_model.dart';
+import '../../../data/services/tour_navigation_engine.dart';
 import '../../../data/services/tts_service.dart';
 
 /// Controller managing floor map state, camera transformations, viewpoints, and audio playback.
 class FloorMapController extends GetxController {
   final TtsService ttsService;
+  final TourNavigationEngine tourEngine;
 
-  FloorMapController({TtsService? ttsService})
-      : ttsService = ttsService ?? TtsService();
+  FloorMapController({
+    TtsService? ttsService,
+    TourNavigationEngine? tourEngine,
+  })  : ttsService = ttsService ?? TtsService(),
+        tourEngine = tourEngine ?? TourNavigationEngine();
 
   final landmarkName = 'Colosseum'.obs;
   final floorName = 'Underground (Hypogeum)'.obs;
   final floorId = 'floor_underground'.obs;
 
   late final TransformationController transformationController;
+
+  /// Reactive indoor guided tour state machine
+  final tourState = const TourNavigationState().obs;
 
   /// User's real-time indoor location beacon on this floor
   final userLocation = const UserLocationModel(
@@ -430,11 +439,12 @@ class FloorMapController extends GetxController {
       }
     }
 
+    // Initialize Text-to-Speech service & Tour Navigation Engine
+    _initTts();
+    _initTour();
+
     // Load viewpoints according to selected floor
     _loadFloorData();
-
-    // Initialize Text-to-Speech service
-    _initTts();
   }
 
   void _initTts() {
@@ -445,6 +455,7 @@ class FloorMapController extends GetxController {
     ttsService.onComplete = () {
       isPlayingAudio.value = false;
       audioProgress.value = 0.0;
+      tourEngine.onAudioCompleted();
     };
     ttsService.onStop = () {
       isPlayingAudio.value = false;
@@ -461,6 +472,45 @@ class FloorMapController extends GetxController {
     };
   }
 
+  void _initTour() {
+    tourEngine.onSpeakInstruction = (text, {onDone}) {
+      ttsService.speak(text, onDone: onDone);
+    };
+
+    tourEngine.onAutoPlayViewpoint = (viewpoint) {
+      selectedViewpoint.value = viewpoint;
+      isCardCollapsed.value = true; // Auto-play starts in collapsed mini-player
+      isPlayingAudio.value = true;
+      if (viewpoint.description.isNotEmpty) {
+        ttsService.speak(viewpoint.description);
+      }
+    };
+
+    tourEngine.onStateChanged = (state) {
+      tourState.value = state;
+
+      // Sync visited status across local viewpoints
+      bool changed = false;
+      for (int i = 0; i < viewpoints.length; i++) {
+        final isVisited = state.visitedIds.contains(viewpoints[i].id);
+        if (viewpoints[i].isVisited != isVisited) {
+          viewpoints[i] = viewpoints[i].copyWith(isVisited: isVisited);
+          changed = true;
+        }
+      }
+
+      if (changed && selectedViewpoint.value != null) {
+        final updatedSelected = viewpoints
+            .firstWhereOrNull((vp) => vp.id == selectedViewpoint.value!.id);
+        if (updatedSelected != null) {
+          selectedViewpoint.value = updatedSelected;
+        }
+      }
+
+      _refreshItinerarySegments();
+    };
+  }
+
   void _loadFloorData() {
     if (floorId.value == 'floor_underground' ||
         floorId.value == 'underground') {
@@ -473,6 +523,14 @@ class FloorMapController extends GetxController {
         headingDegrees: 270.0,
         accuracyMeters: 2.0,
       );
+      tourEngine.startTour(
+        floorId: 'floor_underground',
+        viewpoints: undergroundViewpoints,
+        entryLocation: undergroundEntryLocation,
+        exitLocation: undergroundExitLocation,
+        isVoiceGuidanceEnabled: tourState.value.isVoiceGuidanceEnabled,
+        isAutoPlayEnabled: tourState.value.isAutoPlayEnabled,
+      );
       _refreshItinerarySegments();
     } else {
       floorName.value = 'Floor 1';
@@ -484,25 +542,47 @@ class FloorMapController extends GetxController {
         headingDegrees: 135.0,
         accuracyMeters: 2.5,
       );
+      tourEngine.startTour(
+        floorId: 'floor_1',
+        viewpoints: floor1Viewpoints,
+        isVoiceGuidanceEnabled: false,
+        isAutoPlayEnabled: false,
+      );
       itinerarySegments.clear();
     }
   }
 
-  /// Recalculates completed status on itinerary walking segments based on visited viewpoints.
+  /// Recalculates completed and active status on itinerary walking segments.
   void _refreshItinerarySegments() {
     if (floorId.value == 'floor_underground' ||
         floorId.value == 'underground') {
+      final currentTarget = tourState.value.navigationTargetId;
+      final visited = tourState.value.visitedIds;
+
       final updated = undergroundItinerary.map((segment) {
-        final toVp = viewpoints.firstWhereOrNull((vp) => vp.id == segment.toId);
         final isCompleted = segment.toId == 'EXIT'
-            ? (viewpoints.isNotEmpty && viewpoints.every((vp) => vp.isVisited))
-            : (toVp?.isVisited ?? false);
-        return segment.copyWith(isCompleted: isCompleted);
+            ? (viewpoints.isNotEmpty &&
+                viewpoints.every((vp) => visited.contains(vp.id) || vp.isVisited))
+            : (visited.contains(segment.toId) ||
+                (viewpoints.firstWhereOrNull((vp) => vp.id == segment.toId)?.isVisited ?? false));
+
+        final isActive = segment.toId == currentTarget;
+
+        return segment.copyWith(
+          isCompleted: isCompleted,
+          isActive: isActive,
+        );
       }).toList();
       itinerarySegments.assignAll(updated);
     } else {
       itinerarySegments.clear();
     }
+  }
+
+  /// Updates indoor user position and evaluates tour proximity state machine.
+  void updateUserLocation(UserLocationModel location) {
+    userLocation.value = location;
+    tourEngine.updateLocation(location);
   }
 
   @override
@@ -516,6 +596,7 @@ class FloorMapController extends GetxController {
   void selectViewpoint(ViewpointModel viewpoint) {
     final previous = selectedViewpoint.value;
     selectedViewpoint.value = viewpoint;
+    tourEngine.selectViewpoint(viewpoint.id);
 
     // When choosing another viewpoint, automatically pause / stop TTS playback
     if (previous?.id != viewpoint.id) {
@@ -546,6 +627,8 @@ class FloorMapController extends GetxController {
     selectedViewpoint.value = null;
     isPlayingAudio.value = false;
     ttsService.stop();
+    tourEngine.deselectViewpoint();
+    tourEngine.onUserStopOrCloseAudio();
   }
 
   /// Toggles the visited status for a viewpoint (defaults to currently selected viewpoint).
@@ -556,9 +639,21 @@ class FloorMapController extends GetxController {
     final index = viewpoints.indexWhere((vp) => vp.id == targetId);
     if (index != -1) {
       final current = viewpoints[index];
-      final updated = current.copyWith(isVisited: !current.isVisited);
-      viewpoints[index] = updated;
+      final willBeVisited = !current.isVisited;
+      
+      if (willBeVisited) {
+        tourEngine.markVisited(targetId);
+      } else {
+        // Unmarking
+        final updatedVisited = Set<String>.from(tourState.value.visitedIds)
+          ..remove(targetId);
+        viewpoints[index] = current.copyWith(isVisited: false);
+        tourState.value = tourState.value.copyWith(
+          visitedIds: updatedVisited,
+        );
+      }
 
+      final updated = viewpoints[index];
       if (selectedViewpoint.value?.id == targetId) {
         selectedViewpoint.value = updated;
       }
@@ -566,15 +661,50 @@ class FloorMapController extends GetxController {
     }
   }
 
+  /// Explicitly skips a viewpoint in the guided tour.
+  void skipViewpoint([String? viewpointId]) {
+    final targetId = viewpointId ?? tourState.value.navigationTargetId;
+    if (targetId != null) {
+      tourEngine.skipViewpoint(targetId);
+      _refreshItinerarySegments();
+    }
+  }
+
+  /// Toggles voice guidance announcements.
+  void toggleVoiceGuidance([bool? enabled]) {
+    final newVal = enabled ?? !tourState.value.isVoiceGuidanceEnabled;
+    tourEngine.toggleVoiceGuidance(newVal);
+  }
+
+  /// Toggles automatic viewpoint audio playback upon arrival.
+  void toggleAutoPlay([bool? enabled]) {
+    final newVal = enabled ?? !tourState.value.isAutoPlayEnabled;
+    tourEngine.toggleAutoPlay(newVal);
+  }
+
+  /// Resets the full tour to the beginning.
+  void resetTour() {
+    tourEngine.resetTour();
+    for (int i = 0; i < viewpoints.length; i++) {
+      viewpoints[i] = viewpoints[i].copyWith(isVisited: false);
+    }
+    selectedViewpoint.value = null;
+    isPlayingAudio.value = false;
+    ttsService.stop();
+    _refreshItinerarySegments();
+  }
+
   /// Toggles audio guide speech playback for the active viewpoint.
   void toggleAudio() async {
     if (isPlayingAudio.value) {
       isPlayingAudio.value = false;
+      tourEngine.onUserPauseAudio();
       await ttsService.stop();
     } else {
       final vp = selectedViewpoint.value;
       if (vp != null && vp.description.isNotEmpty) {
         isPlayingAudio.value = true;
+        tourEngine.onUserResumeAudio();
         await ttsService.speak(vp.description);
       }
     }

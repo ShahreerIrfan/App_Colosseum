@@ -8,6 +8,7 @@ class ViewpointMarker extends StatelessWidget {
   final ViewpointModel viewpoint;
   final bool isSelected;
   final bool isPlaying;
+  final bool isTarget;
   final VoidCallback onTap;
 
   const ViewpointMarker({
@@ -15,6 +16,7 @@ class ViewpointMarker extends StatelessWidget {
     required this.viewpoint,
     required this.isSelected,
     this.isPlaying = false,
+    this.isTarget = false,
     required this.onTap,
   });
 
@@ -96,14 +98,16 @@ class ViewpointMarker extends StatelessWidget {
           Stack(
             alignment: Alignment.center,
             children: [
-              // Pulsing halo for active marker
-              if (isSelected)
+              // Halo for active target or selected marker
+              if (isSelected || isTarget)
                 Container(
-                  width: markerWidth + 10.0,
-                  height: markerHeight + 10.0,
+                  width: markerWidth + (isSelected ? 10.0 : 6.0),
+                  height: markerHeight + (isSelected ? 10.0 : 6.0),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20.0),
-                    color: primaryColor.withValues(alpha: 0.22),
+                    color: primaryColor.withValues(
+                      alpha: isSelected ? 0.22 : 0.14,
+                    ),
                   ),
                 ),
 

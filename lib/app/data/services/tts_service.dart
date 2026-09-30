@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -76,16 +77,89 @@ class TtsService {
   }
 
   /// Speaks the provided text
-  Future<void> speak(String text) async {
+  Future<void> speak(String text, {VoidCallback? onDone}) async {
     try {
       if (!_isInitialized) {
         await init();
       }
       if (text.trim().isNotEmpty) {
+        if (onDone != null) {
+          final previousComplete = onComplete;
+          onComplete = () {
+            onComplete = previousComplete;
+            previousComplete?.call();
+            onDone();
+          };
+        }
         await _flutterTts.speak(text);
+      } else {
+        onDone?.call();
       }
     } catch (e) {
       debugPrint('TtsService speak error: $e');
+      onDone?.call();
+    }
+  }
+
+  /// Speaks text and returns a Future that completes when playback genuinely finishes.
+  Future<void> speakWithCompletion(String text, {Duration timeout = const Duration(seconds: 10)}) async {
+    if (text.trim().isEmpty) return;
+    
+    // In unit test environment or headless runners, fallback immediately
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      return;
+    }
+
+    final completer = Completer<void>();
+    VoidCallback? prevComplete;
+    VoidCallback? prevCancel;
+    void Function(dynamic)? prevError;
+
+    void cleanup() {
+      onComplete = prevComplete;
+      onStop = prevCancel;
+      onError = prevError;
+    }
+
+    prevComplete = onComplete;
+    prevCancel = onStop;
+    prevError = onError;
+
+    onComplete = () {
+      cleanup();
+      prevComplete?.call();
+      if (!completer.isCompleted) completer.complete();
+    };
+
+    onStop = () {
+      cleanup();
+      prevCancel?.call();
+      if (!completer.isCompleted) completer.complete();
+    };
+
+    onError = (err) {
+      cleanup();
+      prevError?.call(err);
+      if (!completer.isCompleted) completer.complete();
+    };
+
+    try {
+      if (!_isInitialized) {
+        await init();
+      }
+      await _flutterTts.speak(text);
+      // Failsafe timeout in case native completion handler is delayed
+      Future.delayed(timeout, () {
+        if (!completer.isCompleted) {
+          cleanup();
+          completer.complete();
+        }
+      });
+      await completer.future;
+    } catch (e) {
+      cleanup();
+      debugPrint('speakWithCompletion error: $e');
+      if (!completer.isCompleted) completer.complete();
     }
   }
 

@@ -23,7 +23,29 @@ class ItineraryPainter extends CustomPainter {
       if (segment.points.length < 2) continue;
 
       final isCompleted = segment.isCompleted;
-      final segmentColor = isCompleted ? completedColor : activeColor;
+      final isActive = segment.isActive;
+
+      final Color segmentColor;
+      final double strokeWidth;
+      final double glowWidth;
+      final double glowAlpha;
+
+      if (isCompleted) {
+        segmentColor = completedColor;
+        strokeWidth = 2.8;
+        glowWidth = 6.5;
+        glowAlpha = 0.35;
+      } else if (isActive) {
+        segmentColor = activeColor;
+        strokeWidth = 3.6;
+        glowWidth = 8.5;
+        glowAlpha = 0.45;
+      } else {
+        segmentColor = activeColor.withValues(alpha: 0.55);
+        strokeWidth = 2.4;
+        glowWidth = 5.0;
+        glowAlpha = 0.18;
+      }
 
       // 1. Construct Path
       final path = Path();
@@ -43,9 +65,9 @@ class ItineraryPainter extends CustomPainter {
 
       // 2. Outer Soft Glow
       final glowPaint = Paint()
-        ..color = segmentColor.withValues(alpha: isCompleted ? 0.35 : 0.22)
+        ..color = segmentColor.withValues(alpha: glowAlpha)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 6.5
+        ..strokeWidth = glowWidth
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
       canvas.drawPath(path, glowPaint);
@@ -54,7 +76,7 @@ class ItineraryPainter extends CustomPainter {
       final mainPaint = Paint()
         ..color = segmentColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.8
+        ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
       canvas.drawPath(path, mainPaint);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/theme_extensions.dart';
+import '../../../data/models/tour_navigation_state.dart';
 import '../controllers/floor_map_controller.dart';
 import '../widgets/entry_exit_marker.dart';
 import '../widgets/floor_plan_painter.dart';
@@ -137,11 +138,13 @@ class FloorMapView extends GetView<FloorMapController> {
                             Obx(() {
                               final selectedVp = controller.selectedViewpoint.value;
                               final isPlaying = controller.isPlayingAudio.value;
+                              final currentTargetId = controller.tourState.value.navigationTargetId;
 
                               return Stack(
                                 clipBehavior: Clip.none,
                                 children: controller.viewpoints.map((vp) {
                                   final isSelected = selectedVp?.id == vp.id;
+                                  final isTarget = currentTargetId == vp.id;
                                   final px = vp.normalizedX * mapSize.width;
                                   final py = vp.normalizedY * mapSize.height;
 
@@ -158,6 +161,7 @@ class FloorMapView extends GetView<FloorMapController> {
                                         viewpoint: vp,
                                         isSelected: isSelected,
                                         isPlaying: isSelected && isPlaying,
+                                        isTarget: isTarget,
                                         onTap: () => controller.selectViewpoint(vp),
                                       ),
                                     ),
@@ -346,7 +350,108 @@ class FloorMapView extends GetView<FloorMapController> {
               ),
             ),
 
-            // 4. Contextual Bottom Viewpoint Detail Card
+            // 4. Compact Guided Tour HUD (Navigation Status, Distance, Settings & Skip)
+            Positioned(
+              top: 112.0,
+              left: 16.0,
+              right: 16.0,
+              child: Obx(() {
+                if (!controller.floorId.value.contains('underground')) {
+                  return const SizedBox.shrink();
+                }
+
+                final state = controller.tourState.value;
+                final statusText = _getTourStatusText(state);
+                final statusIcon = _getTourStatusIcon(state.navigationStatus);
+
+                return Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12.0,
+                      vertical: 5.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.card.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(18.0),
+                      border: Border.all(
+                        color: colors.border,
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.foreground.withValues(alpha: 0.06),
+                          blurRadius: 8.0,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          statusIcon,
+                          size: 14.0,
+                          color: colors.primary,
+                        ),
+                        const SizedBox(width: 6.0),
+                        Flexible(
+                          child: Text(
+                            statusText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.foreground,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8.0),
+                        // Voice Guidance Toggle
+                        InkWell(
+                          key: const Key('toggle_voice_guidance_button'),
+                          onTap: () => controller.toggleVoiceGuidance(),
+                          borderRadius: BorderRadius.circular(12.0),
+                          child: Padding(
+                            padding: const EdgeInsets.all(3.0),
+                            child: Icon(
+                              state.isVoiceGuidanceEnabled
+                                  ? Icons.volume_up_rounded
+                                  : Icons.volume_off_rounded,
+                              size: 15.0,
+                              color: state.isVoiceGuidanceEnabled
+                                  ? colors.primary
+                                  : colors.foreground.withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4.0),
+                        // Auto-Play Toggle
+                        InkWell(
+                          key: const Key('toggle_autoplay_button'),
+                          onTap: () => controller.toggleAutoPlay(),
+                          borderRadius: BorderRadius.circular(12.0),
+                          child: Padding(
+                            padding: const EdgeInsets.all(3.0),
+                            child: Icon(
+                              state.isAutoPlayEnabled
+                                  ? Icons.bolt_rounded
+                                  : Icons.flash_off_rounded,
+                              size: 15.0,
+                              color: state.isAutoPlayEnabled
+                                  ? const Color(0xFFEAB308)
+                                  : colors.foreground.withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            // 5. Contextual Bottom Viewpoint Detail Card
             Positioned(
               left: 16.0,
               right: 16.0,
@@ -391,6 +496,74 @@ class FloorMapView extends GetView<FloorMapController> {
         ),
       ),
     );
+  }
+
+  String _getTourStatusText(TourNavigationState state) {
+    switch (state.navigationStatus) {
+      case TourNavigationStatus.idle:
+        return 'Tour Ready';
+      case TourNavigationStatus.navigating:
+      case TourNavigationStatus.navigatingToNext:
+        if (state.navigationTargetId == 'EXIT') {
+          return state.distanceToTarget != null
+              ? 'Exit ahead (${state.distanceToTarget!.toStringAsFixed(0)}m)'
+              : 'Heading to Exit';
+        }
+        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
+        return state.distanceToTarget != null
+            ? 'Stop $targetNum (${state.distanceToTarget!.toStringAsFixed(0)}m)'
+            : 'Heading to Stop $targetNum';
+      case TourNavigationStatus.approaching:
+        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
+        return 'Approaching Stop $targetNum (${state.distanceToTarget?.toStringAsFixed(0)}m)';
+      case TourNavigationStatus.arrivalPending:
+        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
+        return 'Confirming arrival at Stop $targetNum…';
+      case TourNavigationStatus.arrived:
+        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
+        return 'Arrived at Stop $targetNum';
+      case TourNavigationStatus.viewpointAudioPlaying:
+        final targetNum = state.activeAudioViewpointId?.replaceAll('vp_', '');
+        return 'Listening to Stop $targetNum';
+      case TourNavigationStatus.waitingAtViewpoint:
+        final targetNum = state.reachedViewpointId?.replaceAll('vp_', '');
+        return 'Exploring Stop $targetNum';
+      case TourNavigationStatus.waitingForVisited:
+        final targetNum = state.reachedViewpointId?.replaceAll('vp_', '');
+        return 'Stop $targetNum · Mark Visited';
+      case TourNavigationStatus.waitingForDeparture:
+        final targetNum = state.previousTargetId?.replaceAll('vp_', '');
+        return 'Departing Stop $targetNum';
+      case TourNavigationStatus.locationUncertain:
+        return 'Calibrating indoor GPS…';
+      case TourNavigationStatus.itineraryComplete:
+        return 'Underground Tour Complete';
+    }
+  }
+
+  IconData _getTourStatusIcon(TourNavigationStatus status) {
+    switch (status) {
+      case TourNavigationStatus.idle:
+        return Icons.map_rounded;
+      case TourNavigationStatus.navigating:
+      case TourNavigationStatus.navigatingToNext:
+      case TourNavigationStatus.approaching:
+        return Icons.navigation_rounded;
+      case TourNavigationStatus.arrivalPending:
+      case TourNavigationStatus.arrived:
+        return Icons.location_on_rounded;
+      case TourNavigationStatus.viewpointAudioPlaying:
+        return Icons.volume_up_rounded;
+      case TourNavigationStatus.waitingAtViewpoint:
+      case TourNavigationStatus.waitingForVisited:
+        return Icons.check_circle_outline_rounded;
+      case TourNavigationStatus.waitingForDeparture:
+        return Icons.directions_walk_rounded;
+      case TourNavigationStatus.locationUncertain:
+        return Icons.gps_not_fixed_rounded;
+      case TourNavigationStatus.itineraryComplete:
+        return Icons.flag_rounded;
+    }
   }
 }
 
