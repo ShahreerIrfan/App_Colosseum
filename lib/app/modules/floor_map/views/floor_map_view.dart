@@ -23,13 +23,15 @@ class FloorMapView extends GetView<FloorMapController> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Dominant Interactive Floor Map Canvas (Layers)
+            // 1. Dominant Interactive Floor Map Canvas (Anchored fixed position)
             Positioned.fill(
               child: InteractiveViewer(
                 transformationController: controller.transformationController,
+                panEnabled: false,
+                scaleEnabled: false,
                 minScale: 0.8,
                 maxScale: 3.5,
-                boundaryMargin: const EdgeInsets.all(120.0),
+                alignment: Alignment.center,
                 child: Center(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -232,66 +234,69 @@ class FloorMapView extends GetView<FloorMapController> {
               ),
             ),
 
-            // 3. Compact Horizontal Map Toolbar (Zoom In, Zoom Out, Recenter) in Upper-Left Zone
+            // 3. Compact Horizontal Map Toolbar (Zoom In, Zoom Out, Recenter) Centered Horizontally
             Positioned(
-              left: 16.0,
               top: 68.0,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: colors.card,
-                  borderRadius: BorderRadius.circular(10.0),
-                  border: Border.all(
-                    color: colors.border,
-                    width: 1.0,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colors.foreground.withValues(alpha: 0.08),
-                      blurRadius: 8.0,
-                      offset: const Offset(0, 2),
+              left: 0.0,
+              right: 0.0,
+              child: Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: colors.card,
+                    borderRadius: BorderRadius.circular(10.0),
+                    border: Border.all(
+                      color: colors.border,
+                      width: 1.0,
                     ),
-                  ],
-                ),
-                child: IntrinsicHeight(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Zoom In Button
-                      _ToolbarButton(
-                        icon: Icons.add_rounded,
-                        tooltip: 'Zoom In',
-                        onPressed: controller.zoomIn,
-                        colors: colors,
-                      ),
-                      VerticalDivider(
-                        width: 1.0,
-                        thickness: 1.0,
-                        color: colors.border,
-                        indent: 6.0,
-                        endIndent: 6.0,
-                      ),
-                      // Zoom Out Button
-                      _ToolbarButton(
-                        icon: Icons.remove_rounded,
-                        tooltip: 'Zoom Out',
-                        onPressed: controller.zoomOut,
-                        colors: colors,
-                      ),
-                      VerticalDivider(
-                        width: 1.0,
-                        thickness: 1.0,
-                        color: colors.border,
-                        indent: 6.0,
-                        endIndent: 6.0,
-                      ),
-                      // Recenter on Location Button
-                      _ToolbarButton(
-                        icon: Icons.my_location_rounded,
-                        tooltip: 'Recenter',
-                        onPressed: controller.recenter,
-                        colors: colors,
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.foreground.withValues(alpha: 0.08),
+                        blurRadius: 8.0,
+                        offset: const Offset(0, 2),
                       ),
                     ],
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Zoom In Button
+                        _ToolbarButton(
+                          icon: Icons.add_rounded,
+                          tooltip: 'Zoom In',
+                          onPressed: controller.zoomIn,
+                          colors: colors,
+                        ),
+                        VerticalDivider(
+                          width: 1.0,
+                          thickness: 1.0,
+                          color: colors.border,
+                          indent: 6.0,
+                          endIndent: 6.0,
+                        ),
+                        // Zoom Out Button
+                        _ToolbarButton(
+                          icon: Icons.remove_rounded,
+                          tooltip: 'Zoom Out',
+                          onPressed: controller.zoomOut,
+                          colors: colors,
+                        ),
+                        VerticalDivider(
+                          width: 1.0,
+                          thickness: 1.0,
+                          color: colors.border,
+                          indent: 6.0,
+                          endIndent: 6.0,
+                        ),
+                        // Recenter on Location Button
+                        _ToolbarButton(
+                          icon: Icons.my_location_rounded,
+                          tooltip: 'Recenter',
+                          onPressed: controller.recenter,
+                          colors: colors,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
