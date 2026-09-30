@@ -345,11 +345,6 @@ class FloorMapController extends GetxController {
 
     // Initialize Text-to-Speech service
     _initTts();
-
-    // Select the first stop by default
-    if (viewpoints.isNotEmpty) {
-      selectViewpoint(viewpoints.first);
-    }
   }
 
   void _initTts() {

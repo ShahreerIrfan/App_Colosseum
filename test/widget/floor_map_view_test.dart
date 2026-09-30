@@ -55,7 +55,18 @@ void main() {
       expect(find.byIcon(Icons.remove_rounded), findsOneWidget);
       expect(find.byIcon(Icons.my_location_rounded), findsOneWidget);
 
-      // 4. Initial selected viewpoint (Stop 100) detail card
+      // 4. Initial state: NO viewpoint detail card is visible
+      expect(find.byType(ViewpointDetailCard), findsNothing);
+      expect(controller.selectedViewpoint.value, isNull);
+
+      // 5. Tap Viewpoint marker (Stop 100) to select and open detail card
+      final vp100Marker = find.text('100');
+      expect(vp100Marker, findsOneWidget);
+      await tester.tap(vp100Marker);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.selectedViewpoint.value?.id, 'vp_100');
       expect(find.byType(ViewpointDetailCard), findsOneWidget);
       expect(
         find.text('Spectacles in the Colosseum Arena Floor. The Superstars'),

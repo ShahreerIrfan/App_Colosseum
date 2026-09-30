@@ -35,6 +35,8 @@ void main() {
       expect(controller.landmarkName.value, 'Colosseum');
       expect(controller.floorName.value, 'Underground (Hypogeum)');
       expect(controller.floorId.value, 'floor_underground');
+      expect(controller.selectedViewpoint.value, isNull);
+      expect(controller.routePoints.isEmpty, true);
     });
 
     test('initializes with Colosseum Underground 7 viewpoints (100 - 106) and imageAssets', () {
@@ -104,8 +106,14 @@ void main() {
       expect(controller.routePoints.isEmpty, true);
     });
 
-    test('toggleAudio flips playback status', () {
+    test('toggleAudio flips playback status when a viewpoint is selected', () {
       expect(controller.isPlayingAudio.value, false);
+      // When no viewpoint is selected, toggleAudio does nothing
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, false);
+
+      // When viewpoint is selected, toggleAudio toggles speech playback
+      controller.selectViewpoint(controller.viewpoints.first);
       controller.toggleAudio();
       expect(controller.isPlayingAudio.value, true);
       controller.toggleAudio();

@@ -309,38 +309,37 @@ class FloorMapView extends GetView<FloorMapController> {
               bottom: 16.0,
               child: Obx(() {
                 final selectedVp = controller.selectedViewpoint.value;
-                if (selectedVp == null) return const SizedBox.shrink();
 
                 return AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
+                  duration: const Duration(milliseconds: 300),
+                  reverseDuration: const Duration(milliseconds: 250),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
                   transitionBuilder: (child, animation) {
                     return SlideTransition(
                       position: Tween<Offset>(
                         begin: const Offset(0, 0.25),
                         end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      ),
+                      ).animate(animation),
                       child: FadeTransition(
                         opacity: animation,
                         child: child,
                       ),
                     );
                   },
-                  child: ViewpointDetailCard(
-                    key: ValueKey(selectedVp.id),
-                    viewpoint: selectedVp,
-                    isPlaying: controller.isPlayingAudio.value,
-                    isCollapsed: controller.isCardCollapsed.value,
-                    progress: controller.audioProgress.value,
-                    onToggleAudio: controller.toggleAudio,
-                    onToggleCollapse: controller.toggleCardCollapse,
-                    onToggleVisited: controller.toggleVisited,
-                    onClose: controller.deselectViewpoint,
-                  ),
+                  child: selectedVp == null
+                      ? const SizedBox.shrink(key: ValueKey('empty_viewpoint_card'))
+                      : ViewpointDetailCard(
+                          key: ValueKey(selectedVp.id),
+                          viewpoint: selectedVp,
+                          isPlaying: controller.isPlayingAudio.value,
+                          isCollapsed: controller.isCardCollapsed.value,
+                          progress: controller.audioProgress.value,
+                          onToggleAudio: controller.toggleAudio,
+                          onToggleCollapse: controller.toggleCardCollapse,
+                          onToggleVisited: controller.toggleVisited,
+                          onClose: controller.deselectViewpoint,
+                        ),
                 );
               }),
             ),
