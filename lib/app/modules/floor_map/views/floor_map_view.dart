@@ -6,7 +6,6 @@ import '../controllers/floor_map_controller.dart';
 import '../widgets/entry_exit_marker.dart';
 import '../widgets/floor_plan_painter.dart';
 import '../widgets/itinerary_painter.dart';
-import '../widgets/route_painter.dart';
 import '../widgets/user_location_puck.dart';
 import '../widgets/viewpoint_detail_card.dart';
 import '../widgets/viewpoint_marker.dart';
@@ -77,20 +76,7 @@ class FloorMapView extends GetView<FloorMapController> {
                               );
                             }),
 
-                            // Layer 3: Walking Route Path (User -> Selected Viewpoint)
-                            Obx(
-                              () => controller.routePoints.isNotEmpty
-                                  ? CustomPaint(
-                                      size: mapSize,
-                                      painter: RoutePainter(
-                                        normalizedPoints: controller.routePoints,
-                                        routeColor: colors.primary,
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-
-                            // Layer 4: Portal Markers (ENTRY & EXIT)
+                            // Layer 3: Portal Markers (ENTRY & EXIT)
                             Obx(() {
                               if (!controller.floorId.value.contains('underground')) {
                                 return const SizedBox.shrink();
@@ -127,7 +113,7 @@ class FloorMapView extends GetView<FloorMapController> {
                               );
                             }),
 
-                            // Layer 5: Animated User Indoor Location Puck
+                            // Layer 4: Animated User Indoor Location Puck
                             Obx(() {
                               final user = controller.userLocation.value;
                               final px = user.normalizedX * mapSize.width;

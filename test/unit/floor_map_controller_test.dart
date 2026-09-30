@@ -36,7 +36,6 @@ void main() {
       expect(controller.floorName.value, 'Underground (Hypogeum)');
       expect(controller.floorId.value, 'floor_underground');
       expect(controller.selectedViewpoint.value, isNull);
-      expect(controller.routePoints.isEmpty, true);
     });
 
     test('initializes with Colosseum Underground 7 viewpoints (100 - 106) and imageAssets', () {
@@ -71,14 +70,12 @@ void main() {
       expect(user.normalizedY, 0.50);
     });
 
-    test('selectViewpoint sets active stop and computes route', () {
+    test('selectViewpoint sets active stop without mutating route geometry', () {
       final vp3 = controller.viewpoints[2]; // Stop 3
       controller.selectViewpoint(vp3);
 
       expect(controller.selectedViewpoint.value, vp3);
-      expect(controller.routePoints.isNotEmpty, true);
-      expect(controller.routePoints.last.dx, vp3.normalizedX);
-      expect(controller.routePoints.last.dy, vp3.normalizedY);
+      expect(controller.itinerarySegments.length, 8);
     });
 
     test('switching viewpoint automatically pauses active audio playback', () {
@@ -108,12 +105,11 @@ void main() {
       expect(controller.isCardCollapsed.value, false);
     });
 
-    test('deselectViewpoint clears active stop and route', () {
+    test('deselectViewpoint clears active stop', () {
       controller.deselectViewpoint();
 
       expect(controller.selectedViewpoint.value, isNull);
       expect(controller.isPlayingAudio.value, false);
-      expect(controller.routePoints.isEmpty, true);
     });
 
     test('toggleAudio flips playback status when a viewpoint is selected', () {

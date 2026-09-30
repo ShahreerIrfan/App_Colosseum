@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -43,9 +42,6 @@ class FloorMapController extends GetxController {
 
   /// Whether the bottom detail card is collapsed to show maximum map area
   final isCardCollapsed = false.obs;
-
-  /// Normalized walking route points connecting user to active viewpoint
-  final routePoints = <Offset>[].obs;
 
   /// Architectural Guided Itinerary Segments for the current floor
   final itinerarySegments = <ItinerarySegmentModel>[].obs;
@@ -516,11 +512,10 @@ class FloorMapController extends GetxController {
     super.onClose();
   }
 
-  /// Selects a viewpoint, calculates route, and marks it active.
+  /// Selects a viewpoint, opens its detail card, and highlights marker.
   void selectViewpoint(ViewpointModel viewpoint) {
     final previous = selectedViewpoint.value;
     selectedViewpoint.value = viewpoint;
-    _computeRoute(viewpoint);
 
     // When choosing another viewpoint, automatically pause / stop TTS playback
     if (previous?.id != viewpoint.id) {
@@ -546,12 +541,11 @@ class FloorMapController extends GetxController {
     isCardCollapsed.value = true;
   }
 
-  /// Deselects active viewpoint and clears navigation route.
+  /// Deselects active viewpoint and closes detail card.
   void deselectViewpoint() {
     selectedViewpoint.value = null;
     isPlayingAudio.value = false;
     ttsService.stop();
-    routePoints.clear();
   }
 
   /// Toggles the visited status for a viewpoint (defaults to currently selected viewpoint).
@@ -615,46 +609,5 @@ class FloorMapController extends GetxController {
   /// Recenter floor map to default scale and origin.
   void recenter() {
     transformationController.value = Matrix4.identity();
-  }
-
-  /// Generates a smooth architectural walking route along the corridor.
-  void _computeRoute(ViewpointModel target) {
-    final user = userLocation.value;
-    final start = Offset(user.normalizedX, user.normalizedY);
-    final end = Offset(target.normalizedX, target.normalizedY);
-
-    // If start and end are practically identical, direct single segment
-    final dist = (end - start).distance;
-    if (dist < 0.05) {
-      routePoints.value = [start, end];
-      return;
-    }
-
-    // Generate corridor waypoints interpolating along the elliptical arch / central corridor
-    final points = <Offset>[start];
-
-    const center = Offset(0.5, 0.5);
-    final startAngle = math.atan2(start.dy - center.dy, start.dx - center.dx);
-    final endAngle = math.atan2(end.dy - center.dy, end.dx - center.dx);
-
-    var deltaAngle = endAngle - startAngle;
-    if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
-    if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
-
-    final steps = (deltaAngle.abs() / (math.pi / 8)).ceil().clamp(2, 8);
-    for (int i = 1; i < steps; i++) {
-      final t = i / steps;
-      final currentAngle = startAngle + (deltaAngle * t);
-      final rStart = (start - center).distance;
-      final rEnd = (end - center).distance;
-      final r = rStart + (rEnd - rStart) * t;
-
-      final wx = center.dx + math.cos(currentAngle) * r;
-      final wy = center.dy + math.sin(currentAngle) * r;
-      points.add(Offset(wx, wy));
-    }
-
-    points.add(end);
-    routePoints.value = points;
   }
 }
