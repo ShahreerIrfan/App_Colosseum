@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../data/models/itinerary_segment_model.dart';
 import '../../../data/models/user_location_model.dart';
 import '../../../data/models/viewpoint_model.dart';
 import '../../../data/services/tts_service.dart';
@@ -22,7 +23,7 @@ class FloorMapController extends GetxController {
   /// User's real-time indoor location beacon on this floor
   final userLocation = const UserLocationModel(
     floorId: 'floor_underground',
-    normalizedX: 0.86,
+    normalizedX: 0.92,
     normalizedY: 0.50,
     headingDegrees: 270.0,
     accuracyMeters: 2.0,
@@ -46,6 +47,13 @@ class FloorMapController extends GetxController {
   /// Normalized walking route points connecting user to active viewpoint
   final routePoints = <Offset>[].obs;
 
+  /// Architectural Guided Itinerary Segments for the current floor
+  final itinerarySegments = <ItinerarySegmentModel>[].obs;
+
+  /// Underground Entry and Exit locations
+  static const Offset undergroundEntryLocation = Offset(0.92, 0.50);
+  static const Offset undergroundExitLocation = Offset(0.10, 0.50);
+
   /// 7 Detailed Underground Level (Hypogeum) Viewpoints (Stops 100 - 106)
   static const List<ViewpointModel> undergroundViewpoints = [
     ViewpointModel(
@@ -59,7 +67,7 @@ class FloorMapController extends GetxController {
       longitude: 12.492820,
       imageAsset: 'assets/images/vp_100_arena_spectacles.jpg',
       audioDuration: '4 min 30s',
-      isVisited: true,
+      isVisited: false,
       description:
           'The exhibition entitled Spectacles in the Colosseum Arena Floor. The Superstars occupies the initial path of the visit of the underground levels and aims at illustrating the operation and use of the "behind the scenes" of the Colosseum with the support of multimedia devices, reconstructions, models, and original finds.\n\n'
           'The first stop is the Corridor of the Gladiators, the underground service corridor that connected the amphitheatre with the main training gymnasium, the Ludus Magnus. From this corridor the animals were probably led for the hunting shows, but above all the gladiators proceeded before performing in the arena. A holographic projection gives an image of the march of the gladiators and 3D reconstructions show what the landscape around the Colosseum looked like 2000 years ago.\n\n'
@@ -75,13 +83,13 @@ class FloorMapController extends GetxController {
       title:
           'Access to the Underground Levels: East & West Ramps, Ludus Magnus Tunnels & Fosso Labicano Ditch',
       order: 101,
-      normalizedX: 0.90,
-      normalizedY: 0.44,
+      normalizedX: 0.88,
+      normalizedY: 0.38,
       latitude: 41.890320,
       longitude: 12.493050,
       imageAsset: 'assets/images/vp_101_ludus_magnus_tunnel.jpg',
       audioDuration: '5 min 15s',
-      isVisited: true,
+      isVisited: false,
       description:
           'Below the arena floor, in the pitch-black darkness, surrounded by the pungent smell of men and animals, shrouded by smoke from the torches used to illuminate the space, the machinery of the spectacle was being readied to make an appearance.\n\n'
           'You are now standing along the cryptoporticus which crosses the long axis of the oval of the Amphitheatre, from east to west. The protagonists of the games walked along this very pathway, coming directly from the nearby neighbourhood of the Amphitheatre, which is behind you, partially visible today between Via Labicana and Via di San Giovanni in Laterano.\n\n'
@@ -100,7 +108,7 @@ class FloorMapController extends GetxController {
           'General Introduction to the Underground Levels & Different Phases of Development',
       order: 102,
       normalizedX: 0.68,
-      normalizedY: 0.32,
+      normalizedY: 0.30,
       latitude: 41.890450,
       longitude: 12.492580,
       imageAsset: 'assets/images/vp_102_hypogeum_phases.jpg',
@@ -144,7 +152,7 @@ class FloorMapController extends GetxController {
       title:
           'Corridor H: Large Ramps and the Four Galleries to the North, South, East & West',
       order: 104,
-      normalizedX: 0.50,
+      normalizedX: 0.48,
       normalizedY: 0.50,
       latitude: 41.890210,
       longitude: 12.492230,
@@ -165,8 +173,8 @@ class FloorMapController extends GetxController {
       floorId: 'floor_underground',
       title: 'The Hoists After the Fire of 217 CE',
       order: 105,
-      normalizedX: 0.52,
-      normalizedY: 0.76,
+      normalizedX: 0.50,
+      normalizedY: 0.72,
       latitude: 41.889980,
       longitude: 12.492320,
       imageAsset: 'assets/images/vp_105_severan_hoists.jpg',
@@ -188,7 +196,7 @@ class FloorMapController extends GetxController {
       title:
           'Archaeological Excavations and Restorations in the 19th & 20th Centuries',
       order: 106,
-      normalizedX: 0.18,
+      normalizedX: 0.24,
       normalizedY: 0.50,
       latitude: 41.890180,
       longitude: 12.491550,
@@ -221,7 +229,7 @@ class FloorMapController extends GetxController {
       description:
           'The grand ceremonial portal historically reserved for Roman dignitaries and emperors.',
       audioDuration: '2 min 40s',
-      isVisited: true,
+      isVisited: false,
     ),
     ViewpointModel(
       id: 'vp_2',
@@ -233,7 +241,7 @@ class FloorMapController extends GetxController {
       description:
           'The solemn gate through which fallen gladiators and combatants were carried out.',
       audioDuration: '3 min 10s',
-      isVisited: true,
+      isVisited: false,
     ),
     ViewpointModel(
       id: 'vp_3',
@@ -321,6 +329,92 @@ class FloorMapController extends GetxController {
     ),
   ];
 
+  /// Architectural corridor-following itinerary route for Underground (Hypogeum):
+  /// ENTRY -> 100 -> 101 -> 102 -> 103 -> 104 -> 105 -> 106 -> EXIT
+  static const List<ItinerarySegmentModel> undergroundItinerary = [
+    // 1. ENTRY -> Stop 100 (Arena Spectacles)
+    ItinerarySegmentModel(
+      fromId: 'ENTRY',
+      toId: 'vp_100',
+      points: [
+        Offset(0.92, 0.50),
+        Offset(0.80, 0.50),
+      ],
+    ),
+    // 2. Stop 100 -> Stop 101 (Ludus Magnus Tunnel)
+    ItinerarySegmentModel(
+      fromId: 'vp_100',
+      toId: 'vp_101',
+      points: [
+        Offset(0.80, 0.50),
+        Offset(0.83, 0.44),
+        Offset(0.88, 0.38),
+      ],
+    ),
+    // 3. Stop 101 -> Stop 102 (Hypogeum Phases)
+    ItinerarySegmentModel(
+      fromId: 'vp_101',
+      toId: 'vp_102',
+      points: [
+        Offset(0.88, 0.38),
+        Offset(0.82, 0.32),
+        Offset(0.75, 0.30),
+        Offset(0.68, 0.30),
+      ],
+    ),
+    // 4. Stop 102 -> Stop 103 (Flavian Hoists)
+    ItinerarySegmentModel(
+      fromId: 'vp_102',
+      toId: 'vp_103',
+      points: [
+        Offset(0.68, 0.30),
+        Offset(0.58, 0.24),
+        Offset(0.48, 0.22),
+      ],
+    ),
+    // 5. Stop 103 -> Stop 104 (Corridor H)
+    ItinerarySegmentModel(
+      fromId: 'vp_103',
+      toId: 'vp_104',
+      points: [
+        Offset(0.48, 0.22),
+        Offset(0.48, 0.36),
+        Offset(0.48, 0.50),
+      ],
+    ),
+    // 6. Stop 104 -> Stop 105 (Severan Hoists)
+    ItinerarySegmentModel(
+      fromId: 'vp_104',
+      toId: 'vp_105',
+      points: [
+        Offset(0.48, 0.50),
+        Offset(0.49, 0.61),
+        Offset(0.50, 0.72),
+      ],
+    ),
+    // 7. Stop 105 -> Stop 106 (Excavations & Restorations)
+    ItinerarySegmentModel(
+      fromId: 'vp_105',
+      toId: 'vp_106',
+      points: [
+        Offset(0.50, 0.72),
+        Offset(0.40, 0.72),
+        Offset(0.30, 0.64),
+        Offset(0.24, 0.56),
+        Offset(0.24, 0.50),
+      ],
+    ),
+    // 8. Stop 106 -> EXIT
+    ItinerarySegmentModel(
+      fromId: 'vp_106',
+      toId: 'EXIT',
+      points: [
+        Offset(0.24, 0.50),
+        Offset(0.10, 0.50),
+      ],
+    ),
+  ];
+
   @override
   void onInit() {
     super.onInit();
@@ -378,11 +472,12 @@ class FloorMapController extends GetxController {
       viewpoints.assignAll(undergroundViewpoints);
       userLocation.value = const UserLocationModel(
         floorId: 'floor_underground',
-        normalizedX: 0.86,
+        normalizedX: 0.92,
         normalizedY: 0.50,
         headingDegrees: 270.0,
         accuracyMeters: 2.0,
       );
+      _refreshItinerarySegments();
     } else {
       floorName.value = 'Floor 1';
       viewpoints.assignAll(floor1Viewpoints);
@@ -393,6 +488,24 @@ class FloorMapController extends GetxController {
         headingDegrees: 135.0,
         accuracyMeters: 2.5,
       );
+      itinerarySegments.clear();
+    }
+  }
+
+  /// Recalculates completed status on itinerary walking segments based on visited viewpoints.
+  void _refreshItinerarySegments() {
+    if (floorId.value == 'floor_underground' ||
+        floorId.value == 'underground') {
+      final updated = undergroundItinerary.map((segment) {
+        final toVp = viewpoints.firstWhereOrNull((vp) => vp.id == segment.toId);
+        final isCompleted = segment.toId == 'EXIT'
+            ? (viewpoints.isNotEmpty && viewpoints.every((vp) => vp.isVisited))
+            : (toVp?.isVisited ?? false);
+        return segment.copyWith(isCompleted: isCompleted);
+      }).toList();
+      itinerarySegments.assignAll(updated);
+    } else {
+      itinerarySegments.clear();
     }
   }
 
@@ -455,6 +568,7 @@ class FloorMapController extends GetxController {
       if (selectedViewpoint.value?.id == targetId) {
         selectedViewpoint.value = updated;
       }
+      _refreshItinerarySegments();
     }
   }
 

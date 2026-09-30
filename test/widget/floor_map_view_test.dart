@@ -45,10 +45,14 @@ void main() {
       expect(find.text('Underground (Hypogeum)'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
 
-      // 2. Map Canvas & Markers (7 Underground Stops)
+      // 2. Map Canvas, Markers (7 Underground Stops), and Portals (ENTRY & EXIT)
       expect(find.byType(InteractiveViewer), findsOneWidget);
       expect(find.byType(UserLocationPuck), findsOneWidget);
       expect(find.byType(ViewpointMarker), findsNWidgets(7));
+      expect(find.byKey(const Key('itinerary_entry_marker')), findsOneWidget);
+      expect(find.byKey(const Key('itinerary_exit_marker')), findsOneWidget);
+      expect(find.text('ENTRY'), findsOneWidget);
+      expect(find.text('EXIT'), findsOneWidget);
 
       // 3. Floating Controls
       expect(find.byIcon(Icons.add_rounded), findsOneWidget);

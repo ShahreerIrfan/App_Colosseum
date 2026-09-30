@@ -54,10 +54,20 @@ void main() {
       expect(controller.viewpoints[6].imageAsset, 'assets/images/vp_106_excavations_restorations.jpg');
     });
 
-    test('initializes with valid user indoor location for underground', () {
+    test('initializes with all viewpoints unvisited and itinerary segments loaded for underground', () {
+      expect(controller.viewpoints.every((vp) => !vp.isVisited), true);
+      expect(controller.itinerarySegments.isNotEmpty, true);
+      expect(controller.itinerarySegments.length, 8);
+      expect(controller.itinerarySegments.first.fromId, 'ENTRY');
+      expect(controller.itinerarySegments.first.toId, 'vp_100');
+      expect(controller.itinerarySegments.last.fromId, 'vp_106');
+      expect(controller.itinerarySegments.last.toId, 'EXIT');
+    });
+
+    test('initializes with valid user indoor location for underground at eastern entry', () {
       final user = controller.userLocation.value;
       expect(user.floorId, 'floor_underground');
-      expect(user.normalizedX, 0.86);
+      expect(user.normalizedX, 0.92);
       expect(user.normalizedY, 0.50);
     });
 

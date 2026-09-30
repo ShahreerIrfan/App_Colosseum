@@ -3,7 +3,9 @@ import 'package:get/get.dart';
 
 import '../../../core/theme/theme_extensions.dart';
 import '../controllers/floor_map_controller.dart';
+import '../widgets/entry_exit_marker.dart';
 import '../widgets/floor_plan_painter.dart';
+import '../widgets/itinerary_painter.dart';
 import '../widgets/route_painter.dart';
 import '../widgets/user_location_puck.dart';
 import '../widgets/viewpoint_detail_card.dart';
@@ -60,7 +62,22 @@ class FloorMapView extends GetView<FloorMapController> {
                               ),
                             ),
 
-                            // Layer 2: Walking Route Path (User -> Selected Viewpoint)
+                            // Layer 2: Guided Itinerary Tour Walking Path (ENTRY -> 100 -> ... -> 106 -> EXIT)
+                            Obx(() {
+                              if (controller.itinerarySegments.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                              return CustomPaint(
+                                size: mapSize,
+                                painter: ItineraryPainter(
+                                  segments: controller.itinerarySegments,
+                                  activeColor: colors.primary,
+                                  completedColor: const Color(0xFF10B981),
+                                ),
+                              );
+                            }),
+
+                            // Layer 3: Walking Route Path (User -> Selected Viewpoint)
                             Obx(
                               () => controller.routePoints.isNotEmpty
                                   ? CustomPaint(
@@ -73,7 +90,44 @@ class FloorMapView extends GetView<FloorMapController> {
                                   : const SizedBox.shrink(),
                             ),
 
-                            // Layer 3: Animated User Indoor Location Puck
+                            // Layer 4: Portal Markers (ENTRY & EXIT)
+                            Obx(() {
+                              if (!controller.floorId.value.contains('underground')) {
+                                return const SizedBox.shrink();
+                              }
+                              const entry = FloorMapController.undergroundEntryLocation;
+                              const exit = FloorMapController.undergroundExitLocation;
+
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Positioned(
+                                    left: entry.dx * mapSize.width,
+                                    top: entry.dy * mapSize.height,
+                                    child: const FractionalTranslation(
+                                      translation: Offset(-0.5, -0.5),
+                                      child: EntryExitMarker(
+                                        key: Key('itinerary_entry_marker'),
+                                        type: EntryExitType.entry,
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    left: exit.dx * mapSize.width,
+                                    top: exit.dy * mapSize.height,
+                                    child: const FractionalTranslation(
+                                      translation: Offset(-0.5, -0.5),
+                                      child: EntryExitMarker(
+                                        key: Key('itinerary_exit_marker'),
+                                        type: EntryExitType.exit,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }),
+
+                            // Layer 5: Animated User Indoor Location Puck
                             Obx(() {
                               final user = controller.userLocation.value;
                               final px = user.normalizedX * mapSize.width;
@@ -89,7 +143,7 @@ class FloorMapView extends GetView<FloorMapController> {
                               );
                             }),
 
-                            // Layer 4: Interactive Viewpoint Markers
+                            // Layer 6: Interactive Viewpoint Markers (100–106)
                             Obx(() {
                               final selectedVp = controller.selectedViewpoint.value;
                               final isPlaying = controller.isPlayingAudio.value;
