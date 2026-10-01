@@ -3,12 +3,10 @@ import 'package:get/get.dart';
 
 import '../../../core/theme/theme_extensions.dart';
 import '../../../data/models/tour_navigation_state.dart';
-import '../../../data/models/user_location_model.dart';
 import '../controllers/floor_map_controller.dart';
 import '../widgets/entry_exit_marker.dart';
 import '../widgets/floor_plan_painter.dart';
 import '../widgets/itinerary_painter.dart';
-import '../widgets/tour_simulator_panel.dart';
 import '../widgets/user_location_puck.dart';
 import '../widgets/viewpoint_detail_card.dart';
 import '../widgets/viewpoint_marker.dart';
@@ -50,28 +48,12 @@ class FloorMapView extends GetView<FloorMapController> {
 
                       final mapSize = Size(mapDimension, mapDimension);
 
-                      return GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTapUp: (details) {
-                          if (controller.isTapToMoveEnabled.value) {
-                            final normX = (details.localPosition.dx / mapSize.width).clamp(0.0, 1.0);
-                            final normY = (details.localPosition.dy / mapSize.height).clamp(0.0, 1.0);
-                            controller.updateUserLocation(UserLocationModel(
-                              floorId: controller.floorId.value,
-                              normalizedX: normX,
-                              normalizedY: normY,
-                              headingDegrees: 270.0,
-                              accuracyMeters: 1.5,
-                              timestamp: DateTime.now(),
-                            ));
-                          }
-                        },
-                        child: SizedBox(
-                          width: mapSize.width,
-                          height: mapSize.height,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
+                      return SizedBox(
+                        width: mapSize.width,
+                        height: mapSize.height,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
                             // Layer 1: Top-down Architectural Floor Plan
                             Obx(
                               () => CustomPaint(
@@ -189,9 +171,8 @@ class FloorMapView extends GetView<FloorMapController> {
                             }),
                           ],
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
                   ),
                 ),
               ),
@@ -509,18 +490,6 @@ class FloorMapView extends GetView<FloorMapController> {
                           onClose: controller.deselectViewpoint,
                         ),
                 );
-              }),
-            ),
-
-            // 6. Floating Tour Walk Simulator Overlay
-            Positioned(
-              top: 154.0,
-              right: 16.0,
-              child: Obx(() {
-                if (!controller.floorId.value.contains('underground')) {
-                  return const SizedBox.shrink();
-                }
-                return const TourSimulatorPanel();
               }),
             ),
           ],

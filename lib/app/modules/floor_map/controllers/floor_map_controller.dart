@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -56,16 +54,6 @@ class FloorMapController extends GetxController {
 
   /// Architectural Guided Itinerary Segments for the current floor
   final itinerarySegments = <ItinerarySegmentModel>[].obs;
-
-  /// Tour Simulation & Testing Tooling
-  final isSimulatorExpanded = false.obs;
-  final isSimulating = false.obs;
-  final simulationSpeed = 1.5.obs;
-  final isTapToMoveEnabled = false.obs;
-  Timer? _simulationTimer;
-  int _simPolylineIndex = 0;
-  double _simSubsegmentT = 0.0;
-  List<Offset> _simulationPath = const [];
 
   /// Underground Entry and Exit locations
   static const Offset undergroundEntryLocation = Offset(0.92, 0.50);
@@ -599,7 +587,6 @@ class FloorMapController extends GetxController {
 
   @override
   void onClose() {
-    _simulationTimer?.cancel();
     ttsService.dispose();
     transformationController.dispose();
     super.onClose();
@@ -752,207 +739,5 @@ class FloorMapController extends GetxController {
   /// Recenter floor map to default scale and origin.
   void recenter() {
     transformationController.value = Matrix4.identity();
-  }
-
-  // ==========================================
-  // Tour Simulation & Testing Tooling Helpers
-  // ==========================================
-
-  void _initSimulationPath() {
-    _simulationPath = const [
-      Offset(0.92, 0.50), // ENTRY
-      Offset(0.80, 0.50), // vp_100
-      Offset(0.83, 0.44),
-      Offset(0.88, 0.38), // vp_101
-      Offset(0.82, 0.32),
-      Offset(0.75, 0.30),
-      Offset(0.68, 0.30), // vp_102
-      Offset(0.58, 0.24),
-      Offset(0.48, 0.22), // vp_103
-      Offset(0.48, 0.36),
-      Offset(0.48, 0.50), // vp_104
-      Offset(0.49, 0.61),
-      Offset(0.50, 0.72), // vp_105
-      Offset(0.40, 0.72),
-      Offset(0.30, 0.64),
-      Offset(0.24, 0.56),
-      Offset(0.24, 0.50), // vp_106
-      Offset(0.10, 0.50), // EXIT
-    ];
-  }
-
-  void toggleSimulatorExpanded() {
-    isSimulatorExpanded.toggle();
-  }
-
-  void setSimulationSpeed(double speed) {
-    simulationSpeed.value = speed;
-  }
-
-  void toggleTapToMove() {
-    isTapToMoveEnabled.toggle();
-  }
-
-  void toggleAutoWalkSimulation() {
-    if (isSimulating.value) {
-      stopSimulation();
-    } else {
-      startSimulation();
-    }
-  }
-
-  void startSimulation() {
-    if (_simulationPath.isEmpty) _initSimulationPath();
-    isSimulating.value = true;
-    _simulationTimer?.cancel();
-
-    _simulationTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (!isSimulating.value) {
-        timer.cancel();
-        return;
-      }
-
-      final status = tourState.value.navigationStatus;
-
-      // If in arrivalPending, broadcast current position to let dwell timer complete
-      if (status == TourNavigationStatus.arrivalPending) {
-        updateUserLocation(userLocation.value.copyWith(timestamp: DateTime.now()));
-        return;
-      }
-
-      // If at viewpoint / playing / waiting for visited, pause movement so user can experience stop
-      if (status == TourNavigationStatus.arrived ||
-          status == TourNavigationStatus.viewpointAudioPlaying ||
-          status == TourNavigationStatus.waitingAtViewpoint ||
-          status == TourNavigationStatus.waitingForVisited) {
-        return;
-      }
-
-      if (_simPolylineIndex >= _simulationPath.length - 1) {
-        stopSimulation();
-        return;
-      }
-
-      final pA = _simulationPath[_simPolylineIndex];
-      final pB = _simulationPath[_simPolylineIndex + 1];
-
-      final segLengthMeters = tourEngine.calculateMetricDistance(pA, pB);
-      final stepMeters = 0.12 * simulationSpeed.value; // ~1.2m/s base speed
-      final deltaT = segLengthMeters > 0 ? (stepMeters / segLengthMeters) : 1.0;
-
-      _simSubsegmentT += deltaT;
-
-      if (_simSubsegmentT >= 1.0) {
-        _simSubsegmentT = 0.0;
-        _simPolylineIndex++;
-        if (_simPolylineIndex >= _simulationPath.length - 1) {
-          final target = _simulationPath.last;
-          updateUserLocation(UserLocationModel(
-            floorId: 'floor_underground',
-            normalizedX: target.dx,
-            normalizedY: target.dy,
-            headingDegrees: 270.0,
-            accuracyMeters: 1.5,
-            timestamp: DateTime.now(),
-          ));
-          stopSimulation();
-          return;
-        }
-      }
-
-      final currentPA = _simulationPath[_simPolylineIndex];
-      final currentPB = _simulationPath[_simPolylineIndex + 1];
-      final currentX = currentPA.dx + (currentPB.dx - currentPA.dx) * _simSubsegmentT;
-      final currentY = currentPA.dy + (currentPB.dy - currentPA.dy) * _simSubsegmentT;
-
-      final heading = math.atan2(currentPB.dy - currentPA.dy, currentPB.dx - currentPA.dx) * 180 / math.pi;
-
-      updateUserLocation(UserLocationModel(
-        floorId: 'floor_underground',
-        normalizedX: currentX,
-        normalizedY: currentY,
-        headingDegrees: heading,
-        accuracyMeters: 1.5,
-        timestamp: DateTime.now(),
-      ));
-    });
-  }
-
-  void stopSimulation() {
-    isSimulating.value = false;
-    _simulationTimer?.cancel();
-    _simulationTimer = null;
-  }
-
-  void teleportToEntry() {
-    if (_simulationPath.isEmpty) _initSimulationPath();
-    _simPolylineIndex = 0;
-    _simSubsegmentT = 0.0;
-    updateUserLocation(const UserLocationModel(
-      floorId: 'floor_underground',
-      normalizedX: 0.92,
-      normalizedY: 0.50,
-      headingDegrees: 270.0,
-      accuracyMeters: 1.5,
-    ));
-  }
-
-  void teleportToStop(String viewpointId) {
-    if (_simulationPath.isEmpty) _initSimulationPath();
-    final vp = viewpoints.firstWhereOrNull((v) => v.id == viewpointId);
-    if (vp != null) {
-      for (int i = 0; i < _simulationPath.length; i++) {
-        if ((_simulationPath[i].dx - vp.normalizedX).abs() < 0.02 &&
-            (_simulationPath[i].dy - vp.normalizedY).abs() < 0.02) {
-          _simPolylineIndex = i;
-          _simSubsegmentT = 0.0;
-          break;
-        }
-      }
-
-      updateUserLocation(UserLocationModel(
-        floorId: 'floor_underground',
-        normalizedX: vp.normalizedX,
-        normalizedY: vp.normalizedY,
-        headingDegrees: 270.0,
-        accuracyMeters: 1.5,
-        timestamp: DateTime.now(),
-      ));
-    }
-  }
-
-  void teleportToExit() {
-    if (_simulationPath.isEmpty) _initSimulationPath();
-    _simPolylineIndex = _simulationPath.length - 1;
-    _simSubsegmentT = 0.0;
-    updateUserLocation(const UserLocationModel(
-      floorId: 'floor_underground',
-      normalizedX: 0.10,
-      normalizedY: 0.50,
-      headingDegrees: 270.0,
-      accuracyMeters: 1.5,
-    ));
-  }
-
-  void stepSimulatedDeparture() {
-    if (_simulationPath.isEmpty) _initSimulationPath();
-    if (_simPolylineIndex < _simulationPath.length - 1) {
-      _simPolylineIndex++;
-      _simSubsegmentT = 0.3;
-      final pA = _simulationPath[_simPolylineIndex];
-      final pB = _simulationPath[math.min(_simPolylineIndex + 1, _simulationPath.length - 1)];
-      final currentX = pA.dx + (pB.dx - pA.dx) * _simSubsegmentT;
-      final currentY = pA.dy + (pB.dy - pA.dy) * _simSubsegmentT;
-      final heading = math.atan2(pB.dy - pA.dy, pB.dx - pA.dx) * 180 / math.pi;
-
-      updateUserLocation(UserLocationModel(
-        floorId: 'floor_underground',
-        normalizedX: currentX,
-        normalizedY: currentY,
-        headingDegrees: heading,
-        accuracyMeters: 1.5,
-        timestamp: DateTime.now(),
-      ));
-    }
   }
 }

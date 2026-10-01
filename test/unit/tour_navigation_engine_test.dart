@@ -1,3 +1,4 @@
+import 'dart:ui' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:colosseum_client/app/data/models/tour_navigation_state.dart';
 import 'package:colosseum_client/app/data/models/user_location_model.dart';
