@@ -118,33 +118,7 @@ class FloorMapView extends GetView<FloorMapController> {
                               );
                             }),
 
-                            // Layer 4: Animated User Indoor Location Puck (Visible ONLY when in location)
-                            Obx(() {
-                              if (!controller.isUserInLocation.value ||
-                                  controller.userLocation.value == null) {
-                                return const SizedBox.shrink();
-                              }
-
-                              final user = controller.userLocation.value!;
-                              final orientation = controller.userOrientation.value;
-                              final px = user.normalizedX * mapSize.width;
-                              final py = user.normalizedY * mapSize.height;
-                              final heading = orientation.mapHeadingDegrees ??
-                                  orientation.headingDegrees ??
-                                  user.headingDegrees;
-
-                              return Positioned(
-                                left: px - 32.0,
-                                top: py - 32.0,
-                                child: UserLocationPuck(
-                                  headingDegrees: heading,
-                                  accuracyMeters: user.accuracyMeters,
-                                  puckColor: colors.primary,
-                                ),
-                              );
-                            }),
-
-                            // Layer 6: Interactive Viewpoint Markers (100–106)
+                            // Layer 4: Interactive Viewpoint Markers (100–106)
                             Obx(() {
                               final selectedVp = controller.selectedViewpoint.value;
                               final isPlaying = controller.isPlayingAudio.value;
@@ -177,6 +151,33 @@ class FloorMapView extends GetView<FloorMapController> {
                                     ),
                                   );
                                 }).toList(),
+                              );
+                            }),
+
+                            // Layer 5: Animated User Indoor Location Puck (Visible ONLY when in location)
+                            // Rendered on the topmost layer above all viewpoint markers and path lines
+                            Obx(() {
+                              if (!controller.isUserInLocation.value ||
+                                  controller.userLocation.value == null) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final user = controller.userLocation.value!;
+                              final orientation = controller.userOrientation.value;
+                              final px = user.normalizedX * mapSize.width;
+                              final py = user.normalizedY * mapSize.height;
+                              final heading = orientation.mapHeadingDegrees ??
+                                  orientation.headingDegrees ??
+                                  user.headingDegrees;
+
+                              return Positioned(
+                                left: px - 32.0,
+                                top: py - 32.0,
+                                child: UserLocationPuck(
+                                  headingDegrees: heading,
+                                  accuracyMeters: user.accuracyMeters,
+                                  puckColor: const Color(0xFF00A6FF), // Sky blue
+                                ),
                               );
                             }),
                           ],

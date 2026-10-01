@@ -22,7 +22,7 @@ class UserLocationPuck extends StatefulWidget {
     super.key,
     this.headingDegrees,
     this.accuracyMeters = 3.0,
-    this.puckColor = const Color(0xFF1976D2),
+    this.puckColor = const Color(0xFF00A6FF),
   });
 
   @override
