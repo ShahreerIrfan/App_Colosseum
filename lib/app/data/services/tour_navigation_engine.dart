@@ -306,9 +306,7 @@ class TourNavigationEngine {
           arrivalDwellStartedAt: () => null,
         );
 
-        final isEligibleForAutoPlay = targetVp.id ==
-                _state.armedAutoPlayViewpointId &&
-            _state.isAutoPlayEnabled &&
+        final isEligibleForAutoPlay = _state.isAutoPlayEnabled &&
             !_state.autoPlayedViewpointIds.contains(targetVp.id) &&
             !_state.visitedIds.contains(targetVp.id) &&
             !_state.skippedIds.contains(targetVp.id) &&
@@ -349,7 +347,7 @@ class TourNavigationEngine {
       ..add(targetVp.id);
 
     _state = _state.copyWith(
-      armedAutoPlayViewpointId: () => null, // Disarm immediately
+      armedAutoPlayViewpointId: () => null, // Disarm current stop
       autoPlayedViewpointIds: updatedAutoPlayed,
       activeAudioViewpointId: () => targetVp.id,
       selectedViewpointId: () => targetVp.id,
@@ -363,7 +361,7 @@ class TourNavigationEngine {
     onAutoPlayViewpoint?.call(targetVp);
   }
 
-  /// Explicit user action: Marks a viewpoint as visited.
+  /// Explicit user action or auto-completion: Marks a viewpoint as visited and advances navigation.
   void markVisited(String viewpointId) {
     final updatedVisited = Set<String>.from(_state.visitedIds)..add(viewpointId);
     
@@ -389,14 +387,28 @@ class TourNavigationEngine {
       visitedIds: updatedVisited,
       previousTargetId: () => prevTargetId,
       navigationTargetId: () => nextTargetId,
-      // Do NOT arm next target immediately while user is still at visited stop
-      armedAutoPlayViewpointId: () => null,
+      // Auto-arm next target so user walking to it automatically triggers
+      armedAutoPlayViewpointId: () => nextTargetId,
       navigationStatus: isAudioPlaying
           ? TourNavigationStatus.viewpointAudioPlaying
-          : TourNavigationStatus.waitingForDeparture,
+          : TourNavigationStatus.navigating,
     );
 
     _notifyState();
+
+    // Speak immediate next navigation direction
+    if (_state.isVoiceGuidanceEnabled && !isAudioPlaying && nextTargetId != null) {
+      if (nextTargetId == 'EXIT') {
+        _speakThrottled('Proceed toward the Exit portal.');
+      } else {
+        final nextVp = _viewpoints
+            .where((vp) => vp.id == nextTargetId)
+            .firstOrNull;
+        if (nextVp != null) {
+          _speakThrottled('Next, proceed toward Viewpoint ${nextVp.order}.');
+        }
+      }
+    }
   }
 
   /// Explicit user action: Unmarks a viewpoint as visited.

@@ -274,7 +274,7 @@ void main() {
       expect(autoPlayedIds.length, equals(1));
     });
 
-    test('10. Marking stop 100 visited advances target to 101, but does not arm 101 until departure (>= 7m)', () {
+    test('10. Marking stop 100 visited advances target to 101, arms 101, and speaks next direction', () {
       engine.startTour(
         floorId: 'floor_underground',
         viewpoints: testViewpoints,
@@ -291,40 +291,16 @@ void main() {
       engine.updateLocation(locAt100, now: t0);
       engine.updateLocation(locAt100, now: t0.add(const Duration(milliseconds: 2600)));
 
+      spokenInstructions.clear();
+
       // User marks 100 as visited and narration finishes
       engine.markVisited('vp_100');
       engine.onAudioCompleted();
 
       expect(engine.state.visitedIds, contains('vp_100'));
       expect(engine.state.navigationTargetId, equals('vp_101'));
-      expect(engine.state.armedAutoPlayViewpointId, isNull); // NOT armed yet!
-      expect(engine.state.navigationStatus, equals(TourNavigationStatus.waitingForDeparture));
-
-      spokenInstructions.clear();
-
-      // User is still standing 3m from 100 -> departure condition not met
-      final locStillNear100 = UserLocationModel(
-        floorId: 'floor_underground',
-        normalizedX: 0.83,
-        normalizedY: 0.50,
-        accuracyMeters: 1.0,
-        timestamp: t0.add(const Duration(seconds: 10)),
-      );
-      engine.updateLocation(locStillNear100, now: t0.add(const Duration(seconds: 10)));
-      expect(engine.state.armedAutoPlayViewpointId, isNull);
-
-      // User physically walks >= 7m away from 100 toward 101: (0.88, 0.47) -> dist from 100 is sqrt((0.08*86)^2 + (0.03*54)^2) = 7.07m, dist to 101 is 4.86m (>4m)
-      final locDeparted = UserLocationModel(
-        floorId: 'floor_underground',
-        normalizedX: 0.88,
-        normalizedY: 0.47,
-        accuracyMeters: 1.0,
-        timestamp: t0.add(const Duration(seconds: 15)),
-      );
-      engine.updateLocation(locDeparted, now: t0.add(const Duration(seconds: 15)));
-
       expect(engine.state.armedAutoPlayViewpointId, equals('vp_101'));
-      expect(engine.state.navigationStatus, equals(TourNavigationStatus.approaching));
+      expect(engine.state.navigationStatus, equals(TourNavigationStatus.navigating));
       expect(spokenInstructions, contains('Next, proceed toward Viewpoint 101.'));
     });
 

@@ -80,16 +80,16 @@ class TourConfig {
   final bool autoMarkVisitedOnAudioComplete;
 
   const TourConfig({
-    this.approachRadiusMeters = 8.0,
-    this.arrivalRadiusMeters = 4.0,
-    this.departureRadiusMeters = 7.0,
-    this.arrivalDwellDuration = const Duration(milliseconds: 2500),
+    this.approachRadiusMeters = 10.0,
+    this.arrivalRadiusMeters = 6.0,
+    this.departureRadiusMeters = 6.0,
+    this.arrivalDwellDuration = const Duration(milliseconds: 1200),
     this.maxJumpDistanceMeters = 15.0,
     this.maxLocationAge = const Duration(seconds: 5),
-    this.maxAcceptableAccuracyMeters = 6.0,
+    this.maxAcceptableAccuracyMeters = 25.0,
     this.arenaWidthMeters = 86.0,
     this.arenaHeightMeters = 54.0,
-    this.autoMarkVisitedOnAudioComplete = false,
+    this.autoMarkVisitedOnAudioComplete = true,
   });
 }
 
