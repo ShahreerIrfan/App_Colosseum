@@ -533,7 +533,7 @@ class FloorMapController extends GetxController {
       userOrientation.value = state;
       if (isUserInLocation.value && userLocation.value != null) {
         userLocation.value = userLocation.value!.copyWith(
-          headingDegrees: state.headingDegrees,
+          headingDegrees: state.mapHeadingDegrees ?? state.headingDegrees,
         );
       }
     });
@@ -667,7 +667,8 @@ class FloorMapController extends GetxController {
     userOrientation.value = compassService.currentState;
     if (isUserInLocation.value && userLocation.value != null) {
       userLocation.value = userLocation.value!.copyWith(
-        headingDegrees: headingDegrees,
+        headingDegrees: compassService.currentState.mapHeadingDegrees ??
+            compassService.currentState.headingDegrees,
       );
     }
   }
@@ -677,7 +678,7 @@ class FloorMapController extends GetxController {
     userOrientation.value = state;
     if (isUserInLocation.value && userLocation.value != null) {
       userLocation.value = userLocation.value!.copyWith(
-        headingDegrees: state.headingDegrees,
+        headingDegrees: state.mapHeadingDegrees ?? state.headingDegrees,
       );
     }
   }

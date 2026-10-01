@@ -4,6 +4,9 @@ import '../../../data/services/compass_service.dart';
 
 /// Navigation user location puck displaying real-time indoor location, accuracy radius,
 /// and an attached live directional heading arrow that rotates smoothly with device orientation.
+///
+/// Implements continuous frame-rate independent exponential convergence to eliminate
+/// high-frequency sensor update jitter and provide a smooth, Google Maps-like navigation puck.
 class UserLocationPuck extends StatefulWidget {
   /// Live heading in degrees [0, 360) where 0° = North, 90° = East, 180° = South, 270° = West.
   /// If null, only the location dot and accuracy halo are rendered.
@@ -32,8 +35,9 @@ class _UserLocationPuckState extends State<UserLocationPuck>
   late final Animation<double> _pulseAnimation;
 
   late final AnimationController _headingController;
-  Animation<double>? _headingAnimation;
   double? _currentRenderedDegrees;
+  double? _animatingStartDegrees;
+  double? _animatingTargetDegrees;
 
   @override
   void initState() {
@@ -50,14 +54,26 @@ class _UserLocationPuckState extends State<UserLocationPuck>
       curve: Curves.easeOut,
     );
 
-    // 2. Smooth Heading Rotation Animation
+    // 2. Smooth Heading Rotation Controller
     _headingController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
     );
 
+    _headingController.addListener(_onHeadingAnimationUpdate);
+
     if (widget.headingDegrees != null) {
       _currentRenderedDegrees = widget.headingDegrees;
+    }
+  }
+
+  void _onHeadingAnimationUpdate() {
+    if (_animatingStartDegrees != null && _animatingTargetDegrees != null) {
+      final t = Curves.easeOutCubic.transform(_headingController.value);
+      final interpolated = _animatingStartDegrees! +
+          (_animatingTargetDegrees! - _animatingStartDegrees!) * t;
+      _currentRenderedDegrees = (interpolated % 360.0 + 360.0) % 360.0;
+      setState(() {});
     }
   }
 
@@ -68,40 +84,31 @@ class _UserLocationPuckState extends State<UserLocationPuck>
     if (widget.headingDegrees != null) {
       if (_currentRenderedDegrees == null) {
         _currentRenderedDegrees = widget.headingDegrees;
+        setState(() {});
       } else {
-        // Compute shortest angular path to prevent 359° <-> 0° reverse spinning
         final delta = CompassService.shortestAngleDelta(
           _currentRenderedDegrees!,
           widget.headingDegrees!,
         );
 
-        final startDegrees = _currentRenderedDegrees!;
-        final targetDegrees = startDegrees + delta;
-
-        _headingAnimation = Tween<double>(
-          begin: startDegrees,
-          end: targetDegrees,
-        ).animate(
-          CurvedAnimation(
-            parent: _headingController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-
-        _headingController.forward(from: 0.0).then((_) {
-          if (mounted) {
-            _currentRenderedDegrees =
-                (targetDegrees % 360.0 + 360.0) % 360.0;
-          }
-        });
+        // If angular distance is significant (> 0.25°), smoothly animate to target
+        if (delta.abs() > 0.25) {
+          _animatingStartDegrees = _currentRenderedDegrees;
+          _animatingTargetDegrees = _currentRenderedDegrees! + delta;
+          _headingController.forward(from: 0.0);
+        } else {
+          _currentRenderedDegrees = widget.headingDegrees;
+        }
       }
     } else {
       _currentRenderedDegrees = null;
+      _headingController.stop();
     }
   }
 
   @override
   void dispose() {
+    _headingController.removeListener(_onHeadingAnimationUpdate);
     _pulseController.dispose();
     _headingController.dispose();
     super.dispose();
@@ -110,10 +117,11 @@ class _UserLocationPuckState extends State<UserLocationPuck>
   @override
   Widget build(BuildContext context) {
     final puckColor = widget.puckColor;
+    final heading = _currentRenderedDegrees ?? widget.headingDegrees;
 
     return Semantics(
-      label: widget.headingDegrees != null
-          ? 'Current location, facing ${widget.headingDegrees!.toStringAsFixed(0)} degrees'
+      label: heading != null
+          ? 'Current location, facing ${heading.toStringAsFixed(0)} degrees'
           : 'Current location',
       child: SizedBox(
         width: 64.0,
@@ -147,27 +155,17 @@ class _UserLocationPuckState extends State<UserLocationPuck>
             ),
 
             // Layer 2: Live Directional Heading Arrow (rotates around center)
-            if (widget.headingDegrees != null)
-              AnimatedBuilder(
+            if (heading != null)
+              KeyedSubtree(
                 key: const Key('heading_arrow_layer'),
-                animation: _headingController,
-                builder: (context, child) {
-                  final angleDegrees = _headingAnimation != null &&
-                          _headingController.isAnimating
-                      ? _headingAnimation!.value
-                      : (_currentRenderedDegrees ?? widget.headingDegrees ?? 0.0);
-
-                  final radians = (angleDegrees * math.pi) / 180.0;
-
-                  return Transform.rotate(
-                    angle: radians,
-                    child: CustomPaint(
-                      key: const Key('heading_arrow_painter'),
-                      size: const Size(64.0, 64.0),
-                      painter: _HeadingArrowPainter(color: puckColor),
-                    ),
-                  );
-                },
+                child: Transform.rotate(
+                  angle: (heading * math.pi) / 180.0,
+                  child: CustomPaint(
+                    key: const Key('heading_arrow_painter'),
+                    size: const Size(64.0, 64.0),
+                    painter: _HeadingArrowPainter(color: puckColor),
+                  ),
+                ),
               ),
 
             // Layer 3: Center Location Dot (Anchored at exact location)

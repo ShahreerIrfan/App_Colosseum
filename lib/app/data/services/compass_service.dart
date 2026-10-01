@@ -1,9 +1,17 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter_compass/flutter_compass.dart';
 import '../models/user_orientation_state.dart';
 
-/// Service responsible for managing live device compass / orientation sensor data,
-/// filtering sensor noise, handling wrap-around angular interpolation, and reporting calibration state.
+/// High-precision orientation and compass tracking service.
+///
+/// Implements:
+/// 1. Dead-band noise gating to eliminate stationary jitter.
+/// 2. Adaptive circular low-pass filtering (Kalman-style dynamic alpha).
+/// 3. Outlier / electromagnetic spike rejection via angular slew-rate clamping.
+/// 4. Boundary-safe shortest angular path interpolation (359° <-> 0°).
+/// 5. Map-North coordinate space transformation for architectural alignment.
+/// 6. Automatic sensor accuracy / calibration tracking.
 class CompassService {
   StreamSubscription<CompassEvent>? _subscription;
   final StreamController<UserOrientationState> _orientationController =
@@ -16,13 +24,34 @@ class CompassService {
       const UserOrientationState(isAvailable: true);
   UserOrientationState get currentState => _currentState;
 
-  double? _lastFilteredHeading;
+  /// Architectural Map North offset in degrees.
+  /// Colosseum's major axis is rotated by -20.0° relative to true East-West / North.
+  /// Setting this allows true geographic heading to project accurately onto the floor plan canvas.
+  final double mapNorthOffsetDegrees;
 
-  /// Low-pass filter smoothing factor between 0.0 (maximum smoothing) and 1.0 (no smoothing).
-  final double smoothingAlpha;
+  /// Angular dead-band in degrees. Heading variations smaller than this threshold
+  /// are treated as sensor electronic noise and suppressed when stationary.
+  final double deadBandDegrees;
+
+  /// Baseline smoothing alpha for stationary / slow movements [0.0 = max smoothing, 1.0 = raw].
+  final double minAlpha;
+
+  /// Maximum smoothing alpha for fast, deliberate device rotations.
+  final double maxAlpha;
+
+  /// Maximum physical slew rate in degrees per second to filter anomalous magnetic spikes.
+  final double maxSlewRateDegreesPerSec;
+
+  double? _lastFilteredHeading;
+  DateTime? _lastTimestamp;
 
   CompassService({
-    this.smoothingAlpha = 0.30,
+    this.mapNorthOffsetDegrees = -20.0,
+    this.deadBandDegrees = 1.5,
+    this.minAlpha = 0.08,
+    this.maxAlpha = 0.65,
+    this.maxSlewRateDegreesPerSec = 360.0,
+    double? smoothingAlpha,
     Stream<CompassEvent>? mockEvents,
   }) {
     if (mockEvents != null) {
@@ -59,7 +88,9 @@ class CompassService {
     final rawHeading = event.heading;
     if (rawHeading == null || rawHeading.isNaN) {
       _currentState = _currentState.copyWith(
+        rawHeadingDegrees: () => null,
         headingDegrees: () => null,
+        mapHeadingDegrees: () => null,
         sensorAccuracy: () => event.accuracy,
         isAvailable: true,
       );
@@ -67,33 +98,87 @@ class CompassService {
       return;
     }
 
-    // Normalize raw heading to standard [0, 360) range
-    final normalizedHeading = (rawHeading % 360.0 + 360.0) % 360.0;
+    // 1. Normalize raw heading into standard [0, 360) range
+    final normalizedRaw = (rawHeading % 360.0 + 360.0) % 360.0;
+    final now = DateTime.now();
 
-    // Apply circular low-pass angular filter to smooth small sensor fluctuations
-    final smoothedHeading = _lastFilteredHeading == null
-        ? normalizedHeading
-        : smoothHeadingAngle(
-            _lastFilteredHeading!,
-            normalizedHeading,
-            alpha: smoothingAlpha,
-          );
-    _lastFilteredHeading = smoothedHeading;
+    double filteredHeading;
 
-    // Determine calibration state based on sensor accuracy
-    // (accuracy > 30 degrees or status == 0/unreliable)
+    if (_lastFilteredHeading == null) {
+      filteredHeading = normalizedRaw;
+    } else {
+      // 2. Shortest angular delta between last filtered angle and new raw reading
+      final delta = shortestAngleDelta(_lastFilteredHeading!, normalizedRaw);
+      final absDelta = delta.abs();
+
+      // 3. Slew-rate clamping to reject erratic single-frame magnetic spikes
+      double effectiveDelta = delta;
+      if (_lastTimestamp != null) {
+        final dt = now.difference(_lastTimestamp!).inMicroseconds / 1000000.0;
+        if (dt > 0.001 && dt < 0.5) {
+          final maxAllowedDelta = maxSlewRateDegreesPerSec * dt;
+          if (absDelta > maxAllowedDelta && absDelta > 20.0) {
+            effectiveDelta = delta.sign * maxAllowedDelta;
+          }
+        }
+      }
+
+      // 4. Dead-band noise filter: suppress micro-fluctuations (< deadBandDegrees)
+      if (effectiveDelta.abs() < deadBandDegrees) {
+        filteredHeading = _lastFilteredHeading!;
+      } else {
+        // 5. Dynamic adaptive alpha: low smoothing for stationary, high responsiveness when turning
+        final alpha = calculateAdaptiveAlpha(effectiveDelta.abs());
+
+        // 6. Circular interpolation
+        filteredHeading = smoothHeadingAngle(
+          _lastFilteredHeading!,
+          _lastFilteredHeading! + effectiveDelta,
+          alpha: alpha,
+        );
+      }
+    }
+
+    _lastFilteredHeading = filteredHeading;
+    _lastTimestamp = now;
+
+    // 7. Architectural Map North correction: displayHeading = (worldHeading - mapNorthOffsetDegrees)
+    final mapHeading = (filteredHeading - mapNorthOffsetDegrees + 360.0) % 360.0;
+
+    // 8. Calibration status (accuracy > 30° indicates interference)
     final isLowAccuracy = event.accuracy != null &&
         (event.accuracy! > 30.0 || event.accuracy! == 0.0);
 
     _currentState = UserOrientationState(
-      headingDegrees: smoothedHeading,
+      rawHeadingDegrees: normalizedRaw,
+      headingDegrees: filteredHeading,
+      mapHeadingDegrees: mapHeading,
       sensorAccuracy: event.accuracy,
       isAvailable: true,
       isCalibrating: isLowAccuracy,
-      timestamp: DateTime.now(),
+      timestamp: now,
     );
 
     _orientationController.add(_currentState);
+  }
+
+  /// Calculates dynamic alpha factor based on angular change magnitude.
+  /// - Small movements (1.5° - 5°): heavy smoothing (alpha = 0.08 - 0.20)
+  /// - Medium turns (5° - 25°): balanced tracking (alpha = 0.20 - 0.65)
+  /// - Rapid turns (> 25°): fast catch-up (alpha = 0.65 - 0.85)
+  double calculateAdaptiveAlpha(double absDeltaDegrees) {
+    if (absDeltaDegrees < deadBandDegrees) {
+      return 0.0;
+    } else if (absDeltaDegrees < 5.0) {
+      final t = (absDeltaDegrees - deadBandDegrees) / (5.0 - deadBandDegrees);
+      return minAlpha + (0.20 - minAlpha) * t;
+    } else if (absDeltaDegrees < 25.0) {
+      final t = (absDeltaDegrees - 5.0) / 20.0;
+      return 0.20 + (maxAlpha - 0.20) * t;
+    } else {
+      final t = ((absDeltaDegrees - 25.0) / 35.0).clamp(0.0, 1.0);
+      return maxAlpha + (0.85 - maxAlpha) * t;
+    }
   }
 
   /// Manually feeds a simulated mock heading (useful for unit tests and walking simulations).
@@ -104,8 +189,11 @@ class CompassService {
   }) {
     if (heading == null) {
       _lastFilteredHeading = null;
+      _lastTimestamp = null;
       _currentState = UserOrientationState(
+        rawHeadingDegrees: null,
         headingDegrees: null,
+        mapHeadingDegrees: null,
         sensorAccuracy: accuracy,
         isAvailable: isAvailable,
         timestamp: DateTime.now(),
@@ -113,8 +201,13 @@ class CompassService {
     } else {
       final normalized = (heading % 360.0 + 360.0) % 360.0;
       _lastFilteredHeading = normalized;
+      _lastTimestamp = DateTime.now();
+      final mapHeading = (normalized - mapNorthOffsetDegrees + 360.0) % 360.0;
+
       _currentState = UserOrientationState(
+        rawHeadingDegrees: normalized,
         headingDegrees: normalized,
+        mapHeadingDegrees: mapHeading,
         sensorAccuracy: accuracy,
         isAvailable: isAvailable,
         isCalibrating: accuracy != null && accuracy > 30.0,
@@ -130,7 +223,7 @@ class CompassService {
     return ((toDegrees - fromDegrees + 540.0) % 360.0) - 180.0;
   }
 
-  /// Low-pass filter for circular angles to avoid unnatural spinning on 0°/360° wraps.
+  /// Circular low-pass filter for angular values to prevent 0°/360° wrapping glitches.
   static double smoothHeadingAngle(
     double current,
     double target, {
@@ -139,6 +232,29 @@ class CompassService {
     final delta = shortestAngleDelta(current, target);
     final smoothed = current + (delta * alpha.clamp(0.0, 1.0));
     return (smoothed % 360.0 + 360.0) % 360.0;
+  }
+
+  /// Trigonometric vector interpolation (converts angles to 2D unit vectors before blending).
+  static double smoothHeadingVector(
+    double currentDegrees,
+    double targetDegrees, {
+    double alpha = 0.30,
+  }) {
+    final currentRad = currentDegrees * math.pi / 180.0;
+    final targetRad = targetDegrees * math.pi / 180.0;
+
+    final cosCurrent = math.cos(currentRad);
+    final sinCurrent = math.sin(currentRad);
+    final cosTarget = math.cos(targetRad);
+    final sinTarget = math.sin(targetRad);
+
+    final a = alpha.clamp(0.0, 1.0);
+    final blendedCos = (1.0 - a) * cosCurrent + a * cosTarget;
+    final blendedSin = (1.0 - a) * sinCurrent + a * sinTarget;
+
+    final angleRad = math.atan2(blendedSin, blendedCos);
+    final angleDeg = angleRad * 180.0 / math.pi;
+    return (angleDeg % 360.0 + 360.0) % 360.0;
   }
 
   /// Pauses / cancels orientation sensor subscription to conserve battery when screen is inactive.

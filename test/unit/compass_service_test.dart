@@ -9,7 +9,7 @@ void main() {
     late CompassService compassService;
 
     setUp(() {
-      compassService = CompassService(smoothingAlpha: 0.5);
+      compassService = CompassService(mapNorthOffsetDegrees: -20.0);
     });
 
     tearDown(() {
@@ -50,7 +50,73 @@ void main() {
       expect(stepNegative, closeTo(0.0, 0.001));
     });
 
-    test('3. setMockHeading updates currentState and emits to orientationStream', () async {
+    test('3. smoothHeadingVector computes seamless 2D vector trigonometric interpolation', () {
+      final vecSmoothed = CompassService.smoothHeadingVector(358.0, 2.0, alpha: 0.5);
+      expect(vecSmoothed, closeTo(0.0, 0.01));
+
+      final eastToNorth = CompassService.smoothHeadingVector(90.0, 0.0, alpha: 0.5);
+      expect(eastToNorth, closeTo(45.0, 0.01));
+    });
+
+    test('4. Dead-band noise gate suppresses stationary micro-jitter (< 1.5°)', () async {
+      final controller = StreamController<CompassEvent>.broadcast();
+      final service = CompassService(
+        deadBandDegrees: 1.5,
+        mapNorthOffsetDegrees: 0.0,
+      );
+      service.startListening(customStream: controller.stream);
+
+      // Initial steady reading at 90.0°
+      controller.add(CompassEvent.fromList([90.0, 90.0, 5.0]));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(service.currentState.headingDegrees, closeTo(90.0, 0.001));
+
+      // Micro sensor fluctuation of +0.8° (should be suppressed by dead-band)
+      controller.add(CompassEvent.fromList([90.8, 90.8, 5.0]));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(service.currentState.headingDegrees, closeTo(90.0, 0.001)); // Remained 90.0!
+
+      // Micro sensor fluctuation of -1.0° (should also be suppressed)
+      controller.add(CompassEvent.fromList([89.0, 89.0, 5.0]));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(service.currentState.headingDegrees, closeTo(90.0, 0.001));
+
+      // Deliberate rotation of +15° (passes dead-band and updates smoothly)
+      controller.add(CompassEvent.fromList([105.0, 105.0, 5.0]));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(service.currentState.headingDegrees, greaterThan(90.0));
+
+      await controller.close();
+      service.dispose();
+    });
+
+    test('5. calculateAdaptiveAlpha scales dynamically with angular velocity', () {
+      final service = CompassService(deadBandDegrees: 1.5, minAlpha: 0.08, maxAlpha: 0.65);
+
+      // Inside dead-zone (< 1.5°) -> alpha is 0.0 (still)
+      expect(service.calculateAdaptiveAlpha(1.0), equals(0.0));
+
+      // Gentle movement (3.0°) -> low alpha for rock-solid stability
+      expect(service.calculateAdaptiveAlpha(3.0), lessThan(0.20));
+
+      // Deliberate turn (15.0°) -> moderate alpha for responsive tracking
+      expect(service.calculateAdaptiveAlpha(15.0), greaterThan(0.35));
+
+      // Fast turn (45.0°) -> high alpha for rapid catch-up
+      expect(service.calculateAdaptiveAlpha(45.0), greaterThanOrEqualTo(0.65));
+    });
+
+    test('6. mapNorthOffsetDegrees correctly transforms world true heading to architectural map canvas', () {
+      compassService.setMockHeading(0.0); // Facing true North
+      // With mapNorthOffsetDegrees = -20.0, mapHeading = (0 - (-20)) = 20.0°
+      expect(compassService.currentState.headingDegrees, closeTo(0.0, 0.001));
+      expect(compassService.currentState.mapHeadingDegrees, closeTo(20.0, 0.001));
+
+      compassService.setMockHeading(90.0); // Facing East
+      expect(compassService.currentState.mapHeadingDegrees, closeTo(110.0, 0.001));
+    });
+
+    test('7. setMockHeading updates currentState and emits to orientationStream', () async {
       final emitted = <UserOrientationState>[];
       final sub = compassService.orientationStream.listen(emitted.add);
 
@@ -78,7 +144,7 @@ void main() {
       await sub.cancel();
     });
 
-    test('4. Flags isCalibrating true when sensor accuracy is poor (> 30°)', () {
+    test('8. Flags isCalibrating true when sensor accuracy is poor (> 30°)', () {
       compassService.setMockHeading(45.0, accuracy: 45.0);
       expect(compassService.currentState.isCalibrating, isTrue);
 
@@ -86,9 +152,9 @@ void main() {
       expect(compassService.currentState.isCalibrating, isFalse);
     });
 
-    test('5. customStream processes live CompassEvent correctly', () async {
+    test('9. customStream processes live CompassEvent correctly', () async {
       final controller = StreamController<CompassEvent>.broadcast();
-      final service = CompassService(smoothingAlpha: 1.0); // No lag for raw test
+      final service = CompassService(mapNorthOffsetDegrees: 0.0);
       service.startListening(customStream: controller.stream);
 
       final events = <UserOrientationState>[];

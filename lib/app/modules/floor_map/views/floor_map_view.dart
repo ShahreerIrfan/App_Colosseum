@@ -129,8 +129,9 @@ class FloorMapView extends GetView<FloorMapController> {
                               final orientation = controller.userOrientation.value;
                               final px = user.normalizedX * mapSize.width;
                               final py = user.normalizedY * mapSize.height;
-                              final heading =
-                                  orientation.headingDegrees ?? user.headingDegrees;
+                              final heading = orientation.mapHeadingDegrees ??
+                                  orientation.headingDegrees ??
+                                  user.headingDegrees;
 
                               return Positioned(
                                 left: px - 32.0,
