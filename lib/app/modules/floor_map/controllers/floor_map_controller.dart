@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../data/models/itinerary_segment_model.dart';
 import '../../../data/models/tour_navigation_state.dart';
 import '../../../data/models/user_location_model.dart';
+import '../../../data/models/user_orientation_state.dart';
 import '../../../data/models/viewpoint_model.dart';
+import '../../../data/services/compass_service.dart';
 import '../../../data/services/tour_navigation_engine.dart';
 import '../../../data/services/tts_service.dart';
 
@@ -12,12 +15,15 @@ import '../../../data/services/tts_service.dart';
 class FloorMapController extends GetxController {
   final TtsService ttsService;
   final TourNavigationEngine tourEngine;
+  final CompassService compassService;
 
   FloorMapController({
     TtsService? ttsService,
     TourNavigationEngine? tourEngine,
+    CompassService? compassService,
   })  : ttsService = ttsService ?? TtsService(),
-        tourEngine = tourEngine ?? TourNavigationEngine();
+        tourEngine = tourEngine ?? TourNavigationEngine(),
+        compassService = compassService ?? CompassService();
 
   final landmarkName = 'Colosseum'.obs;
   final floorName = 'Underground (Hypogeum)'.obs;
@@ -36,6 +42,11 @@ class FloorMapController extends GetxController {
     headingDegrees: 270.0,
     accuracyMeters: 2.0,
   ).obs;
+
+  /// User's live device orientation and compass heading state
+  final userOrientation = const UserOrientationState().obs;
+
+  StreamSubscription<UserOrientationState>? _compassSubscription;
 
   /// Observable list of architectural viewpoints / audio stops
   final viewpoints = <ViewpointModel>[].obs;
@@ -439,9 +450,10 @@ class FloorMapController extends GetxController {
       }
     }
 
-    // Initialize Text-to-Speech service & Tour Navigation Engine
+    // Initialize Text-to-Speech service, Tour Navigation Engine & Device Compass
     _initTts();
     _initTour();
+    _initCompass();
 
     // Load viewpoints according to selected floor
     _loadFloorData();
@@ -509,6 +521,14 @@ class FloorMapController extends GetxController {
 
       _refreshItinerarySegments();
     };
+  }
+
+  void _initCompass() {
+    userOrientation.value = compassService.currentState;
+    _compassSubscription = compassService.orientationStream.listen((state) {
+      userOrientation.value = state;
+    });
+    compassService.startListening();
   }
 
   void _loadFloorData() {
@@ -587,9 +607,22 @@ class FloorMapController extends GetxController {
 
   @override
   void onClose() {
+    _compassSubscription?.cancel();
+    compassService.dispose();
     ttsService.dispose();
     transformationController.dispose();
     super.onClose();
+  }
+
+  /// Manually feeds a simulated mock compass heading (useful for unit tests and walking simulations).
+  void updateHeading(double? headingDegrees, {double? accuracy}) {
+    compassService.setMockHeading(headingDegrees, accuracy: accuracy);
+    userOrientation.value = compassService.currentState;
+  }
+
+  /// Manually updates complete user orientation state.
+  void updateOrientation(UserOrientationState state) {
+    userOrientation.value = state;
   }
 
   /// Selects a viewpoint, opens its detail card, and highlights marker.

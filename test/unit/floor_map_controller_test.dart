@@ -160,5 +160,25 @@ void main() {
         1.0,
       );
     });
+
+    test('updateHeading updates userOrientation reactive state independently of location', () {
+      expect(controller.userLocation.value.normalizedX, equals(0.92));
+
+      controller.updateHeading(45.0, accuracy: 5.0);
+      expect(controller.userOrientation.value.headingDegrees, closeTo(45.0, 0.001));
+      expect(controller.userOrientation.value.sensorAccuracy, equals(5.0));
+
+      // User location coordinates remain unaffected
+      expect(controller.userLocation.value.normalizedX, equals(0.92));
+      expect(controller.userLocation.value.normalizedY, equals(0.50));
+    });
+
+    test('recenter preserves current live compass heading', () {
+      controller.updateHeading(120.0);
+      controller.zoomIn();
+      controller.recenter();
+
+      expect(controller.userOrientation.value.headingDegrees, closeTo(120.0, 0.001));
+    });
   });
 }

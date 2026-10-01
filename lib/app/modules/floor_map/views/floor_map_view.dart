@@ -118,18 +118,22 @@ class FloorMapView extends GetView<FloorMapController> {
                               );
                             }),
 
-                            // Layer 4: Animated User Indoor Location Puck
+                            // Layer 4: Animated User Indoor Location Puck (with Live Directional Compass Heading)
                             Obx(() {
                               final user = controller.userLocation.value;
+                              final orientation = controller.userOrientation.value;
                               final px = user.normalizedX * mapSize.width;
                               final py = user.normalizedY * mapSize.height;
+                              final heading =
+                                  orientation.headingDegrees ?? user.headingDegrees;
 
                               return Positioned(
-                                left: px - 30.0,
-                                top: py - 30.0,
+                                left: px - 32.0,
+                                top: py - 32.0,
                                 child: UserLocationPuck(
-                                  headingDegrees: user.headingDegrees,
+                                  headingDegrees: heading,
                                   accuracyMeters: user.accuracyMeters,
+                                  puckColor: colors.primary,
                                 ),
                               );
                             }),
@@ -442,6 +446,60 @@ class FloorMapView extends GetView<FloorMapController> {
                                   ? const Color(0xFFEAB308)
                                   : colors.foreground.withValues(alpha: 0.4),
                             ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            // 5. Non-blocking Compass Calibration Notification (only when sensor accuracy is low)
+            Positioned(
+              top: 148.0,
+              left: 20.0,
+              right: 20.0,
+              child: Obx(() {
+                final orientation = controller.userOrientation.value;
+                if (!orientation.isCalibrating) return const SizedBox.shrink();
+
+                return Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14.0,
+                      vertical: 6.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.card.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(16.0),
+                      border: Border.all(
+                        color: Colors.amber.shade700.withValues(alpha: 0.35),
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 6.0,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.explore_outlined,
+                          size: 14.0,
+                          color: Colors.amber.shade800,
+                        ),
+                        const SizedBox(width: 6.0),
+                        Text(
+                          'Move phone in figure-8 to improve compass accuracy',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colors.foreground,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
