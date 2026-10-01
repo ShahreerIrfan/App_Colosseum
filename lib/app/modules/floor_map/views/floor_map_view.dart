@@ -118,9 +118,14 @@ class FloorMapView extends GetView<FloorMapController> {
                               );
                             }),
 
-                            // Layer 4: Animated User Indoor Location Puck (with Live Directional Compass Heading)
+                            // Layer 4: Animated User Indoor Location Puck (Visible ONLY when in location)
                             Obx(() {
-                              final user = controller.userLocation.value;
+                              if (!controller.isUserInLocation.value ||
+                                  controller.userLocation.value == null) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final user = controller.userLocation.value!;
                               final orientation = controller.userOrientation.value;
                               final px = user.normalizedX * mapSize.width;
                               final py = user.normalizedY * mapSize.height;
@@ -354,12 +359,58 @@ class FloorMapView extends GetView<FloorMapController> {
               ),
             ),
 
-            // 4. Compact Guided Tour HUD (Navigation Status, Distance, Settings & Skip)
+            // 4. Guided Tour HUD or Out-of-Location Status Badge
             Positioned(
               top: 112.0,
               left: 16.0,
               right: 16.0,
               child: Obx(() {
+                if (!controller.isUserInLocation.value) {
+                  return Center(
+                    child: Container(
+                      key: const Key('out_of_location_badge'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14.0,
+                        vertical: 6.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.card.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(18.0),
+                        border: Border.all(
+                          color: colors.border,
+                          width: 1.0,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.foreground.withValues(alpha: 0.06),
+                            blurRadius: 8.0,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.location_off_rounded,
+                            size: 14.0,
+                            color: colors.foreground.withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(width: 6.0),
+                          Text(
+                            'You are not in the location',
+                            style: TextStyle(
+                              color: colors.foreground.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
                 if (!controller.floorId.value.contains('underground')) {
                   return const SizedBox.shrink();
                 }

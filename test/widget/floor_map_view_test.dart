@@ -45,14 +45,25 @@ void main() {
       expect(find.text('Underground (Hypogeum)'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
 
-      // 2. Map Canvas, Markers (7 Underground Stops), and Portals (ENTRY & EXIT)
+      // 2. Out-of-Location Badge is shown initially and UserLocationPuck is hidden
       expect(find.byType(InteractiveViewer), findsOneWidget);
-      expect(find.byType(UserLocationPuck), findsOneWidget);
+      expect(find.byKey(const Key('out_of_location_badge')), findsOneWidget);
+      expect(find.text('You are not in the location'), findsOneWidget);
+      expect(find.byType(UserLocationPuck), findsNothing);
+
+      // Markers (7 Underground Stops), and Portals (ENTRY & EXIT) are fully visible
       expect(find.byType(ViewpointMarker), findsNWidgets(7));
       expect(find.byKey(const Key('itinerary_entry_marker')), findsOneWidget);
       expect(find.byKey(const Key('itinerary_exit_marker')), findsOneWidget);
       expect(find.text('ENTRY'), findsOneWidget);
       expect(find.text('EXIT'), findsOneWidget);
+
+      // Now feed in-bounds GPS position -> Puck appears and out_of_location_badge disappears
+      controller.updateGpsPosition(41.890250, 12.492820);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(UserLocationPuck), findsOneWidget);
+      expect(find.byKey(const Key('out_of_location_badge')), findsNothing);
 
       // 3. Floating Controls
       expect(find.byIcon(Icons.add_rounded), findsOneWidget);

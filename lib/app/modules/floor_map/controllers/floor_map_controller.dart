@@ -8,6 +8,7 @@ import '../../../data/models/user_location_model.dart';
 import '../../../data/models/user_orientation_state.dart';
 import '../../../data/models/viewpoint_model.dart';
 import '../../../data/services/compass_service.dart';
+import '../../../data/services/gps_location_service.dart';
 import '../../../data/services/tour_navigation_engine.dart';
 import '../../../data/services/tts_service.dart';
 
@@ -16,14 +17,17 @@ class FloorMapController extends GetxController {
   final TtsService ttsService;
   final TourNavigationEngine tourEngine;
   final CompassService compassService;
+  final GpsLocationService gpsService;
 
   FloorMapController({
     TtsService? ttsService,
     TourNavigationEngine? tourEngine,
     CompassService? compassService,
+    GpsLocationService? gpsService,
   })  : ttsService = ttsService ?? TtsService(),
         tourEngine = tourEngine ?? TourNavigationEngine(),
-        compassService = compassService ?? CompassService();
+        compassService = compassService ?? CompassService(),
+        gpsService = gpsService ?? GpsLocationService();
 
   final landmarkName = 'Colosseum'.obs;
   final floorName = 'Underground (Hypogeum)'.obs;
@@ -34,14 +38,13 @@ class FloorMapController extends GetxController {
   /// Reactive indoor guided tour state machine
   final tourState = const TourNavigationState().obs;
 
-  /// User's real-time indoor location beacon on this floor
-  final userLocation = const UserLocationModel(
-    floorId: 'floor_underground',
-    normalizedX: 0.92,
-    normalizedY: 0.50,
-    headingDegrees: 270.0,
-    accuracyMeters: 2.0,
-  ).obs;
+  /// Whether the user is currently physically located inside the Colosseum boundary
+  final isUserInLocation = false.obs;
+
+  /// User's real-time indoor location beacon on this floor (null when outside location)
+  final userLocation = Rxn<UserLocationModel>();
+
+  StreamSubscription<GpsLocationResult>? _gpsSubscription;
 
   /// User's live device orientation and compass heading state
   final userOrientation = const UserOrientationState().obs;
@@ -450,10 +453,11 @@ class FloorMapController extends GetxController {
       }
     }
 
-    // Initialize Text-to-Speech service, Tour Navigation Engine & Device Compass
+    // Initialize Text-to-Speech service, Tour Navigation Engine, Device Compass & GPS
     _initTts();
     _initTour();
     _initCompass();
+    _initGps();
 
     // Load viewpoints according to selected floor
     _loadFloorData();
@@ -527,8 +531,32 @@ class FloorMapController extends GetxController {
     userOrientation.value = compassService.currentState;
     _compassSubscription = compassService.orientationStream.listen((state) {
       userOrientation.value = state;
+      if (isUserInLocation.value && userLocation.value != null) {
+        userLocation.value = userLocation.value!.copyWith(
+          headingDegrees: state.headingDegrees,
+        );
+      }
     });
     compassService.startListening();
+  }
+
+  void _initGps() {
+    isUserInLocation.value = gpsService.currentResult.isInLocation;
+    userLocation.value = gpsService.currentResult.userLocation;
+
+    _gpsSubscription = gpsService.locationStream.listen((result) {
+      isUserInLocation.value = result.isInLocation;
+      if (result.isInLocation && result.userLocation != null) {
+        final loc = result.userLocation!.copyWith(
+          headingDegrees: userOrientation.value.headingDegrees,
+        );
+        userLocation.value = loc;
+        tourEngine.updateLocation(loc);
+      } else {
+        userLocation.value = null;
+      }
+    });
+    gpsService.startTracking(floorId: floorId.value);
   }
 
   void _loadFloorData() {
@@ -536,13 +564,6 @@ class FloorMapController extends GetxController {
         floorId.value == 'underground') {
       floorName.value = 'Underground (Hypogeum)';
       viewpoints.assignAll(undergroundViewpoints);
-      userLocation.value = const UserLocationModel(
-        floorId: 'floor_underground',
-        normalizedX: 0.92,
-        normalizedY: 0.50,
-        headingDegrees: 270.0,
-        accuracyMeters: 2.0,
-      );
       tourEngine.startTour(
         floorId: 'floor_underground',
         viewpoints: undergroundViewpoints,
@@ -555,13 +576,6 @@ class FloorMapController extends GetxController {
     } else {
       floorName.value = 'Floor 1';
       viewpoints.assignAll(floor1Viewpoints);
-      userLocation.value = const UserLocationModel(
-        floorId: 'floor_1',
-        normalizedX: 0.50,
-        normalizedY: 0.24,
-        headingDegrees: 135.0,
-        accuracyMeters: 2.5,
-      );
       tourEngine.startTour(
         floorId: 'floor_1',
         viewpoints: floor1Viewpoints,
@@ -600,13 +614,21 @@ class FloorMapController extends GetxController {
   }
 
   /// Updates indoor user position and evaluates tour proximity state machine.
-  void updateUserLocation(UserLocationModel location) {
-    userLocation.value = location;
-    tourEngine.updateLocation(location);
+  void updateUserLocation(UserLocationModel? location) {
+    if (location != null) {
+      isUserInLocation.value = true;
+      userLocation.value = location;
+      tourEngine.updateLocation(location);
+    } else {
+      isUserInLocation.value = false;
+      userLocation.value = null;
+    }
   }
 
   @override
   void onClose() {
+    _gpsSubscription?.cancel();
+    gpsService.dispose();
     _compassSubscription?.cancel();
     compassService.dispose();
     ttsService.dispose();
@@ -614,15 +636,50 @@ class FloorMapController extends GetxController {
     super.onClose();
   }
 
+  /// Feeds simulated mock GPS position (useful for unit tests and Fake GPS simulation).
+  void updateGpsPosition(
+    double latitude,
+    double longitude, {
+    double accuracy = 2.0,
+  }) {
+    gpsService.setMockPosition(
+      latitude: latitude,
+      longitude: longitude,
+      accuracy: accuracy,
+      floorId: floorId.value,
+    );
+    isUserInLocation.value = gpsService.currentResult.isInLocation;
+    if (gpsService.currentResult.isInLocation &&
+        gpsService.currentResult.userLocation != null) {
+      final loc = gpsService.currentResult.userLocation!.copyWith(
+        headingDegrees: userOrientation.value.headingDegrees,
+      );
+      userLocation.value = loc;
+      tourEngine.updateLocation(loc);
+    } else {
+      userLocation.value = null;
+    }
+  }
+
   /// Manually feeds a simulated mock compass heading (useful for unit tests and walking simulations).
   void updateHeading(double? headingDegrees, {double? accuracy}) {
     compassService.setMockHeading(headingDegrees, accuracy: accuracy);
     userOrientation.value = compassService.currentState;
+    if (isUserInLocation.value && userLocation.value != null) {
+      userLocation.value = userLocation.value!.copyWith(
+        headingDegrees: headingDegrees,
+      );
+    }
   }
 
   /// Manually updates complete user orientation state.
   void updateOrientation(UserOrientationState state) {
     userOrientation.value = state;
+    if (isUserInLocation.value && userLocation.value != null) {
+      userLocation.value = userLocation.value!.copyWith(
+        headingDegrees: state.headingDegrees,
+      );
+    }
   }
 
   /// Selects a viewpoint, opens its detail card, and highlights marker.

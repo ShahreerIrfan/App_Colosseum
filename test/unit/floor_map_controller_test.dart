@@ -63,11 +63,15 @@ void main() {
       expect(controller.itinerarySegments.last.toId, 'EXIT');
     });
 
-    test('initializes with valid user indoor location for underground at eastern entry', () {
-      final user = controller.userLocation.value;
-      expect(user.floorId, 'floor_underground');
-      expect(user.normalizedX, 0.92);
-      expect(user.normalizedY, 0.50);
+    test('initializes with isUserInLocation false and null userLocation until GPS in-bounds fix arrives', () {
+      expect(controller.isUserInLocation.value, isFalse);
+      expect(controller.userLocation.value, isNull);
+
+      // Feed in-bounds GPS position at Stop 100
+      controller.updateGpsPosition(41.890250, 12.492820);
+      expect(controller.isUserInLocation.value, isTrue);
+      expect(controller.userLocation.value, isNotNull);
+      expect(controller.userLocation.value!.normalizedX, greaterThan(0.70));
     });
 
     test('selectViewpoint sets active stop without mutating route geometry', () {
@@ -162,15 +166,15 @@ void main() {
     });
 
     test('updateHeading updates userOrientation reactive state independently of location', () {
-      expect(controller.userLocation.value.normalizedX, equals(0.92));
+      controller.updateGpsPosition(41.890250, 12.492820);
+      final initialX = controller.userLocation.value!.normalizedX;
 
       controller.updateHeading(45.0, accuracy: 5.0);
       expect(controller.userOrientation.value.headingDegrees, closeTo(45.0, 0.001));
       expect(controller.userOrientation.value.sensorAccuracy, equals(5.0));
 
       // User location coordinates remain unaffected
-      expect(controller.userLocation.value.normalizedX, equals(0.92));
-      expect(controller.userLocation.value.normalizedY, equals(0.50));
+      expect(controller.userLocation.value!.normalizedX, equals(initialX));
     });
 
     test('recenter preserves current live compass heading', () {
