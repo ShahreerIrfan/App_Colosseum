@@ -199,6 +199,29 @@ void main() {
       controller.togglePlaygroundMode();
       controller.resetPlaygroundOrigin();
       expect(controller.isPlaygroundMode.value, isTrue);
+      expect(controller.isDisplacementPaused.value, isFalse);
+    });
+
+    test('togglePauseDisplacement pauses and resumes walking displacement in field test mode', () {
+      controller.togglePlaygroundMode();
+      expect(controller.isDisplacementPaused.value, isFalse);
+
+      controller.togglePauseDisplacement();
+      expect(controller.isDisplacementPaused.value, isTrue);
+
+      controller.togglePauseDisplacement();
+      expect(controller.isDisplacementPaused.value, isFalse);
+    });
+
+    test('snapToTarget snaps user location directly to current tour target', () {
+      controller.togglePlaygroundMode();
+      expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
+
+      controller.snapToTarget();
+      expect(controller.isUserInLocation.value, isTrue);
+      expect(controller.userLocation.value, isNotNull);
+      expect(controller.userLocation.value!.normalizedX, equals(0.80));
+      expect(controller.userLocation.value!.normalizedY, equals(0.50));
     });
   });
 }

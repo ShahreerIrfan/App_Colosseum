@@ -543,14 +543,19 @@ class FloorMapController extends GetxController {
     compassService.startListening();
   }
 
+  /// Whether physical ground walking displacement is paused in field test mode (allows relocating without moving the map puck)
+  final isDisplacementPaused = false.obs;
+
   void _initGps() {
     isUserInLocation.value = gpsService.currentResult.isInLocation;
     isPlaygroundMode.value = gpsService.isPlaygroundMode;
+    isDisplacementPaused.value = gpsService.isDisplacementPaused;
     userLocation.value = gpsService.currentResult.userLocation;
 
     _gpsSubscription = gpsService.locationStream.listen((result) {
       isUserInLocation.value = result.isInLocation;
       isPlaygroundMode.value = result.isPlaygroundMode;
+      isDisplacementPaused.value = result.isDisplacementPaused;
       if (result.isInLocation && result.userLocation != null) {
         final loc = result.userLocation!.copyWith(
           headingDegrees: userOrientation.value.headingDegrees,
@@ -571,13 +576,57 @@ class FloorMapController extends GetxController {
         : GpsTrackingMode.localPlayground;
     gpsService.setTrackingMode(nextMode, floorId: floorId.value);
     isPlaygroundMode.value = gpsService.isPlaygroundMode;
+    isDisplacementPaused.value = gpsService.isDisplacementPaused;
     isUserInLocation.value = gpsService.currentResult.isInLocation;
     userLocation.value = gpsService.currentResult.userLocation;
+  }
+
+  /// Toggles pause/resume of physical ground walking displacement in field test mode.
+  void togglePauseDisplacement() {
+    if (isDisplacementPaused.value) {
+      gpsService.resumeDisplacement();
+    } else {
+      gpsService.pauseDisplacement();
+    }
+    isDisplacementPaused.value = gpsService.isDisplacementPaused;
+  }
+
+  /// Pauses physical walking displacement to allow relocating.
+  void pauseDisplacement() {
+    gpsService.pauseDisplacement();
+    isDisplacementPaused.value = true;
+  }
+
+  /// Resumes physical walking displacement from current physical position anchored to last stop.
+  void resumeDisplacement() {
+    gpsService.resumeDisplacement();
+    isDisplacementPaused.value = false;
+  }
+
+  /// Snaps user location anchor to the current navigation target (or Entry).
+  void snapToTarget() {
+    final targetId = tourState.value.navigationTargetId;
+    if (targetId == 'EXIT') {
+      gpsService.snapToCanvasOffset(undergroundExitLocation, floorId: floorId.value);
+    } else if (targetId != null) {
+      final vp = viewpoints.firstWhereOrNull((v) => v.id == targetId);
+      if (vp != null) {
+        gpsService.snapToCanvasOffset(Offset(vp.normalizedX, vp.normalizedY), floorId: floorId.value);
+      }
+    } else {
+      gpsService.snapToCanvasOffset(undergroundEntryLocation, floorId: floorId.value);
+    }
+    isUserInLocation.value = true;
+    userLocation.value = gpsService.currentResult.userLocation;
+    if (userLocation.value != null) {
+      tourEngine.updateLocation(userLocation.value!);
+    }
   }
 
   /// Resets the local playground reference origin to current GPS location.
   void resetPlaygroundOrigin() {
     gpsService.resetPlaygroundOrigin();
+    isDisplacementPaused.value = false;
   }
 
   void _loadFloorData() {

@@ -533,6 +533,102 @@ class FloorMapView extends GetView<FloorMapController> {
                         ),
                         if (isPlayground) ...[
                           const SizedBox(width: 6.0),
+                          // Pause / Resume Walking (Relocate) Button
+                          Tooltip(
+                            message: controller.isDisplacementPaused.value
+                                ? 'Resume Walking from Current Physical Spot'
+                                : 'Pause Walking to Relocate Physically Without Moving Puck',
+                            child: InkWell(
+                              key: const Key('toggle_pause_walk_button'),
+                              onTap: controller.togglePauseDisplacement,
+                              borderRadius: BorderRadius.circular(10.0),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6.0,
+                                  vertical: 2.0,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: controller.isDisplacementPaused.value
+                                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                      : colors.primary.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(8.0),
+                                  border: Border.all(
+                                    color: controller.isDisplacementPaused.value
+                                        ? const Color(0xFF10B981).withValues(alpha: 0.40)
+                                        : Colors.transparent,
+                                    width: 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      controller.isDisplacementPaused.value
+                                          ? Icons.play_arrow_rounded
+                                          : Icons.pause_rounded,
+                                      size: 12.0,
+                                      color: controller.isDisplacementPaused.value
+                                          ? const Color(0xFF10B981)
+                                          : colors.primary,
+                                    ),
+                                    const SizedBox(width: 3.0),
+                                    Text(
+                                      controller.isDisplacementPaused.value
+                                          ? 'Resume'
+                                          : 'Pause',
+                                      style: TextStyle(
+                                        color: controller.isDisplacementPaused.value
+                                            ? const Color(0xFF10B981)
+                                            : colors.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 9.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4.0),
+                          // Snap to Target Button
+                          Tooltip(
+                            message: 'Snap/Re-anchor to Current Target Stop',
+                            child: InkWell(
+                              key: const Key('snap_target_button'),
+                              onTap: controller.snapToTarget,
+                              borderRadius: BorderRadius.circular(10.0),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6.0,
+                                  vertical: 2.0,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.primary.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.center_focus_strong_rounded,
+                                      size: 11.0,
+                                      color: colors.primary,
+                                    ),
+                                    const SizedBox(width: 3.0),
+                                    Text(
+                                      'Snap Stop',
+                                      style: TextStyle(
+                                        color: colors.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 9.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4.0),
                           // Reset Origin Button
                           Tooltip(
                             message: 'Reset Origin (Set Entry to Current Spot)',
@@ -559,7 +655,7 @@ class FloorMapView extends GetView<FloorMapController> {
                                     ),
                                     const SizedBox(width: 3.0),
                                     Text(
-                                      'Reset Origin',
+                                      'Reset',
                                       style: TextStyle(
                                         color: colors.primary,
                                         fontWeight: FontWeight.w700,
@@ -617,9 +713,105 @@ class FloorMapView extends GetView<FloorMapController> {
               }),
             ),
 
+            // 4b. Walking Paused / Relocation Floating Banner
+            Positioned(
+              top: 152.0,
+              left: 20.0,
+              right: 20.0,
+              child: Obx(() {
+                if (!controller.isPlaygroundMode.value ||
+                    !controller.isDisplacementPaused.value) {
+                  return const SizedBox.shrink();
+                }
+
+                return Center(
+                  child: Container(
+                    key: const Key('walking_paused_banner'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14.0,
+                      vertical: 6.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(20.0),
+                      border: Border.all(
+                        color: const Color(0xFFF59E0B),
+                        width: 1.2,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 8.0,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.pause_circle_rounded,
+                          size: 16.0,
+                          color: Color(0xFFD97706),
+                        ),
+                        const SizedBox(width: 6.0),
+                        const Flexible(
+                          child: Text(
+                            'Walking Paused · Relocate to an open path & tap Resume',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Color(0xFF92400E),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8.0),
+                        InkWell(
+                          key: const Key('banner_resume_button'),
+                          onTap: controller.togglePauseDisplacement,
+                          borderRadius: BorderRadius.circular(10.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 3.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD97706),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 12.0,
+                                  color: Colors.white,
+                                ),
+                                SizedBox(width: 2.0),
+                                Text(
+                                  'Resume',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+
             // 5. Non-blocking Compass Calibration Notification (only when sensor accuracy is low)
             Positioned(
-              top: 148.0,
+              top: 196.0,
               left: 20.0,
               right: 20.0,
               child: Obx(() {

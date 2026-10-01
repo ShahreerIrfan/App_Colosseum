@@ -214,8 +214,25 @@ void main() {
       expect(find.byType(UserLocationPuck), findsOneWidget);
       expect(find.textContaining('Field Test'), findsWidgets);
       expect(find.byKey(const Key('reset_origin_button')), findsOneWidget);
+      expect(find.byKey(const Key('toggle_pause_walk_button')), findsOneWidget);
+      expect(find.byKey(const Key('snap_target_button')), findsOneWidget);
 
-      // 4. Tap Reset Origin button
+      // 4. Tap Pause Walk button -> pauses displacement and renders walking_paused_banner
+      await tester.tap(find.byKey(const Key('toggle_pause_walk_button')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(controller.isDisplacementPaused.value, isTrue);
+      expect(find.byKey(const Key('walking_paused_banner')), findsOneWidget);
+      expect(find.text('Resume'), findsWidgets);
+
+      // 5. Tap Resume on banner -> unfreezes displacement
+      await tester.tap(find.byKey(const Key('banner_resume_button')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(controller.isDisplacementPaused.value, isFalse);
+      expect(find.byKey(const Key('walking_paused_banner')), findsNothing);
+
+      // 6. Tap Reset Origin button
       await tester.tap(find.byKey(const Key('reset_origin_button')));
       await tester.pump(const Duration(milliseconds: 100));
       expect(controller.isPlaygroundMode.value, isTrue);

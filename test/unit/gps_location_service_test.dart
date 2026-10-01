@@ -160,5 +160,57 @@ void main() {
 
       await sub.cancel();
     });
+
+    test('8. pauseDisplacement freezes canvas position and resumeDisplacement re-anchors to new physical spot', () async {
+      gpsService.setTrackingMode(GpsTrackingMode.localPlayground);
+
+      // 1. Initial fix at origin (maps to Entry 0.92, 0.50)
+      gpsService.setMockPosition(latitude: 23.810300, longitude: 90.412500, accuracy: 2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(gpsService.currentResult.userLocation!.normalizedX, closeTo(0.92, 0.01));
+
+      // 2. Pause walking displacement (e.g. user reached a road dead-end)
+      gpsService.pauseDisplacement();
+      expect(gpsService.isDisplacementPaused, isTrue);
+      expect(gpsService.currentResult.isDisplacementPaused, isTrue);
+      final frozenX = gpsService.currentResult.userLocation!.normalizedX;
+
+      // 3. User physically walks back 30 meters on road while paused -> puck must NOT move!
+      const metersPerLng = 111139.0 * 0.91496;
+      final relocatedLng = 90.412500 + (30.0 / metersPerLng);
+      gpsService.setMockPosition(latitude: 23.810300, longitude: relocatedLng, accuracy: 2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(gpsService.currentResult.userLocation!.normalizedX, equals(frozenX));
+
+      // 4. User hits Resume at new physical spot -> displacement unfreezes smoothly from frozenX
+      gpsService.resumeDisplacement();
+      expect(gpsService.isDisplacementPaused, isFalse);
+
+      // First fix after resume re-anchors origin to relocatedLng
+      gpsService.setMockPosition(latitude: 23.810300, longitude: relocatedLng, accuracy: 2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(gpsService.currentResult.userLocation!.normalizedX, closeTo(frozenX, 0.01));
+
+      // Walking westward from new relocated origin moves forward on canvas
+      final nextStepLng = relocatedLng - (10.0 / metersPerLng);
+      gpsService.setMockPosition(latitude: 23.810300, longitude: nextStepLng, accuracy: 2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(gpsService.currentResult.userLocation!.normalizedX, lessThan(frozenX));
+    });
+
+    test('9. snapToCanvasOffset sets anchor directly to viewpoint and emits immediate update', () {
+      gpsService.setTrackingMode(GpsTrackingMode.localPlayground);
+
+      const vp100Offset = Offset(0.80, 0.50);
+      gpsService.snapToCanvasOffset(vp100Offset);
+
+      expect(gpsService.currentResult.isInLocation, isTrue);
+      expect(gpsService.currentResult.userLocation!.normalizedX, equals(0.80));
+      expect(gpsService.currentResult.userLocation!.normalizedY, equals(0.50));
+      expect(gpsService.playgroundAnchorCanvas, equals(vp100Offset));
+    });
   });
 }

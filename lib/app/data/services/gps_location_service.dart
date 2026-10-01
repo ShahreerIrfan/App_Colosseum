@@ -52,6 +52,18 @@ class GpsLocationService {
   double? get playgroundOriginLat => _playgroundOriginLat;
   double? get playgroundOriginLng => _playgroundOriginLng;
 
+  /// Current anchor coordinate on Colosseum canvas (defaults to ENTRY gate)
+  Offset _playgroundAnchorCanvas = defaultCanvasEntry;
+  Offset get playgroundAnchorCanvas => _playgroundAnchorCanvas;
+
+  /// Whether physical walking displacement is paused (allowing physical relocation without moving the puck)
+  bool _isDisplacementPaused = false;
+  bool get isDisplacementPaused => _isDisplacementPaused;
+
+  /// Frozen canvas offset when displacement is paused
+  Offset? _frozenCanvasOffset;
+  Offset? get frozenCanvasOffset => _frozenCanvasOffset;
+
   double? _lastFilteredX;
   double? _lastFilteredY;
 
@@ -73,6 +85,9 @@ class GpsLocationService {
     _trackingMode = mode;
     _lastFilteredX = null;
     _lastFilteredY = null;
+    _isDisplacementPaused = false;
+    _frozenCanvasOffset = null;
+    _playgroundAnchorCanvas = defaultCanvasEntry;
     if (mode == GpsTrackingMode.localPlayground) {
       // Clear origin so the next incoming GPS fix becomes the new reference anchor
       _playgroundOriginLat = null;
@@ -81,11 +96,98 @@ class GpsLocationService {
   }
 
   /// Resets or sets the local playground reference origin anchor.
-  void resetPlaygroundOrigin({double? lat, double? lng}) {
+  void resetPlaygroundOrigin({double? lat, double? lng, Offset canvasAnchor = defaultCanvasEntry}) {
     _playgroundOriginLat = lat;
     _playgroundOriginLng = lng;
-    _lastFilteredX = null;
-    _lastFilteredY = null;
+    _playgroundAnchorCanvas = canvasAnchor;
+    _frozenCanvasOffset = canvasAnchor;
+    _lastFilteredX = canvasAnchor.dx;
+    _lastFilteredY = canvasAnchor.dy;
+  }
+
+  /// Pauses physical ground walking displacement in local playground mode.
+  /// Freezes user location on the canvas so user can physically walk back or relocate.
+  void pauseDisplacement() {
+    _isDisplacementPaused = true;
+    _frozenCanvasOffset = (_lastFilteredX != null && _lastFilteredY != null)
+        ? Offset(_lastFilteredX!, _lastFilteredY!)
+        : _playgroundAnchorCanvas;
+
+    if (_currentResult.userLocation != null) {
+      _safeAddResult(
+        GpsLocationResult(
+          isInLocation: _currentResult.isInLocation,
+          userLocation: _currentResult.userLocation!.copyWith(
+            normalizedX: _frozenCanvasOffset!.dx,
+            normalizedY: _frozenCanvasOffset!.dy,
+          ),
+          distanceToCenterMeters: _currentResult.distanceToCenterMeters,
+          errorMessage: _currentResult.errorMessage,
+          isPlaygroundMode: _currentResult.isPlaygroundMode,
+          isDisplacementPaused: true,
+        ),
+      );
+    }
+  }
+
+  /// Resets physical ground origin to the next incoming GPS fix and resumes displacement relative to frozen/target position.
+  void resumeDisplacement({Offset? customAnchorCanvas}) {
+    _isDisplacementPaused = false;
+    if (customAnchorCanvas != null) {
+      _playgroundAnchorCanvas = customAnchorCanvas;
+      _frozenCanvasOffset = customAnchorCanvas;
+    } else if (_frozenCanvasOffset != null) {
+      _playgroundAnchorCanvas = _frozenCanvasOffset!;
+    }
+    _lastFilteredX = _playgroundAnchorCanvas.dx;
+    _lastFilteredY = _playgroundAnchorCanvas.dy;
+    // Clear origin so next incoming GPS fix becomes the new physical ground anchor
+    _playgroundOriginLat = null;
+    _playgroundOriginLng = null;
+
+    if (_currentResult.userLocation != null) {
+      _safeAddResult(
+        GpsLocationResult(
+          isInLocation: _currentResult.isInLocation,
+          userLocation: _currentResult.userLocation!.copyWith(
+            normalizedX: _playgroundAnchorCanvas.dx,
+            normalizedY: _playgroundAnchorCanvas.dy,
+          ),
+          distanceToCenterMeters: _currentResult.distanceToCenterMeters,
+          errorMessage: _currentResult.errorMessage,
+          isPlaygroundMode: _currentResult.isPlaygroundMode,
+          isDisplacementPaused: false,
+        ),
+      );
+    }
+  }
+
+  /// Snaps the local playground anchor to a specific canvas coordinate (e.g. a Viewpoint or Entry).
+  void snapToCanvasOffset(Offset canvasOffset, {String floorId = 'floor_underground'}) {
+    _playgroundAnchorCanvas = canvasOffset;
+    _frozenCanvasOffset = canvasOffset;
+    _lastFilteredX = canvasOffset.dx;
+    _lastFilteredY = canvasOffset.dy;
+    _playgroundOriginLat = null;
+    _playgroundOriginLng = null;
+
+    final userLoc = UserLocationModel(
+      floorId: floorId,
+      normalizedX: canvasOffset.dx,
+      normalizedY: canvasOffset.dy,
+      accuracyMeters: 2.0,
+      timestamp: DateTime.now(),
+    );
+
+    _safeAddResult(
+      GpsLocationResult(
+        isInLocation: true,
+        userLocation: userLoc,
+        distanceToCenterMeters: 0.0,
+        isPlaygroundMode: true,
+        isDisplacementPaused: _isDisplacementPaused,
+      ),
+    );
   }
 
   /// Calculates metric Euclidean distance in meters from a given coordinate to the Colosseum center.
@@ -294,6 +396,28 @@ class GpsLocationService {
     bool inLocation;
 
     if (_trackingMode == GpsTrackingMode.localPlayground) {
+      // If displacement is paused, keep location frozen at _frozenCanvasOffset
+      if (_isDisplacementPaused) {
+        final frozenOffset = _frozenCanvasOffset ?? _playgroundAnchorCanvas;
+        final userLoc = UserLocationModel(
+          floorId: floorId,
+          normalizedX: frozenOffset.dx,
+          normalizedY: frozenOffset.dy,
+          accuracyMeters: position.accuracy,
+          timestamp: position.timestamp,
+        );
+        _safeAddResult(
+          GpsLocationResult(
+            isInLocation: true,
+            userLocation: userLoc,
+            distanceToCenterMeters: 0.0,
+            isPlaygroundMode: true,
+            isDisplacementPaused: true,
+          ),
+        );
+        return;
+      }
+
       // --- FIELD TEST / PLAYGROUND MODE ---
       // Anchor origin to the first received GPS coordinate if not already set
       if (_playgroundOriginLat == null || _playgroundOriginLng == null) {
@@ -306,6 +430,7 @@ class GpsLocationService {
         currentLng: position.longitude,
         originLat: _playgroundOriginLat!,
         originLng: _playgroundOriginLng!,
+        entryOffset: _playgroundAnchorCanvas,
       );
 
       inLocation = true;
@@ -325,6 +450,7 @@ class GpsLocationService {
             userLocation: null,
             distanceToCenterMeters: distanceToCenter,
             isPlaygroundMode: false,
+            isDisplacementPaused: false,
           ),
         );
         return;
@@ -364,6 +490,7 @@ class GpsLocationService {
         userLocation: userLoc,
         distanceToCenterMeters: distanceToCenter,
         isPlaygroundMode: _trackingMode == GpsTrackingMode.localPlayground,
+        isDisplacementPaused: _isDisplacementPaused,
       ),
     );
   }
@@ -410,6 +537,7 @@ class GpsLocationResult {
   final double? distanceToCenterMeters;
   final String? errorMessage;
   final bool isPlaygroundMode;
+  final bool isDisplacementPaused;
 
   const GpsLocationResult({
     required this.isInLocation,
@@ -417,5 +545,6 @@ class GpsLocationResult {
     this.distanceToCenterMeters,
     this.errorMessage,
     this.isPlaygroundMode = false,
+    this.isDisplacementPaused = false,
   });
 }
