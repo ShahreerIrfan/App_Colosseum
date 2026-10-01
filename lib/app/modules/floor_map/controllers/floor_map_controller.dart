@@ -41,6 +41,9 @@ class FloorMapController extends GetxController {
   /// Whether the user is currently physically located inside the Colosseum boundary
   final isUserInLocation = false.obs;
 
+  /// Whether the app is in Local Ground Field-Test (Playground) Mode
+  final isPlaygroundMode = false.obs;
+
   /// User's real-time indoor location beacon on this floor (null when outside location)
   final userLocation = Rxn<UserLocationModel>();
 
@@ -542,10 +545,12 @@ class FloorMapController extends GetxController {
 
   void _initGps() {
     isUserInLocation.value = gpsService.currentResult.isInLocation;
+    isPlaygroundMode.value = gpsService.isPlaygroundMode;
     userLocation.value = gpsService.currentResult.userLocation;
 
     _gpsSubscription = gpsService.locationStream.listen((result) {
       isUserInLocation.value = result.isInLocation;
+      isPlaygroundMode.value = result.isPlaygroundMode;
       if (result.isInLocation && result.userLocation != null) {
         final loc = result.userLocation!.copyWith(
           headingDegrees: userOrientation.value.headingDegrees,
@@ -557,6 +562,22 @@ class FloorMapController extends GetxController {
       }
     });
     gpsService.startTracking(floorId: floorId.value);
+  }
+
+  /// Toggles between Colosseum Geofence Mode and Local Playground Field Test Mode.
+  void togglePlaygroundMode() {
+    final nextMode = isPlaygroundMode.value
+        ? GpsTrackingMode.colosseumGeofence
+        : GpsTrackingMode.localPlayground;
+    gpsService.setTrackingMode(nextMode, floorId: floorId.value);
+    isPlaygroundMode.value = gpsService.isPlaygroundMode;
+    isUserInLocation.value = gpsService.currentResult.isInLocation;
+    userLocation.value = gpsService.currentResult.userLocation;
+  }
+
+  /// Resets the local playground reference origin to current GPS location.
+  void resetPlaygroundOrigin() {
+    gpsService.resetPlaygroundOrigin();
   }
 
   void _loadFloorData() {

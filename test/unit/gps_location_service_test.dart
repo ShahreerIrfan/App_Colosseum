@@ -62,7 +62,65 @@ void main() {
       expect(clampedFar.dy, inInclusiveRange(0.02, 0.98));
     });
 
-    test('4. setMockPosition updates isInLocation and emits location model for in-bounds coordinates', () async {
+    test('4. projectPlaygroundToCanvas maps local ground displacement relative to ENTRY gate', () {
+      const originLat = 23.810300;
+      const originLng = 90.412500;
+
+      // 1. At local origin (0m displacement) -> maps exactly to ENTRY (0.92, 0.50)
+      final originCanvas = GpsLocationService.projectPlaygroundToCanvas(
+        currentLat: originLat,
+        currentLng: originLng,
+        originLat: originLat,
+        originLng: originLng,
+      );
+      expect(originCanvas.dx, closeTo(0.92, 0.001));
+      expect(originCanvas.dy, closeTo(0.50, 0.001));
+
+      // 2. Walking West in local field (Lng decreases by ~10.3 meters: 10.3 / (111139 * cos(23.8°)))
+      const metersPerLng = 111139.0 * 0.91496;
+      final movedWestLng = originLng - (10.3 / metersPerLng);
+
+      final westCanvas = GpsLocationService.projectPlaygroundToCanvas(
+        currentLat: originLat,
+        currentLng: movedWestLng,
+        originLat: originLat,
+        originLng: originLng,
+      );
+      // Moves westward from Entry (0.92) toward Stop 100 (~0.82)
+      expect(westCanvas.dx, lessThan(0.92));
+      expect(westCanvas.dx, closeTo(0.82, 0.05));
+    });
+
+    test('5. Local Playground Field-Test mode allows tracking anywhere in the world', () async {
+      final results = <GpsLocationResult>[];
+      final sub = gpsService.locationStream.listen(results.add);
+
+      // Enable Playground Field Test Mode
+      gpsService.setTrackingMode(GpsTrackingMode.localPlayground);
+      expect(gpsService.isPlaygroundMode, isTrue);
+
+      // First GPS fix in Dhaka, Bangladesh (becomes origin at Entry)
+      gpsService.setMockPosition(latitude: 23.810300, longitude: 90.412500, accuracy: 2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(gpsService.currentResult.isInLocation, isTrue);
+      expect(gpsService.currentResult.userLocation, isNotNull);
+      expect(gpsService.currentResult.userLocation!.normalizedX, closeTo(0.92, 0.01));
+      expect(gpsService.currentResult.isPlaygroundMode, isTrue);
+
+      // Walk 15 meters West in the local field
+      const metersPerLng = 111139.0 * 0.91496;
+      final nextLng = 90.412500 - (15.0 / metersPerLng);
+      gpsService.setMockPosition(latitude: 23.810300, longitude: nextLng, accuracy: 2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(gpsService.currentResult.userLocation!.normalizedX, lessThan(0.92));
+      expect(results.length, equals(2));
+
+      await sub.cancel();
+    });
+
+    test('6. setMockPosition updates isInLocation and emits location model for in-bounds coordinates', () async {
       final results = <GpsLocationResult>[];
       final sub = gpsService.locationStream.listen(results.add);
 
@@ -75,7 +133,7 @@ void main() {
       expect(gpsService.currentResult.userLocation!.accuracyMeters, equals(1.5));
       expect(results.length, equals(1));
 
-      // 2. Set position outside Colosseum (Dhaka, Bangladesh)
+      // 2. Set position outside Colosseum (Dhaka, Bangladesh) in Geofence mode
       gpsService.setMockPosition(latitude: 23.8103, longitude: 90.4125, accuracy: 2.0);
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
@@ -86,15 +144,19 @@ void main() {
       await sub.cancel();
     });
 
-    test('5. Discards noisy GPS fixes with accuracy > 15m', () async {
+    test('7. Dynamic accuracy filter allows moderate fixes (<= 30m) and discards severe outliers (> 30m)', () async {
       final results = <GpsLocationResult>[];
       final sub = gpsService.locationStream.listen(results.add);
 
-      // Inaccurate fix (accuracy = 35m)
+      // Moderate accuracy fix (20m) -> allowed
+      gpsService.setMockPosition(latitude: 41.890250, longitude: 12.492820, accuracy: 20.0);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(results.length, equals(1));
+
+      // Severe outlier (accuracy = 35m) -> discarded
       gpsService.setMockPosition(latitude: 41.890250, longitude: 12.492820, accuracy: 35.0);
       await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      expect(results, isEmpty); // Discarded!
+      expect(results.length, equals(1)); // Remained 1!
 
       await sub.cancel();
     });

@@ -184,5 +184,21 @@ void main() {
 
       expect(controller.userOrientation.value.headingDegrees, closeTo(120.0, 0.001));
     });
+
+    test('togglePlaygroundMode switches between Geofence and Local Field Test mode', () {
+      expect(controller.isPlaygroundMode.value, isFalse);
+
+      controller.togglePlaygroundMode();
+      expect(controller.isPlaygroundMode.value, isTrue);
+
+      controller.togglePlaygroundMode();
+      expect(controller.isPlaygroundMode.value, isFalse);
+    });
+
+    test('resetPlaygroundOrigin resets reference anchor without errors', () {
+      controller.togglePlaygroundMode();
+      controller.resetPlaygroundOrigin();
+      expect(controller.isPlaygroundMode.value, isTrue);
+    });
   });
 }

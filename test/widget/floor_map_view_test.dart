@@ -178,4 +178,47 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'FloorMapView toggles Field Test mode and renders reset origin button',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = Get.put(FloorMapController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const FloorMapView(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // 1. Initially out of location, quick field test button is visible
+      expect(find.byKey(const Key('out_of_location_badge')), findsOneWidget);
+      final quickButton = find.byKey(const Key('quick_field_test_button'));
+      expect(quickButton, findsOneWidget);
+
+      // 2. Tap Quick Field Test button -> activates Playground mode
+      await tester.tap(quickButton);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(controller.isPlaygroundMode.value, isTrue);
+
+      // 3. Feed mock GPS position anywhere (e.g. Dhaka) -> Puck appears at ENTRY
+      controller.updateGpsPosition(23.8103, 90.4125);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(UserLocationPuck), findsOneWidget);
+      expect(find.textContaining('Field Test'), findsWidgets);
+      expect(find.byKey(const Key('reset_origin_button')), findsOneWidget);
+
+      // 4. Tap Reset Origin button
+      await tester.tap(find.byKey(const Key('reset_origin_button')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(controller.isPlaygroundMode.value, isTrue);
+    },
+  );
 }

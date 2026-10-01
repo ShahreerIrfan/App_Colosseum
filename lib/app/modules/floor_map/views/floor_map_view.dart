@@ -353,6 +353,26 @@ class FloorMapView extends GetView<FloorMapController> {
                           onPressed: controller.recenter,
                           colors: colors,
                         ),
+                        VerticalDivider(
+                          width: 1.0,
+                          thickness: 1.0,
+                          color: colors.border,
+                          indent: 6.0,
+                          endIndent: 6.0,
+                        ),
+                        // Field Test (Playground Mode) Toggle Button
+                        Obx(
+                          () => _ToolbarButton(
+                            icon: Icons.explore_rounded,
+                            tooltip: controller.isPlaygroundMode.value
+                                ? 'Field Test Mode (Active)'
+                                : 'Enable Field Test Mode',
+                            onPressed: controller.togglePlaygroundMode,
+                            colors: colors,
+                            isActive: controller.isPlaygroundMode.value,
+                            activeColor: colors.primary,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -360,7 +380,7 @@ class FloorMapView extends GetView<FloorMapController> {
               ),
             ),
 
-            // 4. Guided Tour HUD or Out-of-Location Status Badge
+            // 4. Guided Tour HUD, Out-of-Location Badge or Field Test Badge
             Positioned(
               top: 112.0,
               left: 16.0,
@@ -371,8 +391,8 @@ class FloorMapView extends GetView<FloorMapController> {
                     child: Container(
                       key: const Key('out_of_location_badge'),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14.0,
-                        vertical: 6.0,
+                        horizontal: 12.0,
+                        vertical: 5.0,
                       ),
                       decoration: BoxDecoration(
                         color: colors.card.withValues(alpha: 0.95),
@@ -397,13 +417,56 @@ class FloorMapView extends GetView<FloorMapController> {
                             size: 14.0,
                             color: colors.foreground.withValues(alpha: 0.6),
                           ),
-                          const SizedBox(width: 6.0),
-                          Text(
-                            'You are not in the location',
-                            style: TextStyle(
-                              color: colors.foreground.withValues(alpha: 0.8),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12.0,
+                          Flexible(
+                            child: Text(
+                              'You are not in the location',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.foreground.withValues(alpha: 0.8),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.0,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8.0),
+                          // Quick toggle for Field Test Mode
+                          InkWell(
+                            key: const Key('quick_field_test_button'),
+                            onTap: controller.togglePlaygroundMode,
+                            borderRadius: BorderRadius.circular(12.0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0,
+                                vertical: 2.5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10.0),
+                                border: Border.all(
+                                  color: colors.primary.withValues(alpha: 0.3),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.directions_walk_rounded,
+                                    size: 12.0,
+                                    color: colors.primary,
+                                  ),
+                                  const SizedBox(width: 4.0),
+                                  Text(
+                                    'Field Test',
+                                    style: TextStyle(
+                                      color: colors.primary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -417,6 +480,7 @@ class FloorMapView extends GetView<FloorMapController> {
                 }
 
                 final state = controller.tourState.value;
+                final isPlayground = controller.isPlaygroundMode.value;
                 final statusText = _getTourStatusText(state);
                 final statusIcon = _getTourStatusIcon(state.navigationStatus);
 
@@ -430,7 +494,9 @@ class FloorMapView extends GetView<FloorMapController> {
                       color: colors.card.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(18.0),
                       border: Border.all(
-                        color: colors.border,
+                        color: isPlayground
+                            ? colors.primary.withValues(alpha: 0.4)
+                            : colors.border,
                         width: 1.0,
                       ),
                       boxShadow: [
@@ -445,14 +511,16 @@ class FloorMapView extends GetView<FloorMapController> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          statusIcon,
+                          isPlayground ? Icons.directions_walk_rounded : statusIcon,
                           size: 14.0,
                           color: colors.primary,
                         ),
                         const SizedBox(width: 6.0),
                         Flexible(
                           child: Text(
-                            statusText,
+                            isPlayground
+                                ? 'Field Test · $statusText'
+                                : statusText,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -462,6 +530,47 @@ class FloorMapView extends GetView<FloorMapController> {
                             ),
                           ),
                         ),
+                        if (isPlayground) ...[
+                          const SizedBox(width: 6.0),
+                          // Reset Origin Button
+                          Tooltip(
+                            message: 'Reset Origin (Set Entry to Current Spot)',
+                            child: InkWell(
+                              key: const Key('reset_origin_button'),
+                              onTap: controller.resetPlaygroundOrigin,
+                              borderRadius: BorderRadius.circular(10.0),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6.0,
+                                  vertical: 2.0,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.primary.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.refresh_rounded,
+                                      size: 11.0,
+                                      color: colors.primary,
+                                    ),
+                                    const SizedBox(width: 3.0),
+                                    Text(
+                                      'Reset Origin',
+                                      style: TextStyle(
+                                        color: colors.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 9.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(width: 8.0),
                         // Voice Guidance Toggle
                         InkWell(
@@ -682,29 +791,42 @@ class _ToolbarButton extends StatelessWidget {
   final String tooltip;
   final VoidCallback onPressed;
   final dynamic colors;
+  final bool isActive;
+  final Color? activeColor;
 
   const _ToolbarButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
     required this.colors,
+    this.isActive = false,
+    this.activeColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconColor =
+        isActive ? (activeColor ?? colors.primary) : colors.foreground;
+
     return Tooltip(
       message: tooltip,
       child: InkWell(
         onTap: onPressed,
         borderRadius: BorderRadius.circular(9.0),
-        child: SizedBox(
+        child: Container(
           width: 38.0,
           height: 35.0,
+          decoration: BoxDecoration(
+            color: isActive
+                ? (activeColor ?? colors.primary).withValues(alpha: 0.14)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9.0),
+          ),
           child: Center(
             child: Icon(
               icon,
               size: 18.0,
-              color: colors.foreground,
+              color: iconColor,
             ),
           ),
         ),
