@@ -466,19 +466,23 @@ class FloorMapController extends GetxController {
     _loadFloorData();
   }
 
+  int _currentSpeechStartOffset = 0;
+  int _lastSpokenCharIndex = 0;
+
   void _initTts() {
     ttsService.init();
     ttsService.onStart = () {
       isPlayingAudio.value = true;
     };
-    ttsService.onComplete = () {
+    ttsService.onNarrationComplete = () {
+      _currentSpeechStartOffset = 0;
+      _lastSpokenCharIndex = 0;
       isPlayingAudio.value = false;
       audioProgress.value = 0.0;
       tourEngine.onAudioCompleted();
     };
     ttsService.onStop = () {
       isPlayingAudio.value = false;
-      audioProgress.value = 0.0;
     };
     ttsService.onPause = () {
       isPlayingAudio.value = false;
@@ -486,22 +490,26 @@ class FloorMapController extends GetxController {
     ttsService.onProgress = (start, end, word) {
       final vp = selectedViewpoint.value;
       if (vp != null && vp.description.isNotEmpty) {
-        audioProgress.value = (end / vp.description.length).clamp(0.0, 1.0);
+        _lastSpokenCharIndex = (_currentSpeechStartOffset + end).clamp(0, vp.description.length);
+        audioProgress.value = (_lastSpokenCharIndex / vp.description.length).clamp(0.0, 1.0);
       }
     };
   }
 
   void _initTour() {
     tourEngine.onSpeakInstruction = (text, {onDone}) {
-      ttsService.speak(text, onDone: onDone);
+      ttsService.speakInstruction(text, onDone: onDone);
     };
 
     tourEngine.onAutoPlayViewpoint = (viewpoint) {
       selectedViewpoint.value = viewpoint;
       isCardCollapsed.value = true; // Auto-play starts in collapsed mini-player
       isPlayingAudio.value = true;
+      _currentSpeechStartOffset = 0;
+      _lastSpokenCharIndex = 0;
+      audioProgress.value = 0.0;
       if (viewpoint.description.isNotEmpty) {
-        ttsService.speak(viewpoint.description);
+        ttsService.speakNarration(viewpoint.description);
       }
     };
 
@@ -759,8 +767,11 @@ class FloorMapController extends GetxController {
     selectedViewpoint.value = viewpoint;
     tourEngine.selectViewpoint(viewpoint.id);
 
-    // When choosing another viewpoint, automatically pause / stop TTS playback
+    // When choosing another viewpoint, automatically pause / stop TTS playback and reset bookmark
     if (previous?.id != viewpoint.id) {
+      _currentSpeechStartOffset = 0;
+      _lastSpokenCharIndex = 0;
+      audioProgress.value = 0.0;
       if (isPlayingAudio.value) {
         isPlayingAudio.value = false;
         ttsService.stop();
@@ -785,8 +796,11 @@ class FloorMapController extends GetxController {
 
   /// Deselects active viewpoint and closes detail card.
   void deselectViewpoint() {
+    _currentSpeechStartOffset = 0;
+    _lastSpokenCharIndex = 0;
     selectedViewpoint.value = null;
     isPlayingAudio.value = false;
+    audioProgress.value = 0.0;
     ttsService.stop();
     tourEngine.deselectViewpoint();
     tourEngine.onUserStopOrCloseAudio();
@@ -831,17 +845,20 @@ class FloorMapController extends GetxController {
 
   /// Resets the full tour to the beginning.
   void resetTour() {
+    _currentSpeechStartOffset = 0;
+    _lastSpokenCharIndex = 0;
     tourEngine.resetTour();
     for (int i = 0; i < viewpoints.length; i++) {
       viewpoints[i] = viewpoints[i].copyWith(isVisited: false);
     }
     selectedViewpoint.value = null;
     isPlayingAudio.value = false;
+    audioProgress.value = 0.0;
     ttsService.stop();
     _refreshItinerarySegments();
   }
 
-  /// Toggles audio guide speech playback for the active viewpoint.
+  /// Toggles audio guide speech playback for the active viewpoint with smart resume.
   void toggleAudio() async {
     if (isPlayingAudio.value) {
       isPlayingAudio.value = false;
@@ -852,7 +869,24 @@ class FloorMapController extends GetxController {
       if (vp != null && vp.description.isNotEmpty) {
         isPlayingAudio.value = true;
         tourEngine.onUserResumeAudio();
-        await ttsService.speak(vp.description);
+
+        // Resume from bookmarked character offset if paused midway
+        if (_lastSpokenCharIndex > 0 && _lastSpokenCharIndex < vp.description.length) {
+          int resumeIndex = _lastSpokenCharIndex;
+          if (resumeIndex < vp.description.length && vp.description[resumeIndex] != ' ') {
+            final lastSpace = vp.description.lastIndexOf(' ', resumeIndex);
+            if (lastSpace != -1 && lastSpace >= _currentSpeechStartOffset) {
+              resumeIndex = lastSpace + 1;
+            }
+          }
+          _currentSpeechStartOffset = resumeIndex;
+          final remainingText = vp.description.substring(_currentSpeechStartOffset);
+          await ttsService.speakNarration(remainingText);
+        } else {
+          _currentSpeechStartOffset = 0;
+          _lastSpokenCharIndex = 0;
+          await ttsService.speakNarration(vp.description);
+        }
       }
     }
   }

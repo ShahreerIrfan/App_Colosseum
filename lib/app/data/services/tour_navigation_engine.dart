@@ -18,6 +18,7 @@ class TourNavigationEngine {
 
   Offset? _entryLocation;
   Offset? _exitLocation;
+  final Set<String> _announcedApproachViewpointIds = <String>{};
 
   /// Callbacks for engine events
   void Function(String text, {VoidCallback? onDone})? onSpeakInstruction;
@@ -43,6 +44,7 @@ class TourNavigationEngine {
     _viewpoints = List.from(viewpoints);
     _entryLocation = entryLocation ?? const Offset(0.92, 0.50);
     _exitLocation = exitLocation ?? const Offset(0.10, 0.50);
+    _announcedApproachViewpointIds.clear();
 
     // Sort viewpoints by order if present
     _viewpoints.sort((a, b) => a.order.compareTo(b.order));
@@ -266,8 +268,8 @@ class TourNavigationEngine {
       return;
     }
 
-    // 1. Outside Approach Radius (> 8m)
-    if (distToTarget > config.approachRadiusMeters) {
+    // 1. Outside Approach Radius with 2m Hysteresis (> approachRadius + 2m)
+    if (distToTarget > config.approachRadiusMeters + 2.0) {
       if (_state.navigationStatus == TourNavigationStatus.approaching ||
           _state.navigationStatus == TourNavigationStatus.arrivalPending) {
         _state = _state.copyWith(
@@ -276,8 +278,8 @@ class TourNavigationEngine {
         );
       }
     }
-    // 2. Inside Approach Radius (4m < dist <= 8m)
-    else if (distToTarget > config.arrivalRadiusMeters) {
+    // 2. Inside Approach Radius (arrivalRadius < dist <= approachRadius)
+    else if (distToTarget > config.arrivalRadiusMeters && distToTarget <= config.approachRadiusMeters) {
       _state = _state.copyWith(arrivalDwellStartedAt: () => null);
       if (_state.navigationStatus != TourNavigationStatus.approaching &&
           !isAtOrExploring) {
@@ -285,13 +287,15 @@ class TourNavigationEngine {
           navigationStatus: TourNavigationStatus.approaching,
         );
         if (_state.isVoiceGuidanceEnabled &&
-            _state.activeAudioViewpointId == null) {
+            _state.activeAudioViewpointId == null &&
+            !_announcedApproachViewpointIds.contains(targetVp.id)) {
+          _announcedApproachViewpointIds.add(targetVp.id);
           _speakThrottled('Viewpoint ${targetVp.order} is ahead.');
         }
       }
     }
-    // 3. Inside Arrival Radius (<= 4m) -> Dwell Verification
-    else {
+    // 3. Inside Arrival Radius (<= arrivalRadius) -> Dwell Verification
+    else if (distToTarget <= config.arrivalRadiusMeters) {
       if (_state.arrivalDwellStartedAt == null) {
         _state = _state.copyWith(
           arrivalDwellStartedAt: () => currentTime,
@@ -300,6 +304,7 @@ class TourNavigationEngine {
       } else if (currentTime.difference(_state.arrivalDwellStartedAt!) >=
           config.arrivalDwellDuration) {
         // ARRIVAL CONFIRMED!
+        _announcedApproachViewpointIds.add(targetVp.id);
         _state = _state.copyWith(
           navigationStatus: TourNavigationStatus.arrived,
           reachedViewpointId: () => targetVp.id,
@@ -363,6 +368,7 @@ class TourNavigationEngine {
 
   /// Explicit user action or auto-completion: Marks a viewpoint as visited and advances navigation.
   void markVisited(String viewpointId) {
+    _announcedApproachViewpointIds.add(viewpointId);
     final updatedVisited = Set<String>.from(_state.visitedIds)..add(viewpointId);
     
     // Update local viewpoint copy
@@ -413,6 +419,7 @@ class TourNavigationEngine {
 
   /// Explicit user action: Unmarks a viewpoint as visited.
   void unmarkVisited(String viewpointId) {
+    _announcedApproachViewpointIds.remove(viewpointId);
     final updatedVisited = Set<String>.from(_state.visitedIds)..remove(viewpointId);
 
     // Update local viewpoint copy
@@ -436,6 +443,7 @@ class TourNavigationEngine {
 
   /// Explicit user action: Skips a viewpoint.
   void skipViewpoint(String viewpointId) {
+    _announcedApproachViewpointIds.add(viewpointId);
     final updatedSkipped = Set<String>.from(_state.skippedIds)..add(viewpointId);
 
     String? nextTargetId = _state.navigationTargetId;
@@ -569,6 +577,7 @@ class TourNavigationEngine {
 
   /// Resets the full tour to the beginning.
   void resetTour() {
+    _announcedApproachViewpointIds.clear();
     for (int i = 0; i < _viewpoints.length; i++) {
       _viewpoints[i] = _viewpoints[i].copyWith(isVisited: false);
     }
@@ -613,10 +622,10 @@ class TourNavigationEngine {
     }
 
     final now = DateTime.now();
-    if (_state.lastSpokenInstruction == text &&
+    if (onDone == null &&
+        _state.lastSpokenInstruction == text &&
         _state.lastSpokenTimestamp != null &&
-        now.difference(_state.lastSpokenTimestamp!).inSeconds < 8) {
-      onDone?.call();
+        now.difference(_state.lastSpokenTimestamp!).inSeconds < 15) {
       return;
     }
 

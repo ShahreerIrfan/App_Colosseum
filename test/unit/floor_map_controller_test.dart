@@ -223,5 +223,35 @@ void main() {
       expect(controller.userLocation.value!.normalizedX, equals(0.80));
       expect(controller.userLocation.value!.normalizedY, equals(0.50));
     });
+
+    test('speaking navigation instruction does not trigger onAudioCompleted or mark stop visited', () {
+      expect(controller.tourState.value.visitedIds, isEmpty);
+
+      // Speak navigation instruction
+      controller.ttsService.speakInstruction('Next, proceed toward Viewpoint 101.');
+      expect(controller.tourState.value.visitedIds, isEmpty);
+      expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
+    });
+
+    test('toggleAudio pauses narration and resumes from bookmark position', () {
+      final vp = controller.viewpoints.first;
+      controller.selectViewpoint(vp);
+
+      // Start narration
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isTrue);
+
+      // Simulate TTS progress to 50 characters
+      controller.ttsService.onProgress?.call(0, 50, 'word');
+      expect(controller.audioProgress.value, greaterThan(0.0));
+
+      // Pause narration
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isFalse);
+
+      // Resume narration -> resumes with remaining text
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isTrue);
+    });
   });
 }

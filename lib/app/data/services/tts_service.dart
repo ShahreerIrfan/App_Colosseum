@@ -10,10 +10,14 @@ class TtsService {
 
   VoidCallback? onStart;
   VoidCallback? onComplete;
+  VoidCallback? onNarrationComplete;
   VoidCallback? onPause;
   VoidCallback? onStop;
   void Function(int start, int end, String word)? onProgress;
   void Function(dynamic error)? onError;
+
+  bool _isSpeakingNarration = false;
+  bool get isSpeakingNarration => _isSpeakingNarration;
 
   TtsService({FlutterTts? flutterTts})
       : _flutterTts = flutterTts ?? FlutterTts();
@@ -51,6 +55,7 @@ class TtsService {
         });
 
         _flutterTts.setCancelHandler(() {
+          _isSpeakingNarration = false;
           onStop?.call();
         });
 
@@ -67,6 +72,7 @@ class TtsService {
         });
 
         _flutterTts.setErrorHandler((msg) {
+          _isSpeakingNarration = false;
           onError?.call(msg);
         });
       }
@@ -76,8 +82,9 @@ class TtsService {
     }
   }
 
-  /// Speaks the provided text
-  Future<void> speak(String text, {VoidCallback? onDone}) async {
+  /// Speaks a navigation voice instruction without triggering narration complete events.
+  Future<void> speakInstruction(String text, {VoidCallback? onDone}) async {
+    _isSpeakingNarration = false;
     try {
       if (!_isInitialized) {
         await init();
@@ -87,7 +94,6 @@ class TtsService {
           final previousComplete = onComplete;
           onComplete = () {
             onComplete = previousComplete;
-            previousComplete?.call();
             onDone();
           };
         }
@@ -96,9 +102,44 @@ class TtsService {
         onDone?.call();
       }
     } catch (e) {
-      debugPrint('TtsService speak error: $e');
+      debugPrint('TtsService speakInstruction error: $e');
       onDone?.call();
     }
+  }
+
+  /// Speaks a viewpoint guide description narration and invokes [onNarrationComplete] when done.
+  Future<void> speakNarration(String text, {VoidCallback? onDone}) async {
+    _isSpeakingNarration = true;
+    try {
+      if (!_isInitialized) {
+        await init();
+      }
+      if (text.trim().isNotEmpty) {
+        final previousComplete = onComplete;
+        onComplete = () {
+          _isSpeakingNarration = false;
+          onComplete = previousComplete;
+          previousComplete?.call();
+          onNarrationComplete?.call();
+          onDone?.call();
+        };
+        await _flutterTts.speak(text);
+      } else {
+        _isSpeakingNarration = false;
+        onNarrationComplete?.call();
+        onDone?.call();
+      }
+    } catch (e) {
+      _isSpeakingNarration = false;
+      debugPrint('TtsService speakNarration error: $e');
+      onNarrationComplete?.call();
+      onDone?.call();
+    }
+  }
+
+  /// Speaks the provided text (defaults to narration).
+  Future<void> speak(String text, {VoidCallback? onDone}) async {
+    return speakNarration(text, onDone: onDone);
   }
 
   /// Speaks text and returns a Future that completes when playback genuinely finishes.
