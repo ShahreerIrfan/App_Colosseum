@@ -399,6 +399,29 @@ class TourNavigationEngine {
     _notifyState();
   }
 
+  /// Explicit user action: Unmarks a viewpoint as visited.
+  void unmarkVisited(String viewpointId) {
+    final updatedVisited = Set<String>.from(_state.visitedIds)..remove(viewpointId);
+
+    // Update local viewpoint copy
+    final index = _viewpoints.indexWhere((vp) => vp.id == viewpointId);
+    if (index != -1) {
+      _viewpoints[index] = _viewpoints[index].copyWith(isVisited: false);
+    }
+
+    // Recompute next itinerary target from unvisited and unskipped stops
+    final nextTargetId = _findNextItineraryTarget(updatedVisited, _state.skippedIds);
+
+    _state = _state.copyWith(
+      visitedIds: updatedVisited,
+      navigationTargetId: () => nextTargetId,
+      armedAutoPlayViewpointId: () => nextTargetId,
+      navigationStatus: TourNavigationStatus.navigating,
+    );
+
+    _notifyState();
+  }
+
   /// Explicit user action: Skips a viewpoint.
   void skipViewpoint(String viewpointId) {
     final updatedSkipped = Set<String>.from(_state.skippedIds)..add(viewpointId);

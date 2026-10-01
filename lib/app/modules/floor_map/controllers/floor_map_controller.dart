@@ -639,25 +639,11 @@ class FloorMapController extends GetxController {
     final index = viewpoints.indexWhere((vp) => vp.id == targetId);
     if (index != -1) {
       final current = viewpoints[index];
-      final willBeVisited = !current.isVisited;
-      
-      if (willBeVisited) {
-        tourEngine.markVisited(targetId);
+      if (current.isVisited) {
+        tourEngine.unmarkVisited(targetId);
       } else {
-        // Unmarking
-        final updatedVisited = Set<String>.from(tourState.value.visitedIds)
-          ..remove(targetId);
-        viewpoints[index] = current.copyWith(isVisited: false);
-        tourState.value = tourState.value.copyWith(
-          visitedIds: updatedVisited,
-        );
+        tourEngine.markVisited(targetId);
       }
-
-      final updated = viewpoints[index];
-      if (selectedViewpoint.value?.id == targetId) {
-        selectedViewpoint.value = updated;
-      }
-      _refreshItinerarySegments();
     }
   }
 

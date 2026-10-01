@@ -1,4 +1,3 @@
-import 'dart:ui' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:colosseum_client/app/data/models/tour_navigation_state.dart';
 import 'package:colosseum_client/app/data/models/user_location_model.dart';
@@ -555,6 +554,24 @@ void main() {
       expect(engine.state.visitedIds, isEmpty);
       expect(engine.state.navigationTargetId, equals('vp_100'));
       expect(engine.state.armedAutoPlayViewpointId, equals('vp_100'));
+    });
+
+    test('23. unmarkVisited removes stop from visitedIds, updates target, and allows re-visiting', () {
+      engine.startTour(
+        floorId: 'floor_underground',
+        viewpoints: testViewpoints,
+      );
+
+      engine.markVisited('vp_100');
+      expect(engine.state.visitedIds, contains('vp_100'));
+      expect(engine.state.navigationTargetId, equals('vp_101'));
+
+      // User unmarks vp_100 (e.g. undo)
+      engine.unmarkVisited('vp_100');
+      expect(engine.state.visitedIds, isNot(contains('vp_100')));
+      expect(engine.state.navigationTargetId, equals('vp_100'));
+      expect(engine.state.armedAutoPlayViewpointId, equals('vp_100'));
+      expect(engine.state.navigationStatus, equals(TourNavigationStatus.navigating));
     });
   });
 }
