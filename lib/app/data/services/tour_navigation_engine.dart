@@ -42,20 +42,22 @@ class TourNavigationEngine {
     bool isAutoPlayEnabled = true,
   }) {
     _viewpoints = List.from(viewpoints);
-    _entryLocation = entryLocation ?? const Offset(0.92, 0.50);
-    _exitLocation = exitLocation ?? const Offset(0.10, 0.50);
+    _entryLocation = entryLocation;
+    _exitLocation = exitLocation;
     _announcedApproachViewpointIds.clear();
 
     // Sort viewpoints by order if present
     _viewpoints.sort((a, b) => a.order.compareTo(b.order));
 
-    final firstTarget = _viewpoints.isNotEmpty ? _viewpoints.first.id : 'EXIT';
+    final firstTarget = _viewpoints.isNotEmpty
+        ? _viewpoints.first.id
+        : (_exitLocation != null ? 'EXIT' : null);
 
     _state = TourNavigationState(
       itineraryId: '${floorId}_tour',
       activeFloorId: floorId,
       navigationTargetId: firstTarget,
-      previousTargetId: 'ENTRY',
+      previousTargetId: null,
       armedAutoPlayViewpointId: firstTarget,
       navigationStatus: TourNavigationStatus.navigating,
       isVoiceGuidanceEnabled: isVoiceGuidanceEnabled,
@@ -389,6 +391,8 @@ class TourNavigationEngine {
     final isAudioPlaying = _state.activeAudioViewpointId == viewpointId &&
         _state.navigationStatus == TourNavigationStatus.viewpointAudioPlaying;
 
+    final isTourComplete = nextTargetId == null;
+
     _state = _state.copyWith(
       visitedIds: updatedVisited,
       previousTargetId: () => prevTargetId,
@@ -397,14 +401,18 @@ class TourNavigationEngine {
       armedAutoPlayViewpointId: () => nextTargetId,
       navigationStatus: isAudioPlaying
           ? TourNavigationStatus.viewpointAudioPlaying
-          : TourNavigationStatus.navigating,
+          : (isTourComplete
+              ? TourNavigationStatus.itineraryComplete
+              : TourNavigationStatus.navigating),
     );
 
     _notifyState();
 
     // Speak immediate next navigation direction
-    if (_state.isVoiceGuidanceEnabled && !isAudioPlaying && nextTargetId != null) {
-      if (nextTargetId == 'EXIT') {
+    if (_state.isVoiceGuidanceEnabled && !isAudioPlaying) {
+      if (nextTargetId == null) {
+        _speakThrottled('You have completed the Underground tour.');
+      } else if (nextTargetId == 'EXIT') {
         _speakThrottled('Proceed toward the Exit portal.');
       } else {
         final nextVp = _viewpoints
@@ -465,7 +473,7 @@ class TourNavigationEngine {
     _notifyState();
   }
 
-  String _findNextItineraryTarget(
+  String? _findNextItineraryTarget(
     Set<String> visited,
     Set<String> skipped,
   ) {
@@ -474,7 +482,7 @@ class TourNavigationEngine {
         return vp.id;
       }
     }
-    return 'EXIT';
+    return _exitLocation != null ? 'EXIT' : null;
   }
 
   /// User taps a viewpoint marker to open its card (decoupled from navigation target).
@@ -545,7 +553,7 @@ class TourNavigationEngine {
 
   /// Audio narration finishes playing.
   void onAudioCompleted() {
-    final reachedId = _state.reachedViewpointId;
+    final reachedId = _state.reachedViewpointId ?? _state.selectedViewpointId;
     _state = _state.copyWith(
       activeAudioViewpointId: () => null,
     );
@@ -582,13 +590,15 @@ class TourNavigationEngine {
       _viewpoints[i] = _viewpoints[i].copyWith(isVisited: false);
     }
 
-    final firstTarget = _viewpoints.isNotEmpty ? _viewpoints.first.id : 'EXIT';
+    final firstTarget = _viewpoints.isNotEmpty
+        ? _viewpoints.first.id
+        : (_exitLocation != null ? 'EXIT' : null);
 
     _state = TourNavigationState(
       itineraryId: _state.itineraryId,
       activeFloorId: _state.activeFloorId,
       navigationTargetId: firstTarget,
-      previousTargetId: 'ENTRY',
+      previousTargetId: null,
       armedAutoPlayViewpointId: firstTarget,
       navigationStatus: TourNavigationStatus.navigating,
       isVoiceGuidanceEnabled: _state.isVoiceGuidanceEnabled,

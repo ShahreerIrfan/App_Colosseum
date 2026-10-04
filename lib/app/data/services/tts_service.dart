@@ -3,6 +3,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+enum TtsSpeechType {
+  none,
+  instruction,
+  narration,
+}
+
 /// Service managing Text-to-Speech audio guide playback using device native engines.
 class TtsService {
   final FlutterTts _flutterTts;
@@ -16,8 +22,13 @@ class TtsService {
   void Function(int start, int end, String word)? onProgress;
   void Function(dynamic error)? onError;
 
-  bool _isSpeakingNarration = false;
-  bool get isSpeakingNarration => _isSpeakingNarration;
+  TtsSpeechType _currentSpeechType = TtsSpeechType.none;
+  TtsSpeechType get currentSpeechType => _currentSpeechType;
+
+  VoidCallback? _activeInstructionOnDone;
+  VoidCallback? _activeNarrationOnDone;
+
+  bool get isSpeakingNarration => _currentSpeechType == TtsSpeechType.narration;
 
   TtsService({FlutterTts? flutterTts})
       : _flutterTts = flutterTts ?? FlutterTts();
@@ -50,12 +61,12 @@ class TtsService {
           onStart?.call();
         });
 
-        _flutterTts.setCompletionHandler(() {
-          onComplete?.call();
-        });
+        _flutterTts.setCompletionHandler(handleNativeCompletion);
 
         _flutterTts.setCancelHandler(() {
-          _isSpeakingNarration = false;
+          _currentSpeechType = TtsSpeechType.none;
+          _activeInstructionOnDone = null;
+          _activeNarrationOnDone = null;
           onStop?.call();
         });
 
@@ -72,7 +83,9 @@ class TtsService {
         });
 
         _flutterTts.setErrorHandler((msg) {
-          _isSpeakingNarration = false;
+          _currentSpeechType = TtsSpeechType.none;
+          _activeInstructionOnDone = null;
+          _activeNarrationOnDone = null;
           onError?.call(msg);
         });
       }
@@ -82,26 +95,42 @@ class TtsService {
     }
   }
 
+  /// Internal / test handler for native TTS completion events.
+  @visibleForTesting
+  void handleNativeCompletion() {
+    final type = _currentSpeechType;
+    _currentSpeechType = TtsSpeechType.none;
+
+    if (type == TtsSpeechType.instruction) {
+      final cb = _activeInstructionOnDone;
+      _activeInstructionOnDone = null;
+      cb?.call();
+    } else if (type == TtsSpeechType.narration) {
+      final cb = _activeNarrationOnDone;
+      _activeNarrationOnDone = null;
+      onNarrationComplete?.call();
+      cb?.call();
+    }
+    onComplete?.call();
+  }
+
   /// Speaks a navigation voice instruction without triggering narration complete events.
   Future<void> speakInstruction(String text, {VoidCallback? onDone}) async {
-    _isSpeakingNarration = false;
     try {
       if (!_isInitialized) {
         await init();
       }
       if (text.trim().isNotEmpty) {
-        if (onDone != null) {
-          final previousComplete = onComplete;
-          onComplete = () {
-            onComplete = previousComplete;
-            onDone();
-          };
-        }
+        _currentSpeechType = TtsSpeechType.instruction;
+        _activeInstructionOnDone = onDone;
+        _activeNarrationOnDone = null;
         await _flutterTts.speak(text);
       } else {
+        _currentSpeechType = TtsSpeechType.none;
         onDone?.call();
       }
     } catch (e) {
+      _currentSpeechType = TtsSpeechType.none;
       debugPrint('TtsService speakInstruction error: $e');
       onDone?.call();
     }
@@ -109,28 +138,22 @@ class TtsService {
 
   /// Speaks a viewpoint guide description narration and invokes [onNarrationComplete] when done.
   Future<void> speakNarration(String text, {VoidCallback? onDone}) async {
-    _isSpeakingNarration = true;
     try {
       if (!_isInitialized) {
         await init();
       }
       if (text.trim().isNotEmpty) {
-        final previousComplete = onComplete;
-        onComplete = () {
-          _isSpeakingNarration = false;
-          onComplete = previousComplete;
-          previousComplete?.call();
-          onNarrationComplete?.call();
-          onDone?.call();
-        };
+        _currentSpeechType = TtsSpeechType.narration;
+        _activeNarrationOnDone = onDone;
+        _activeInstructionOnDone = null;
         await _flutterTts.speak(text);
       } else {
-        _isSpeakingNarration = false;
+        _currentSpeechType = TtsSpeechType.none;
         onNarrationComplete?.call();
         onDone?.call();
       }
     } catch (e) {
-      _isSpeakingNarration = false;
+      _currentSpeechType = TtsSpeechType.none;
       debugPrint('TtsService speakNarration error: $e');
       onNarrationComplete?.call();
       onDone?.call();
@@ -215,6 +238,9 @@ class TtsService {
 
   /// Stops the current speech
   Future<void> stop() async {
+    _currentSpeechType = TtsSpeechType.none;
+    _activeInstructionOnDone = null;
+    _activeNarrationOnDone = null;
     try {
       await _flutterTts.stop();
     } catch (e) {

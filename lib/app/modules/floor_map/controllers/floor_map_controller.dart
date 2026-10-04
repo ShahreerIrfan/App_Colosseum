@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
+import 'package:latlong2/latlong.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/geodesic_utils.dart';
 import '../../../data/models/itinerary_segment_model.dart';
 import '../../../data/models/tour_navigation_state.dart';
 import '../../../data/models/user_location_model.dart';
@@ -33,7 +37,15 @@ class FloorMapController extends GetxController {
   final floorName = 'Underground (Hypogeum)'.obs;
   final floorId = 'floor_underground'.obs;
 
+  late final MapController mapController;
   late final TransformationController transformationController;
+
+  static const LatLng colosseumCenter = LatLng(41.890210, 12.492231);
+  static const double defaultZoom = 18.6;
+  static const double minZoom = 17.0;
+  static const double maxZoom = 21.0;
+
+  final currentZoom = defaultZoom.obs;
 
   /// Reactive indoor guided tour state machine
   final tourState = const TourNavigationState().obs;
@@ -71,10 +83,6 @@ class FloorMapController extends GetxController {
 
   /// Architectural Guided Itinerary Segments for the current floor
   final itinerarySegments = <ItinerarySegmentModel>[].obs;
-
-  /// Underground Entry and Exit locations
-  static const Offset undergroundEntryLocation = Offset(0.92, 0.50);
-  static const Offset undergroundExitLocation = Offset(0.10, 0.50);
 
   /// 7 Detailed Underground Level (Hypogeum) Viewpoints (Stops 100 - 106)
   static const List<ViewpointModel> undergroundViewpoints = [
@@ -352,18 +360,9 @@ class FloorMapController extends GetxController {
   ];
 
   /// Architectural corridor-following itinerary route for Underground (Hypogeum):
-  /// ENTRY -> 100 -> 101 -> 102 -> 103 -> 104 -> 105 -> 106 -> EXIT
+  /// Stop 100 -> 101 -> 102 -> 103 -> 104 -> 105 -> 106
   static const List<ItinerarySegmentModel> undergroundItinerary = [
-    // 1. ENTRY -> Stop 100 (Arena Spectacles)
-    ItinerarySegmentModel(
-      fromId: 'ENTRY',
-      toId: 'vp_100',
-      points: [
-        Offset(0.92, 0.50),
-        Offset(0.80, 0.50),
-      ],
-    ),
-    // 2. Stop 100 -> Stop 101 (Ludus Magnus Tunnel)
+    // 1. Stop 100 -> Stop 101 (Ludus Magnus Tunnel)
     ItinerarySegmentModel(
       fromId: 'vp_100',
       toId: 'vp_101',
@@ -373,7 +372,7 @@ class FloorMapController extends GetxController {
         Offset(0.88, 0.38),
       ],
     ),
-    // 3. Stop 101 -> Stop 102 (Hypogeum Phases)
+    // 2. Stop 101 -> Stop 102 (Hypogeum Phases)
     ItinerarySegmentModel(
       fromId: 'vp_101',
       toId: 'vp_102',
@@ -384,7 +383,7 @@ class FloorMapController extends GetxController {
         Offset(0.68, 0.30),
       ],
     ),
-    // 4. Stop 102 -> Stop 103 (Flavian Hoists)
+    // 3. Stop 102 -> Stop 103 (Flavian Hoists)
     ItinerarySegmentModel(
       fromId: 'vp_102',
       toId: 'vp_103',
@@ -394,7 +393,7 @@ class FloorMapController extends GetxController {
         Offset(0.48, 0.22),
       ],
     ),
-    // 5. Stop 103 -> Stop 104 (Corridor H)
+    // 4. Stop 103 -> Stop 104 (Corridor H)
     ItinerarySegmentModel(
       fromId: 'vp_103',
       toId: 'vp_104',
@@ -404,7 +403,7 @@ class FloorMapController extends GetxController {
         Offset(0.48, 0.50),
       ],
     ),
-    // 6. Stop 104 -> Stop 105 (Severan Hoists)
+    // 5. Stop 104 -> Stop 105 (Severan Hoists)
     ItinerarySegmentModel(
       fromId: 'vp_104',
       toId: 'vp_105',
@@ -414,7 +413,7 @@ class FloorMapController extends GetxController {
         Offset(0.50, 0.72),
       ],
     ),
-    // 7. Stop 105 -> Stop 106 (Excavations & Restorations)
+    // 6. Stop 105 -> Stop 106 (Excavations & Restorations)
     ItinerarySegmentModel(
       fromId: 'vp_105',
       toId: 'vp_106',
@@ -426,20 +425,12 @@ class FloorMapController extends GetxController {
         Offset(0.24, 0.50),
       ],
     ),
-    // 8. Stop 106 -> EXIT
-    ItinerarySegmentModel(
-      fromId: 'vp_106',
-      toId: 'EXIT',
-      points: [
-        Offset(0.24, 0.50),
-        Offset(0.10, 0.50),
-      ],
-    ),
   ];
 
   @override
   void onInit() {
     super.onInit();
+    mapController = MapController();
     transformationController = TransformationController();
 
     // Parse navigation arguments if passed
@@ -468,6 +459,40 @@ class FloorMapController extends GetxController {
 
   int _currentSpeechStartOffset = 0;
   int _lastSpokenCharIndex = 0;
+  Timer? _audioProgressTimer;
+  DateTime? _narrationStartTime;
+  static const double _estimatedCharsPerSecond = 14.5;
+
+  void _startAudioProgressTimer() {
+    _audioProgressTimer?.cancel();
+    _narrationStartTime = DateTime.now();
+    _audioProgressTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      final vp = selectedViewpoint.value;
+      if (vp == null || vp.description.isEmpty || !isPlayingAudio.value) {
+        _stopAudioProgressTimer();
+        return;
+      }
+      if (_narrationStartTime != null) {
+        final elapsedSeconds =
+            DateTime.now().difference(_narrationStartTime!).inMilliseconds / 1000.0;
+        final estimatedChars = (_currentSpeechStartOffset +
+                (elapsedSeconds * _estimatedCharsPerSecond))
+            .round()
+            .clamp(0, vp.description.length);
+        if (estimatedChars > _lastSpokenCharIndex) {
+          _lastSpokenCharIndex = estimatedChars;
+          audioProgress.value =
+              (_lastSpokenCharIndex / vp.description.length).clamp(0.0, 1.0);
+        }
+      }
+    });
+  }
+
+  void _stopAudioProgressTimer() {
+    _audioProgressTimer?.cancel();
+    _audioProgressTimer = null;
+    _narrationStartTime = null;
+  }
 
   void _initTts() {
     ttsService.init();
@@ -475,6 +500,7 @@ class FloorMapController extends GetxController {
       isPlayingAudio.value = true;
     };
     ttsService.onNarrationComplete = () {
+      _stopAudioProgressTimer();
       _currentSpeechStartOffset = 0;
       _lastSpokenCharIndex = 0;
       isPlayingAudio.value = false;
@@ -482,16 +508,21 @@ class FloorMapController extends GetxController {
       tourEngine.onAudioCompleted();
     };
     ttsService.onStop = () {
+      _stopAudioProgressTimer();
       isPlayingAudio.value = false;
     };
     ttsService.onPause = () {
+      _stopAudioProgressTimer();
       isPlayingAudio.value = false;
     };
     ttsService.onProgress = (start, end, word) {
       final vp = selectedViewpoint.value;
       if (vp != null && vp.description.isNotEmpty) {
-        _lastSpokenCharIndex = (_currentSpeechStartOffset + end).clamp(0, vp.description.length);
-        audioProgress.value = (_lastSpokenCharIndex / vp.description.length).clamp(0.0, 1.0);
+        final calculatedIndex = (_currentSpeechStartOffset + end).clamp(0, vp.description.length);
+        if (calculatedIndex > _lastSpokenCharIndex) {
+          _lastSpokenCharIndex = calculatedIndex;
+          audioProgress.value = (_lastSpokenCharIndex / vp.description.length).clamp(0.0, 1.0);
+        }
       }
     };
   }
@@ -509,6 +540,7 @@ class FloorMapController extends GetxController {
       _lastSpokenCharIndex = 0;
       audioProgress.value = 0.0;
       if (viewpoint.description.isNotEmpty) {
+        _startAudioProgressTimer();
         ttsService.speakNarration(viewpoint.description);
       }
     };
@@ -611,24 +643,58 @@ class FloorMapController extends GetxController {
     isDisplacementPaused.value = false;
   }
 
-  /// Snaps user location anchor to the current navigation target (or Entry).
+  /// Snaps user location anchor to the current navigation target (or first viewpoint).
   void snapToTarget() {
     final targetId = tourState.value.navigationTargetId;
-    if (targetId == 'EXIT') {
-      gpsService.snapToCanvasOffset(undergroundExitLocation, floorId: floorId.value);
-    } else if (targetId != null) {
-      final vp = viewpoints.firstWhereOrNull((v) => v.id == targetId);
-      if (vp != null) {
-        gpsService.snapToCanvasOffset(Offset(vp.normalizedX, vp.normalizedY), floorId: floorId.value);
-      }
-    } else {
-      gpsService.snapToCanvasOffset(undergroundEntryLocation, floorId: floorId.value);
+    ViewpointModel? targetVp;
+    if (targetId != null) {
+      targetVp = viewpoints.firstWhereOrNull((v) => v.id == targetId);
     }
+    targetVp ??= viewpoints.firstOrNull;
+
+    if (targetVp != null) {
+      final canvasOffset = Offset(targetVp.normalizedX, targetVp.normalizedY);
+      gpsService.snapToCanvasOffset(canvasOffset, floorId: floorId.value);
+
+      final snappedLoc = UserLocationModel(
+        floorId: floorId.value,
+        normalizedX: targetVp.normalizedX,
+        normalizedY: targetVp.normalizedY,
+        latitude: targetVp.latLng.latitude,
+        longitude: targetVp.latLng.longitude,
+        headingDegrees: userOrientation.value.headingDegrees,
+        accuracyMeters: 1.5,
+        timestamp: DateTime.now(),
+      );
+      isUserInLocation.value = true;
+      userLocation.value = snappedLoc;
+      tourEngine.updateLocation(snappedLoc);
+    }
+  }
+
+  /// Sets a simulated user location from a tapped geographic coordinate on the satellite map (FoodPanda / Uber style).
+  void setSimulatedLocation(LatLng point) {
+    final canvasOffset = GeodesicUtils.latLngToCanvasOffset(point);
+    // Pause any live physical GPS drift while manually placing position
+    gpsService.pauseDisplacement();
+    isDisplacementPaused.value = true;
+
+    gpsService.snapToCanvasOffset(canvasOffset, floorId: floorId.value);
+
+    final simulatedLoc = UserLocationModel(
+      floorId: floorId.value,
+      normalizedX: canvasOffset.dx,
+      normalizedY: canvasOffset.dy,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      headingDegrees: userOrientation.value.headingDegrees,
+      accuracyMeters: 1.5,
+      timestamp: DateTime.now(),
+    );
+
     isUserInLocation.value = true;
-    userLocation.value = gpsService.currentResult.userLocation;
-    if (userLocation.value != null) {
-      tourEngine.updateLocation(userLocation.value!);
-    }
+    userLocation.value = simulatedLoc;
+    tourEngine.updateLocation(simulatedLoc);
   }
 
   /// Resets the local playground reference origin to current GPS location.
@@ -645,8 +711,6 @@ class FloorMapController extends GetxController {
       tourEngine.startTour(
         floorId: 'floor_underground',
         viewpoints: undergroundViewpoints,
-        entryLocation: undergroundEntryLocation,
-        exitLocation: undergroundExitLocation,
         isVoiceGuidanceEnabled: tourState.value.isVoiceGuidanceEnabled,
         isAutoPlayEnabled: tourState.value.isAutoPlayEnabled,
       );
@@ -672,11 +736,8 @@ class FloorMapController extends GetxController {
       final visited = tourState.value.visitedIds;
 
       final updated = undergroundItinerary.map((segment) {
-        final isCompleted = segment.toId == 'EXIT'
-            ? (viewpoints.isNotEmpty &&
-                viewpoints.every((vp) => visited.contains(vp.id) || vp.isVisited))
-            : (visited.contains(segment.toId) ||
-                (viewpoints.firstWhereOrNull((vp) => vp.id == segment.toId)?.isVisited ?? false));
+        final isCompleted = visited.contains(segment.toId) ||
+            (viewpoints.firstWhereOrNull((vp) => vp.id == segment.toId)?.isVisited ?? false);
 
         final isActive = segment.toId == currentTarget;
 
@@ -705,11 +766,13 @@ class FloorMapController extends GetxController {
 
   @override
   void onClose() {
+    _stopAudioProgressTimer();
     _gpsSubscription?.cancel();
     gpsService.dispose();
     _compassSubscription?.cancel();
     compassService.dispose();
     ttsService.dispose();
+    mapController.dispose();
     transformationController.dispose();
     super.onClose();
   }
@@ -769,6 +832,7 @@ class FloorMapController extends GetxController {
 
     // When choosing another viewpoint, automatically pause / stop TTS playback and reset bookmark
     if (previous?.id != viewpoint.id) {
+      _stopAudioProgressTimer();
       _currentSpeechStartOffset = 0;
       _lastSpokenCharIndex = 0;
       audioProgress.value = 0.0;
@@ -796,6 +860,7 @@ class FloorMapController extends GetxController {
 
   /// Deselects active viewpoint and closes detail card.
   void deselectViewpoint() {
+    _stopAudioProgressTimer();
     _currentSpeechStartOffset = 0;
     _lastSpokenCharIndex = 0;
     selectedViewpoint.value = null;
@@ -845,6 +910,7 @@ class FloorMapController extends GetxController {
 
   /// Resets the full tour to the beginning.
   void resetTour() {
+    _stopAudioProgressTimer();
     _currentSpeechStartOffset = 0;
     _lastSpokenCharIndex = 0;
     tourEngine.resetTour();
@@ -861,6 +927,7 @@ class FloorMapController extends GetxController {
   /// Toggles audio guide speech playback for the active viewpoint with smart resume.
   void toggleAudio() async {
     if (isPlayingAudio.value) {
+      _stopAudioProgressTimer();
       isPlayingAudio.value = false;
       tourEngine.onUserPauseAudio();
       await ttsService.stop();
@@ -881,18 +948,92 @@ class FloorMapController extends GetxController {
           }
           _currentSpeechStartOffset = resumeIndex;
           final remainingText = vp.description.substring(_currentSpeechStartOffset);
+          _startAudioProgressTimer();
           await ttsService.speakNarration(remainingText);
         } else {
           _currentSpeechStartOffset = 0;
           _lastSpokenCharIndex = 0;
+          _startAudioProgressTimer();
           await ttsService.speakNarration(vp.description);
         }
       }
     }
   }
 
+  /// Gets the live effective heading in degrees from compass or user location.
+  double? get effectiveHeading =>
+      userOrientation.value.mapHeadingDegrees ??
+      userOrientation.value.headingDegrees ??
+      userLocation.value?.headingDegrees;
+
+  /// Handles camera movement changes on the satellite map.
+  void onPositionChanged(MapCamera camera, bool hasGesture) {
+    currentZoom.value = camera.zoom;
+  }
+
+  /// Centers the satellite map view on a specific viewpoint.
+  void animateToViewpoint(ViewpointModel vp) {
+    selectViewpoint(vp);
+    try {
+      mapController.move(vp.latLng, mapController.camera.zoom);
+    } catch (_) {}
+  }
+
+  /// Builds geo-located polylines for the walking tour itinerary on Google Satellite View.
+  List<Polyline> buildItineraryPolylines(AppColors colors) {
+    final polylines = <Polyline>[];
+
+    for (final segment in itinerarySegments) {
+      final rawPoints = segment.points;
+      if (rawPoints.isEmpty) continue;
+
+      final latLngs = <LatLng>[];
+      for (int i = 0; i < rawPoints.length; i++) {
+        if (i == 0) {
+          final vp = viewpoints.firstWhereOrNull((v) => v.id == segment.fromId);
+          latLngs.add(vp?.latLng ?? GeodesicUtils.canvasOffsetToLatLng(rawPoints[i]));
+        } else if (i == rawPoints.length - 1) {
+          final vp = viewpoints.firstWhereOrNull((v) => v.id == segment.toId);
+          latLngs.add(vp?.latLng ?? GeodesicUtils.canvasOffsetToLatLng(rawPoints[i]));
+        } else {
+          latLngs.add(GeodesicUtils.canvasOffsetToLatLng(rawPoints[i]));
+        }
+      }
+
+      final Color color;
+      final double strokeWidth;
+      if (segment.isCompleted) {
+        color = const Color(0xFF10B981); // Emerald green for visited legs
+        strokeWidth = 4.2;
+      } else if (segment.isActive) {
+        color = colors.primary; // Active targeted leg
+        strokeWidth = 4.8;
+      } else {
+        color = colors.primary.withValues(alpha: 0.38); // Upcoming legs
+        strokeWidth = 3.2;
+      }
+
+      polylines.add(
+        Polyline(
+          points: latLngs,
+          strokeWidth: strokeWidth,
+          color: color,
+          strokeCap: StrokeCap.round,
+          strokeJoin: StrokeJoin.round,
+        ),
+      );
+    }
+
+    return polylines;
+  }
+
   /// Zoom In helper for floating map controls.
   void zoomIn() {
+    try {
+      final targetZoom = (mapController.camera.zoom + 0.6).clamp(minZoom, maxZoom);
+      mapController.move(mapController.camera.center, targetZoom);
+    } catch (_) {}
+
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     if (currentScale < 3.2) {
       final targetScale = currentScale * 1.25;
@@ -906,6 +1047,11 @@ class FloorMapController extends GetxController {
 
   /// Zoom Out helper for floating map controls.
   void zoomOut() {
+    try {
+      final targetZoom = (mapController.camera.zoom - 0.6).clamp(minZoom, maxZoom);
+      mapController.move(mapController.camera.center, targetZoom);
+    } catch (_) {}
+
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     if (currentScale > 0.85) {
       final targetScale = currentScale * 0.8;
@@ -919,6 +1065,14 @@ class FloorMapController extends GetxController {
 
   /// Recenter floor map to default scale and origin.
   void recenter() {
+    try {
+      if (isUserInLocation.value && userLocation.value != null) {
+        mapController.move(userLocation.value!.latLng, defaultZoom);
+      } else {
+        mapController.move(colosseumCenter, defaultZoom);
+      }
+    } catch (_) {}
+
     transformationController.value = Matrix4.identity();
   }
 }

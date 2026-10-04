@@ -75,18 +75,22 @@ class ViewpointMarker extends StatelessWidget {
                       ),
                     ),
                   ],
-                  Text(
-                    isPlaying
-                        ? 'Stop ${viewpoint.order} · Now Playing'
-                        : (viewpoint.isVisited
-                            ? 'Stop ${viewpoint.order} · Visited'
-                            : 'Stop ${viewpoint.order}'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11.0,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.2,
-                      decoration: TextDecoration.none,
+                  Flexible(
+                    child: Text(
+                      isPlaying
+                          ? 'Stop ${viewpoint.order} · Now Playing'
+                          : (viewpoint.isVisited
+                              ? 'Stop ${viewpoint.order} · Visited'
+                              : 'Stop ${viewpoint.order}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.0,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                        decoration: TextDecoration.none,
+                      ),
                     ),
                   ),
                 ],

@@ -56,11 +56,11 @@ void main() {
     test('initializes with all viewpoints unvisited and itinerary segments loaded for underground', () {
       expect(controller.viewpoints.every((vp) => !vp.isVisited), true);
       expect(controller.itinerarySegments.isNotEmpty, true);
-      expect(controller.itinerarySegments.length, 8);
-      expect(controller.itinerarySegments.first.fromId, 'ENTRY');
-      expect(controller.itinerarySegments.first.toId, 'vp_100');
-      expect(controller.itinerarySegments.last.fromId, 'vp_106');
-      expect(controller.itinerarySegments.last.toId, 'EXIT');
+      expect(controller.itinerarySegments.length, 6);
+      expect(controller.itinerarySegments.first.fromId, 'vp_100');
+      expect(controller.itinerarySegments.first.toId, 'vp_101');
+      expect(controller.itinerarySegments.last.fromId, 'vp_105');
+      expect(controller.itinerarySegments.last.toId, 'vp_106');
     });
 
     test('initializes with isUserInLocation false and null userLocation until GPS in-bounds fix arrives', () {
@@ -79,7 +79,7 @@ void main() {
       controller.selectViewpoint(vp3);
 
       expect(controller.selectedViewpoint.value, vp3);
-      expect(controller.itinerarySegments.length, 8);
+      expect(controller.itinerarySegments.length, 6);
     });
 
     test('switching viewpoint automatically pauses active audio playback', () {
@@ -213,7 +213,7 @@ void main() {
       expect(controller.isDisplacementPaused.value, isFalse);
     });
 
-    test('snapToTarget snaps user location directly to current tour target', () {
+    test('snapToTarget snaps user location directly to current tour target with exact LatLng match', () {
       controller.togglePlaygroundMode();
       expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
 
@@ -222,15 +222,59 @@ void main() {
       expect(controller.userLocation.value, isNotNull);
       expect(controller.userLocation.value!.normalizedX, equals(0.80));
       expect(controller.userLocation.value!.normalizedY, equals(0.50));
+
+      // Coordinate Unification: LatLng must match viewpoint 100 exactly
+      final vp100 = controller.viewpoints.first;
+      expect(controller.userLocation.value!.latLng.latitude, closeTo(vp100.latLng.latitude, 0.000001));
+      expect(controller.userLocation.value!.latLng.longitude, closeTo(vp100.latLng.longitude, 0.000001));
     });
 
-    test('speaking navigation instruction does not trigger onAudioCompleted or mark stop visited', () {
+    test('setSimulatedLocation enables FoodPanda/Uber style tap-to-place anywhere on satellite map', () {
+      controller.togglePlaygroundMode();
+      expect(controller.isPlaygroundMode.value, isTrue);
+
+      // 1. Developer in Bangladesh taps anywhere on satellite map
+      final tappedPoint = controller.viewpoints[1].latLng; // Viewpoint 101 LatLng
+      controller.setSimulatedLocation(tappedPoint);
+
+      expect(controller.isUserInLocation.value, isTrue);
+      expect(controller.userLocation.value, isNotNull);
+      expect(controller.isDisplacementPaused.value, isTrue); // Automatically pauses live drift
+      expect(controller.userLocation.value!.latLng.latitude, closeTo(tappedPoint.latitude, 0.000001));
+      expect(controller.userLocation.value!.latLng.longitude, closeTo(tappedPoint.longitude, 0.000001));
+      expect(controller.userLocation.value!.normalizedX, closeTo(controller.viewpoints[1].normalizedX, 0.001));
+      expect(controller.userLocation.value!.normalizedY, closeTo(controller.viewpoints[1].normalizedY, 0.001));
+    });
+
+    test('speaking navigation instruction does not trigger onAudioCompleted or mark stop visited (Bug 1 fixed)', () async {
       expect(controller.tourState.value.visitedIds, isEmpty);
 
       // Speak navigation instruction
-      controller.ttsService.speakInstruction('Next, proceed toward Viewpoint 101.');
+      await controller.ttsService.speakInstruction('Next, proceed toward Viewpoint 101.');
+      // Native completion of instruction must NOT mark visited
+      controller.ttsService.handleNativeCompletion();
+
       expect(controller.tourState.value.visitedIds, isEmpty);
       expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
+    });
+
+    test('genuine narration completion triggers onAudioCompleted and marks stop visited', () async {
+      expect(controller.tourState.value.visitedIds, isEmpty);
+
+      // Snap to Viewpoint 100
+      controller.snapToTarget();
+      final vp = controller.viewpoints.first;
+      controller.selectViewpoint(vp);
+
+      // Start narration
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isTrue);
+
+      // Native TTS completes narration
+      controller.ttsService.handleNativeCompletion();
+
+      expect(controller.tourState.value.visitedIds, contains('vp_100'));
+      expect(controller.tourState.value.navigationTargetId, equals('vp_101'));
     });
 
     test('toggleAudio pauses narration and resumes from bookmark position', () {
@@ -250,6 +294,30 @@ void main() {
       expect(controller.isPlayingAudio.value, isFalse);
 
       // Resume narration -> resumes with remaining text
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isTrue);
+    });
+
+    test('hybrid timer advances audioProgress when native onProgress is absent (Bug 2 fixed)', () async {
+      final vp = controller.viewpoints.first;
+      controller.selectViewpoint(vp);
+
+      // Start narration without calling onProgress (simulating Samsung/Xiaomi TTS)
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isTrue);
+
+      // Wait 300ms for periodic hybrid progress timer to fire
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+
+      expect(controller.audioProgress.value, greaterThan(0.0));
+
+      // Pause audio
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isFalse);
+      final savedProgress = controller.audioProgress.value;
+      expect(savedProgress, greaterThan(0.0));
+
+      // Resume audio
       controller.toggleAudio();
       expect(controller.isPlayingAudio.value, isTrue);
     });

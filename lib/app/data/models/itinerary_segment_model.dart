@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
+import '../../core/utils/geodesic_utils.dart';
 
 /// Represents a distinct walking path segment connecting consecutive stops or entry/exit in a tour itinerary.
 class ItinerarySegmentModel {
@@ -7,6 +9,11 @@ class ItinerarySegmentModel {
   final List<Offset> points;
   final bool isCompleted;
   final bool isActive;
+
+  /// Gets geographic [LatLng] points along this walking path segment.
+  List<LatLng> get latLngPoints {
+    return points.map((p) => GeodesicUtils.canvasOffsetToLatLng(p)).toList();
+  }
 
   const ItinerarySegmentModel({
     required this.fromId,

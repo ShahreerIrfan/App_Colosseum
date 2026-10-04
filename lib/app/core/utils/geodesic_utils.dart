@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show Offset;
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -95,6 +96,79 @@ abstract class GeodesicUtils {
     return LatLngBounds(
       LatLng(center.latitude - deltaLat, center.longitude - deltaLng),
       LatLng(center.latitude + deltaLat, center.longitude + deltaLng),
+    );
+  }
+
+  /// Converts normalized canvas coordinate ([0.0, 1.0] x [0.0, 1.0]) back to geographic [LatLng] on the Colosseum monument.
+  static LatLng canvasToLatLng(
+    math.Point<double> point, {
+    double centerLat = 41.890210,
+    double centerLng = 12.492231,
+    double arenaWidthMeters = 86.0,
+    double arenaHeightMeters = 54.0,
+    double monumentRotationDegrees = -20.0,
+  }) {
+    final theta = -monumentRotationDegrees * (math.pi / 180.0);
+    const metersPerDegreeLat = 111139.0;
+    final metersPerDegreeLng =
+        111139.0 * math.cos(centerLat * math.pi / 180.0);
+
+    final xRot = (point.x - 0.50) / 0.82 * arenaWidthMeters;
+    final yRot = -(point.y - 0.50) / 0.60 * arenaHeightMeters;
+
+    final dEast = xRot * math.cos(theta) + yRot * math.sin(theta);
+    final dNorth = -xRot * math.sin(theta) + yRot * math.cos(theta);
+
+    final lat = centerLat + (dNorth / metersPerDegreeLat);
+    final lng = centerLng + (dEast / metersPerDegreeLng);
+    return LatLng(lat, lng);
+  }
+
+  /// Converts normalized canvas [Offset] back to geographic [LatLng].
+  static LatLng canvasOffsetToLatLng(
+    Offset point, {
+    double centerLat = 41.890210,
+    double centerLng = 12.492231,
+    double arenaWidthMeters = 86.0,
+    double arenaHeightMeters = 54.0,
+    double monumentRotationDegrees = -20.0,
+  }) {
+    return canvasToLatLng(
+      math.Point<double>(point.dx, point.dy),
+      centerLat: centerLat,
+      centerLng: centerLng,
+      arenaWidthMeters: arenaWidthMeters,
+      arenaHeightMeters: arenaHeightMeters,
+      monumentRotationDegrees: monumentRotationDegrees,
+    );
+  }
+
+  /// Converts a real geographic [LatLng] back to normalized canvas [Offset] ([0.0, 1.0] x [0.0, 1.0]).
+  static Offset latLngToCanvasOffset(
+    LatLng point, {
+    double centerLat = 41.890210,
+    double centerLng = 12.492231,
+    double arenaWidthMeters = 86.0,
+    double arenaHeightMeters = 54.0,
+    double monumentRotationDegrees = -20.0,
+  }) {
+    final theta = -monumentRotationDegrees * (math.pi / 180.0);
+    const metersPerDegreeLat = 111139.0;
+    final metersPerDegreeLng =
+        111139.0 * math.cos(centerLat * math.pi / 180.0);
+
+    final dNorth = (point.latitude - centerLat) * metersPerDegreeLat;
+    final dEast = (point.longitude - centerLng) * metersPerDegreeLng;
+
+    final xRot = dEast * math.cos(theta) - dNorth * math.sin(theta);
+    final yRot = dEast * math.sin(theta) + dNorth * math.cos(theta);
+
+    final normalizedX = 0.50 + (xRot / arenaWidthMeters) * 0.82;
+    final normalizedY = 0.50 - (yRot / arenaHeightMeters) * 0.60;
+
+    return Offset(
+      normalizedX.clamp(0.02, 0.98),
+      normalizedY.clamp(0.02, 0.98),
     );
   }
 }

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
@@ -8,10 +11,12 @@ import 'package:colosseum_client/app/modules/floor_map/widgets/user_location_puc
 import 'package:colosseum_client/app/modules/floor_map/widgets/viewpoint_detail_card.dart';
 import 'package:colosseum_client/app/modules/floor_map/widgets/viewpoint_marker.dart';
 
+import '../helpers/mock_http_overrides.dart';
 import '../helpers/mock_tts.dart';
 
 void main() {
   setUpAll(() {
+    HttpOverrides.global = MockHttpOverrides();
     setupMockTts();
   });
 
@@ -46,17 +51,19 @@ void main() {
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
 
       // 2. Out-of-Location Badge is shown initially and UserLocationPuck is hidden
-      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(find.byType(TileLayer), findsOneWidget);
+      expect(find.byType(PolylineLayer), findsOneWidget);
       expect(find.byKey(const Key('out_of_location_badge')), findsOneWidget);
       expect(find.text('You are not in the location'), findsOneWidget);
       expect(find.byType(UserLocationPuck), findsNothing);
 
-      // Markers (7 Underground Stops), and Portals (ENTRY & EXIT) are fully visible
+      // Markers (7 Underground Stops) are fully visible, Portals (ENTRY & EXIT) are removed
       expect(find.byType(ViewpointMarker), findsNWidgets(7));
-      expect(find.byKey(const Key('itinerary_entry_marker')), findsOneWidget);
-      expect(find.byKey(const Key('itinerary_exit_marker')), findsOneWidget);
-      expect(find.text('ENTRY'), findsOneWidget);
-      expect(find.text('EXIT'), findsOneWidget);
+      expect(find.byKey(const Key('itinerary_entry_marker')), findsNothing);
+      expect(find.byKey(const Key('itinerary_exit_marker')), findsNothing);
+      expect(find.text('ENTRY'), findsNothing);
+      expect(find.text('EXIT'), findsNothing);
 
       // Now feed in-bounds GPS position -> Puck appears and out_of_location_badge disappears
       controller.updateGpsPosition(41.890250, 12.492820);

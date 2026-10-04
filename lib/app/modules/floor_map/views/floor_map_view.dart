@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/theme_extensions.dart';
+import '../../../core/utils/geodesic_utils.dart';
 import '../../../data/models/tour_navigation_state.dart';
 import '../controllers/floor_map_controller.dart';
-import '../widgets/entry_exit_marker.dart';
-import '../widgets/floor_plan_painter.dart';
-import '../widgets/itinerary_painter.dart';
 import '../widgets/user_location_puck.dart';
 import '../widgets/viewpoint_detail_card.dart';
 import '../widgets/viewpoint_marker.dart';
 
-/// Screen displaying top-down architectural floor map with indoor positioning and viewpoints.
+/// Screen displaying Google Maps Satellite View with indoor positioning and viewpoints.
 class FloorMapView extends GetView<FloorMapController> {
   const FloorMapView({super.key});
 
@@ -25,167 +24,109 @@ class FloorMapView extends GetView<FloorMapController> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Dominant Interactive Floor Map Canvas (Interactive Pinch & Pan)
+            // 1. Dominant Google Maps Pure Satellite Viewport
             Positioned.fill(
-              child: InteractiveViewer(
-                transformationController: controller.transformationController,
-                panEnabled: true,
-                scaleEnabled: true,
-                minScale: 0.8,
-                maxScale: 3.5,
-                boundaryMargin: const EdgeInsets.symmetric(
-                  horizontal: 140.0,
-                  vertical: 180.0,
-                ),
-                alignment: Alignment.center,
-                child: Center(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Maintain a square aspect map viewport based on available screen space
-                      final mapDimension = constraints.maxWidth < constraints.maxHeight
-                          ? constraints.maxWidth
-                          : constraints.maxHeight * 0.75;
-
-                      final mapSize = Size(mapDimension, mapDimension);
-
-                      return SizedBox(
-                        width: mapSize.width,
-                        height: mapSize.height,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            // Layer 1: Top-down Architectural Floor Plan
-                            Obx(
-                              () => CustomPaint(
-                                size: mapSize,
-                                painter: FloorPlanPainter(
-                                  colors: colors,
-                                  isUnderground: controller.floorId.value
-                                      .contains('underground'),
-                                ),
-                              ),
-                            ),
-
-                            // Layer 2: Guided Itinerary Tour Walking Path (ENTRY -> 100 -> ... -> 106 -> EXIT)
-                            Obx(() {
-                              if (controller.itinerarySegments.isEmpty) {
-                                return const SizedBox.shrink();
-                              }
-                              return CustomPaint(
-                                size: mapSize,
-                                painter: ItineraryPainter(
-                                  segments: controller.itinerarySegments,
-                                  activeColor: colors.primary,
-                                  completedColor: const Color(0xFF10B981),
-                                ),
-                              );
-                            }),
-
-                            // Layer 3: Portal Markers (ENTRY & EXIT)
-                            Obx(() {
-                              if (!controller.floorId.value.contains('underground')) {
-                                return const SizedBox.shrink();
-                              }
-                              const entry = FloorMapController.undergroundEntryLocation;
-                              const exit = FloorMapController.undergroundExitLocation;
-
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Positioned(
-                                    left: entry.dx * mapSize.width,
-                                    top: entry.dy * mapSize.height,
-                                    child: const FractionalTranslation(
-                                      translation: Offset(-0.5, -0.5),
-                                      child: EntryExitMarker(
-                                        key: Key('itinerary_entry_marker'),
-                                        type: EntryExitType.entry,
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    left: exit.dx * mapSize.width,
-                                    top: exit.dy * mapSize.height,
-                                    child: const FractionalTranslation(
-                                      translation: Offset(-0.5, -0.5),
-                                      child: EntryExitMarker(
-                                        key: Key('itinerary_exit_marker'),
-                                        type: EntryExitType.exit,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }),
-
-                            // Layer 4: Interactive Viewpoint Markers (100–106)
-                            Obx(() {
-                              final selectedVp = controller.selectedViewpoint.value;
-                              final isPlaying = controller.isPlayingAudio.value;
-                              final currentTargetId = controller.tourState.value.navigationTargetId;
-
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: controller.viewpoints.map((vp) {
-                                  final isSelected = selectedVp?.id == vp.id;
-                                  final isTarget = currentTargetId == vp.id;
-                                  final px = vp.normalizedX * mapSize.width;
-                                  final py = vp.normalizedY * mapSize.height;
-
-                                  // Center the marker horizontally on normalized point and align pin center
-                                  return Positioned(
-                                    left: px,
-                                    top: py,
-                                    child: FractionalTranslation(
-                                      translation: Offset(
-                                        -0.5,
-                                        isSelected ? -0.78 : -0.5,
-                                      ),
-                                      child: ViewpointMarker(
-                                        viewpoint: vp,
-                                        isSelected: isSelected,
-                                        isPlaying: isSelected && isPlaying,
-                                        isTarget: isTarget,
-                                        onTap: () => controller.selectViewpoint(vp),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              );
-                            }),
-
-                            // Layer 5: Animated User Indoor Location Puck (Visible ONLY when in location)
-                            // Rendered on the topmost layer above all viewpoint markers and path lines
-                            Obx(() {
-                              if (!controller.isUserInLocation.value ||
-                                  controller.userLocation.value == null) {
-                                return const SizedBox.shrink();
-                              }
-
-                              final user = controller.userLocation.value!;
-                              final orientation = controller.userOrientation.value;
-                              final px = user.normalizedX * mapSize.width;
-                              final py = user.normalizedY * mapSize.height;
-                              final heading = orientation.mapHeadingDegrees ??
-                                  orientation.headingDegrees ??
-                                  user.headingDegrees;
-
-                              return Positioned(
-                                left: px - 32.0,
-                                top: py - 32.0,
-                                child: UserLocationPuck(
-                                  headingDegrees: heading,
-                                  accuracyMeters: user.accuracyMeters,
-                                  puckColor: const Color(0xFF00A6FF), // Sky blue
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                      );
-                    },
+              child: FlutterMap(
+                mapController: controller.mapController,
+                options: MapOptions(
+                  initialCenter: FloorMapController.colosseumCenter,
+                  initialZoom: FloorMapController.defaultZoom,
+                  minZoom: FloorMapController.minZoom,
+                  maxZoom: FloorMapController.maxZoom,
+                  onPositionChanged: controller.onPositionChanged,
+                  onTap: (tapPosition, latLng) {
+                    if (controller.isPlaygroundMode.value) {
+                      controller.setSimulatedLocation(latLng);
+                    }
+                  },
+                  cameraConstraint: CameraConstraint.containCenter(
+                    bounds: GeodesicUtils.createBoundsFromDimensions(
+                      center: FloorMapController.colosseumCenter,
+                      widthMeters: 360.0,
+                      heightMeters: 360.0,
+                    ),
+                  ),
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
                 ),
+                children: [
+                  // Layer 1: Google Maps Pure Satellite Tiles (lyrs=s)
+                  TileLayer(
+                    urlTemplate:
+                        'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+                    subdomains: const ['0', '1', '2', '3'],
+                    userAgentPackageName: 'com.example.colosseum_client',
+                    maxZoom: 21,
+                  ),
+
+                  // Layer 2: Guided Itinerary Tour Walking Path
+                  Obx(() {
+                    if (controller.itinerarySegments.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return PolylineLayer(
+                      polylines: controller.buildItineraryPolylines(colors),
+                    );
+                  }),
+
+                  // Layer 3: Interactive Viewpoint Markers (100–106)
+                  Obx(() {
+                    final selectedVp = controller.selectedViewpoint.value;
+                    final isPlaying = controller.isPlayingAudio.value;
+                    final currentTargetId = controller.tourState.value.navigationTargetId;
+
+                    return MarkerLayer(
+                      markers: controller.viewpoints.map((vp) {
+                        final isSelected = selectedVp?.id == vp.id;
+                        final isTarget = currentTargetId == vp.id;
+
+                        return Marker(
+                          point: vp.latLng,
+                          width: isSelected ? 220.0 : 48.0,
+                          height: isSelected ? 76.0 : 48.0,
+                          alignment: isSelected ? Alignment.bottomCenter : Alignment.center,
+                          child: ViewpointMarker(
+                            viewpoint: vp,
+                            isSelected: isSelected,
+                            isPlaying: isSelected && isPlaying,
+                            isTarget: isTarget,
+                            onTap: () => controller.animateToViewpoint(vp),
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  }),
+
+                  // Layer 4: Animated User Indoor Location Puck (Visible ONLY when in location)
+                  Obx(() {
+                    if (!controller.isUserInLocation.value ||
+                        controller.userLocation.value == null) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final user = controller.userLocation.value!;
+                    final heading = controller.effectiveHeading;
+
+                    return MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: user.latLng,
+                          width: 64.0,
+                          height: 64.0,
+                          alignment: Alignment.center,
+                          child: IgnorePointer(
+                            child: UserLocationPuck(
+                              headingDegrees: heading,
+                              accuracyMeters: user.accuracyMeters,
+                              puckColor: const Color(0xFF00A6FF), // Sky blue
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
               ),
             ),
 
@@ -631,7 +572,7 @@ class FloorMapView extends GetView<FloorMapController> {
                           const SizedBox(width: 4.0),
                           // Reset Origin Button
                           Tooltip(
-                            message: 'Reset Origin (Set Entry to Current Spot)',
+                            message: 'Reset Origin (Set Origin to Current Spot)',
                             child: InkWell(
                               key: const Key('reset_origin_button'),
                               onTap: controller.resetPlaygroundOrigin,

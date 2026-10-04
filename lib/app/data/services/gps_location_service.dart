@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../core/utils/geodesic_utils.dart';
 import '../models/user_location_model.dart';
 
 /// GPS tracking mode options.
@@ -67,6 +68,9 @@ class GpsLocationService {
   double? _lastFilteredX;
   double? _lastFilteredY;
 
+  /// Last anchor position used for deadband speed filtering to eliminate stationary GPS jitter
+  Position? _lastAnchorPosition;
+
   /// Low-pass filter factor between 0.0 (maximum smoothing) and 1.0 (raw instant updates).
   final double positionSmoothingAlpha;
 
@@ -85,6 +89,7 @@ class GpsLocationService {
     _trackingMode = mode;
     _lastFilteredX = null;
     _lastFilteredY = null;
+    _lastAnchorPosition = null;
     _isDisplacementPaused = false;
     _frozenCanvasOffset = null;
     _playgroundAnchorCanvas = defaultCanvasEntry;
@@ -103,12 +108,14 @@ class GpsLocationService {
     _frozenCanvasOffset = canvasAnchor;
     _lastFilteredX = canvasAnchor.dx;
     _lastFilteredY = canvasAnchor.dy;
+    _lastAnchorPosition = null;
   }
 
   /// Pauses physical ground walking displacement in local playground mode.
   /// Freezes user location on the canvas so user can physically walk back or relocate.
   void pauseDisplacement() {
     _isDisplacementPaused = true;
+    _lastAnchorPosition = null;
     _frozenCanvasOffset = (_lastFilteredX != null && _lastFilteredY != null)
         ? Offset(_lastFilteredX!, _lastFilteredY!)
         : _playgroundAnchorCanvas;
@@ -133,6 +140,7 @@ class GpsLocationService {
   /// Resets physical ground origin to the next incoming GPS fix and resumes displacement relative to frozen/target position.
   void resumeDisplacement({Offset? customAnchorCanvas}) {
     _isDisplacementPaused = false;
+    _lastAnchorPosition = null;
     if (customAnchorCanvas != null) {
       _playgroundAnchorCanvas = customAnchorCanvas;
       _frozenCanvasOffset = customAnchorCanvas;
@@ -170,11 +178,16 @@ class GpsLocationService {
     _lastFilteredY = canvasOffset.dy;
     _playgroundOriginLat = null;
     _playgroundOriginLng = null;
+    _lastAnchorPosition = null;
+
+    final latLng = GeodesicUtils.canvasOffsetToLatLng(canvasOffset);
 
     final userLoc = UserLocationModel(
       floorId: floorId,
       normalizedX: canvasOffset.dx,
       normalizedY: canvasOffset.dy,
+      latitude: latLng.latitude,
+      longitude: latLng.longitude,
       accuracyMeters: 2.0,
       timestamp: DateTime.now(),
     );
@@ -384,6 +397,22 @@ class GpsLocationService {
       return;
     }
 
+    // 2. Stationary GPS Deadband Gate:
+    // If movement < 1.5m and velocity is stationary (< 0.4 m/s), suppress GPS jitter
+    if (_lastAnchorPosition != null) {
+      final distanceMoved = Geolocator.distanceBetween(
+        _lastAnchorPosition!.latitude,
+        _lastAnchorPosition!.longitude,
+        position.latitude,
+        position.longitude,
+      );
+      final isStationary = position.speed < 0.4 || position.speedAccuracy > position.speed;
+      if (distanceMoved < 1.5 && isStationary) {
+        return;
+      }
+    }
+    _lastAnchorPosition = position;
+
     // Dynamic smoothing factor based on GPS precision:
     // High precision (<= 12m) -> snappy alpha (0.40)
     // Moderate precision (12m - 30m) -> heavier smoothing (0.20) to eliminate noise
@@ -480,6 +509,8 @@ class GpsLocationService {
       floorId: floorId,
       normalizedX: smoothedX,
       normalizedY: smoothedY,
+      latitude: _trackingMode == GpsTrackingMode.colosseumGeofence ? position.latitude : null,
+      longitude: _trackingMode == GpsTrackingMode.colosseumGeofence ? position.longitude : null,
       accuracyMeters: position.accuracy,
       timestamp: position.timestamp,
     );
@@ -502,6 +533,7 @@ class GpsLocationService {
     double accuracy = 2.0,
     String floorId = 'floor_underground',
   }) {
+    _lastAnchorPosition = null;
     final pos = Position(
       latitude: latitude,
       longitude: longitude,
@@ -511,7 +543,7 @@ class GpsLocationService {
       altitudeAccuracy: 0.0,
       heading: 0.0,
       headingAccuracy: 0.0,
-      speed: 0.0,
+      speed: 1.0,
       speedAccuracy: 0.0,
     );
     _handlePositionUpdate(pos, floorId: floorId);

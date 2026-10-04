@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:colosseum_client/app/data/services/gps_location_service.dart';
 
 void main() {
@@ -211,6 +213,68 @@ void main() {
       expect(gpsService.currentResult.userLocation!.normalizedX, equals(0.80));
       expect(gpsService.currentResult.userLocation!.normalizedY, equals(0.50));
       expect(gpsService.playgroundAnchorCanvas, equals(vp100Offset));
+    });
+
+    test('10. Stationary deadband filter suppresses micro-jitter movements < 1.5m at low speed', () async {
+      final streamController = StreamController<Position>.broadcast();
+      final deadbandService = GpsLocationService(positionSmoothingAlpha: 1.0);
+      await deadbandService.startTracking(customStream: streamController.stream);
+
+      final results = <GpsLocationResult>[];
+      final sub = deadbandService.locationStream.listen(results.add);
+
+      final baseTime = DateTime.now();
+      // 1. Initial fix at Viewpoint 100
+      streamController.add(Position(
+        latitude: 41.890250,
+        longitude: 12.492820,
+        timestamp: baseTime,
+        accuracy: 2.0,
+        altitude: 0.0,
+        altitudeAccuracy: 0.0,
+        heading: 0.0,
+        headingAccuracy: 0.0,
+        speed: 1.0,
+        speedAccuracy: 0.1,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(results.length, equals(1));
+
+      // 2. Stationary jitter: 0.44m movement (< 1.5m) and speed = 0.1 m/s (< 0.4 m/s)
+      streamController.add(Position(
+        latitude: 41.890254,
+        longitude: 12.492820,
+        timestamp: baseTime.add(const Duration(seconds: 1)),
+        accuracy: 2.0,
+        altitude: 0.0,
+        altitudeAccuracy: 0.0,
+        heading: 0.0,
+        headingAccuracy: 0.0,
+        speed: 0.1,
+        speedAccuracy: 0.1,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(results.length, equals(1)); // Suppressed by deadband!
+
+      // 3. Genuine physical movement: 4.5m movement (> 1.5m)
+      streamController.add(Position(
+        latitude: 41.890290,
+        longitude: 12.492820,
+        timestamp: baseTime.add(const Duration(seconds: 2)),
+        accuracy: 2.0,
+        altitude: 0.0,
+        altitudeAccuracy: 0.0,
+        heading: 0.0,
+        headingAccuracy: 0.0,
+        speed: 1.2,
+        speedAccuracy: 0.1,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(results.length, equals(2)); // Genuine movement accepted!
+
+      await sub.cancel();
+      deadbandService.dispose();
+      await streamController.close();
     });
   });
 }

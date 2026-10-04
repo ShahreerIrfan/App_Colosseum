@@ -1,3 +1,7 @@
+import 'dart:ui' show Offset;
+import 'package:latlong2/latlong.dart';
+import '../../core/utils/geodesic_utils.dart';
+
 /// Immutable model representing an interactive viewpoint / audio stop on a landmark floor.
 class ViewpointModel {
   final String id;
@@ -12,6 +16,9 @@ class ViewpointModel {
   final double? latitude;
   final double? longitude;
   final String? imageAsset;
+
+  /// Gets the real geographic coordinate [LatLng] on the map.
+  LatLng get latLng => GeodesicUtils.canvasOffsetToLatLng(Offset(normalizedX, normalizedY));
 
   const ViewpointModel({
     required this.id,
