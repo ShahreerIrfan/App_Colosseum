@@ -317,6 +317,14 @@ class FloorMapController extends GetxController {
   void snapToTarget() {
     if (viewpoints.isEmpty) return;
 
+    // 0. Cleanly stop any active audio from previous stop before snapping
+    if (isPlayingAudio.value || ttsService.currentSpeechType != TtsSpeechType.none) {
+      _stopAudioProgressTimer();
+      isPlayingAudio.value = false;
+      audioProgress.value = 0.0;
+      ttsService.stop();
+    }
+
     // 1. Freeze physical GPS drift so real sensor noise does not push user puck away
     gpsService.pauseDisplacement();
     isDisplacementPaused.value = true;
@@ -376,6 +384,14 @@ class FloorMapController extends GetxController {
 
   /// Sets a simulated user location from a tapped geographic coordinate on the satellite map (FoodPanda / Uber style).
   void setSimulatedLocation(LatLng point) {
+    // Cleanly stop any active audio when placing location
+    if (isPlayingAudio.value || ttsService.currentSpeechType != TtsSpeechType.none) {
+      _stopAudioProgressTimer();
+      isPlayingAudio.value = false;
+      audioProgress.value = 0.0;
+      ttsService.stop();
+    }
+
     final canvasOffset = GeodesicUtils.latLngToCanvasOffset(point);
     // Pause any live physical GPS drift while manually placing position
     gpsService.pauseDisplacement();

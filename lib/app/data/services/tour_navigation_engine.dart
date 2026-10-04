@@ -530,6 +530,7 @@ class TourNavigationEngine {
       navigationTargetId: () => viewpointId,
       armedAutoPlayViewpointId: () => viewpointId,
       reachedViewpointId: () => null,
+      activeAudioViewpointId: () => null,
       autoPlayedViewpointIds: updatedAutoPlayed,
       skippedIds: updatedSkipped,
       navigationStatus: TourNavigationStatus.navigating,

@@ -122,11 +122,21 @@ class TtsService {
   /// Speaks a navigation voice instruction without triggering narration complete events.
   Future<void> speakInstruction(String text, {VoidCallback? onDone}) async {
     _instructionSafetyTimer?.cancel();
+    _instructionSafetyTimer = null;
     try {
       if (!_isInitialized) {
         await init();
       }
       if (text.trim().isNotEmpty) {
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          _currentSpeechType = TtsSpeechType.none;
+          _activeInstructionOnDone = null;
+          _activeNarrationOnDone = null;
+          try {
+            await _flutterTts.stop();
+          } catch (_) {}
+        }
+
         _currentSpeechType = TtsSpeechType.instruction;
         _activeInstructionOnDone = onDone;
         _activeNarrationOnDone = null;
@@ -160,11 +170,25 @@ class TtsService {
 
   /// Speaks a viewpoint guide description narration and invokes [onNarrationComplete] when done.
   Future<void> speakNarration(String text, {VoidCallback? onDone}) async {
+    _instructionSafetyTimer?.cancel();
+    _instructionSafetyTimer = null;
     try {
       if (!_isInitialized) {
         await init();
       }
       if (text.trim().isNotEmpty) {
+        // Stop any previous speech first while _currentSpeechType is none on mobile devices,
+        // so that any native flush/abort completion event from previous speech
+        // is discarded and cannot trigger premature onNarrationComplete events.
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          _currentSpeechType = TtsSpeechType.none;
+          _activeInstructionOnDone = null;
+          _activeNarrationOnDone = null;
+          try {
+            await _flutterTts.stop();
+          } catch (_) {}
+        }
+
         _currentSpeechType = TtsSpeechType.narration;
         _activeNarrationOnDone = onDone;
         _activeInstructionOnDone = null;
