@@ -72,9 +72,18 @@ class TourNavigationEngine {
     if (isVoiceGuidanceEnabled && _viewpoints.isNotEmpty) {
       final firstVp = _viewpoints.first;
       _speakThrottled(
-        'Begin the Underground tour. Proceed toward Viewpoint ${firstVp.order}.',
+        'Begin the ${_getFloorTourName(floorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
       );
     }
+  }
+
+  String _getFloorTourName(String? floorId) {
+    if (floorId == null) return 'Colosseum';
+    if (floorId.contains('underground')) return 'Underground';
+    if (floorId.contains('1')) return 'Level 1';
+    if (floorId.contains('2')) return 'Level 2';
+    if (floorId.contains('3')) return 'Level 3';
+    return 'Colosseum';
   }
 
   /// Calculates real-world metric physical distance between two normalized floor offsets.
@@ -85,7 +94,13 @@ class TourNavigationEngine {
   }
 
   /// Evaluates an incoming indoor location beacon and advances navigation state.
-  void updateLocation(UserLocationModel location, {DateTime? now}) {
+  /// If [isSimulated] is true (e.g. developer map tap or snap stop), jump detection and dwell
+  /// timers are bypassed so arrival and auto-play trigger immediately.
+  void updateLocation(
+    UserLocationModel location, {
+    DateTime? now,
+    bool isSimulated = false,
+  }) {
     final currentTime = now ?? location.timestamp ?? DateTime.now();
 
     // 1. Floor Validation Check
@@ -95,7 +110,7 @@ class TourNavigationEngine {
     }
 
     // 2. Location Staleness Check
-    if (location.timestamp != null) {
+    if (!isSimulated && location.timestamp != null) {
       final age = currentTime.difference(location.timestamp!);
       if (age > config.maxLocationAge) {
         // Discard stale location
@@ -104,7 +119,7 @@ class TourNavigationEngine {
     }
 
     // 3. Accuracy / Quality Check
-    if (location.accuracyMeters > config.maxAcceptableAccuracyMeters) {
+    if (!isSimulated && location.accuracyMeters > config.maxAcceptableAccuracyMeters) {
       _state = _state.copyWith(
         isLocationUncertain: true,
         navigationStatus: TourNavigationStatus.locationUncertain,
@@ -120,7 +135,7 @@ class TourNavigationEngine {
     }
 
     // 4. Sudden Impossible Jump Detection
-    if (_state.userLocation != null) {
+    if (!isSimulated && _state.userLocation != null) {
       final prevOffset = Offset(
         _state.userLocation!.normalizedX,
         _state.userLocation!.normalizedY,
@@ -148,7 +163,7 @@ class TourNavigationEngine {
     _evaluateDeparture(userOffset, currentTime);
 
     // 6. Evaluate Target Proximity & Arrival
-    _evaluateTargetProximity(userOffset, currentTime);
+    _evaluateTargetProximity(userOffset, currentTime, isSimulated: isSimulated);
   }
 
   void _evaluateDeparture(Offset userOffset, DateTime currentTime) {
@@ -206,7 +221,11 @@ class TourNavigationEngine {
     }
   }
 
-  void _evaluateTargetProximity(Offset userOffset, DateTime currentTime) {
+  void _evaluateTargetProximity(
+    Offset userOffset,
+    DateTime currentTime, {
+    bool isSimulated = false,
+  }) {
     if (_state.navigationTargetId == null) return;
 
     // Handle EXIT Portal Target
@@ -215,14 +234,18 @@ class TourNavigationEngine {
         final distToExit = calculateMetricDistance(userOffset, _exitLocation!);
         _state = _state.copyWith(distanceToTarget: () => distToExit);
 
+        final isExitDwellConfirmed = isSimulated ||
+            (_state.arrivalDwellStartedAt != null &&
+                currentTime.difference(_state.arrivalDwellStartedAt!) >=
+                    config.arrivalDwellDuration);
+
         if (distToExit <= config.arrivalRadiusMeters) {
-          if (_state.arrivalDwellStartedAt == null) {
+          if (!isExitDwellConfirmed && _state.arrivalDwellStartedAt == null) {
             _state = _state.copyWith(
               arrivalDwellStartedAt: () => currentTime,
               navigationStatus: TourNavigationStatus.arrivalPending,
             );
-          } else if (currentTime.difference(_state.arrivalDwellStartedAt!) >=
-              config.arrivalDwellDuration) {
+          } else if (isExitDwellConfirmed) {
             if (_state.navigationStatus != TourNavigationStatus.itineraryComplete) {
               _state = _state.copyWith(
                 navigationStatus: TourNavigationStatus.itineraryComplete,
@@ -231,7 +254,7 @@ class TourNavigationEngine {
               );
               if (_state.isVoiceGuidanceEnabled) {
                 _speakThrottled(
-                  'You have completed the Underground itinerary. The exit is here.',
+                  'You have completed the ${_getFloorTourName(_state.activeFloorId)} itinerary. The exit is here.',
                 );
               }
             }
@@ -298,27 +321,32 @@ class TourNavigationEngine {
     }
     // 3. Inside Arrival Radius (<= arrivalRadius) -> Dwell Verification
     else if (distToTarget <= config.arrivalRadiusMeters) {
-      if (_state.arrivalDwellStartedAt == null) {
+      final isDwellSatisfied = isSimulated ||
+          (_state.arrivalDwellStartedAt != null &&
+              currentTime.difference(_state.arrivalDwellStartedAt!) >=
+                  config.arrivalDwellDuration);
+
+      if (!isDwellSatisfied && _state.arrivalDwellStartedAt == null) {
         _state = _state.copyWith(
           arrivalDwellStartedAt: () => currentTime,
           navigationStatus: TourNavigationStatus.arrivalPending,
         );
-      } else if (currentTime.difference(_state.arrivalDwellStartedAt!) >=
-          config.arrivalDwellDuration) {
+      } else if (isDwellSatisfied) {
         // ARRIVAL CONFIRMED!
         _announcedApproachViewpointIds.add(targetVp.id);
         _state = _state.copyWith(
           navigationStatus: TourNavigationStatus.arrived,
           reachedViewpointId: () => targetVp.id,
           arrivalDwellStartedAt: () => null,
+          isExplicitlyClosed: false,
+          pausedByUser: false,
         );
 
+        // Auto-play eligibility: completely decoupled from visitedIds!
+        // Viewpoints will auto-play as long as auto-play is enabled and this stop hasn't already auto-played in this session.
         final isEligibleForAutoPlay = _state.isAutoPlayEnabled &&
             !_state.autoPlayedViewpointIds.contains(targetVp.id) &&
-            !_state.visitedIds.contains(targetVp.id) &&
-            !_state.skippedIds.contains(targetVp.id) &&
-            !_state.pausedByUser &&
-            !_state.isExplicitlyClosed;
+            !_state.skippedIds.contains(targetVp.id);
 
         if (_state.isVoiceGuidanceEnabled) {
           _speakThrottled(
@@ -399,6 +427,8 @@ class TourNavigationEngine {
       navigationTargetId: () => nextTargetId,
       // Auto-arm next target so user walking to it automatically triggers
       armedAutoPlayViewpointId: () => nextTargetId,
+      isExplicitlyClosed: false,
+      pausedByUser: false,
       navigationStatus: isAudioPlaying
           ? TourNavigationStatus.viewpointAudioPlaying
           : (isTourComplete
@@ -411,7 +441,7 @@ class TourNavigationEngine {
     // Speak immediate next navigation direction
     if (_state.isVoiceGuidanceEnabled && !isAudioPlaying) {
       if (nextTargetId == null) {
-        _speakThrottled('You have completed the Underground tour.');
+        _speakThrottled('You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
       } else if (nextTargetId == 'EXIT') {
         _speakThrottled('Proceed toward the Exit portal.');
       } else {
@@ -466,8 +496,12 @@ class TourNavigationEngine {
       skippedIds: updatedSkipped,
       previousTargetId: () => prevTargetId,
       navigationTargetId: () => nextTargetId,
-      armedAutoPlayViewpointId: () => null,
-      navigationStatus: TourNavigationStatus.navigating,
+      armedAutoPlayViewpointId: () => nextTargetId,
+      isExplicitlyClosed: false,
+      pausedByUser: false,
+      navigationStatus: nextTargetId == null
+          ? TourNavigationStatus.itineraryComplete
+          : TourNavigationStatus.navigating,
     );
 
     _notifyState();
@@ -483,6 +517,26 @@ class TourNavigationEngine {
       }
     }
     return _exitLocation != null ? 'EXIT' : null;
+  }
+
+  /// Sets or navigates directly to a target viewpoint (used for developer simulation / snap stop).
+  void setNavigationTarget(String viewpointId) {
+    final updatedAutoPlayed = Set<String>.from(_state.autoPlayedViewpointIds)
+      ..remove(viewpointId);
+    final updatedSkipped = Set<String>.from(_state.skippedIds)
+      ..remove(viewpointId);
+
+    _state = _state.copyWith(
+      navigationTargetId: () => viewpointId,
+      armedAutoPlayViewpointId: () => viewpointId,
+      reachedViewpointId: () => null,
+      autoPlayedViewpointIds: updatedAutoPlayed,
+      skippedIds: updatedSkipped,
+      navigationStatus: TourNavigationStatus.navigating,
+      isExplicitlyClosed: false,
+      pausedByUser: false,
+    );
+    _notifyState();
   }
 
   /// User taps a viewpoint marker to open its card (decoupled from navigation target).
@@ -561,12 +615,36 @@ class TourNavigationEngine {
     if (config.autoMarkVisitedOnAudioComplete && reachedId != null) {
       markVisited(reachedId);
     } else {
-      final isVisited = reachedId != null && _state.visitedIds.contains(reachedId);
-      _state = _state.copyWith(
-        navigationStatus: isVisited
-            ? TourNavigationStatus.waitingForDeparture
-            : TourNavigationStatus.waitingForVisited,
-      );
+      final isAlreadyNavigatingNext = _state.navigationTargetId != null &&
+          _state.navigationTargetId != reachedId;
+
+      if (isAlreadyNavigatingNext) {
+        _state = _state.copyWith(
+          navigationStatus: TourNavigationStatus.navigating,
+        );
+        if (_state.isVoiceGuidanceEnabled) {
+          final nextTargetId = _state.navigationTargetId;
+          if (nextTargetId == null) {
+            _speakThrottled('You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
+          } else if (nextTargetId == 'EXIT') {
+            _speakThrottled('Proceed toward the Exit portal.');
+          } else {
+            final nextVp = _viewpoints
+                .where((vp) => vp.id == nextTargetId)
+                .firstOrNull;
+            if (nextVp != null) {
+              _speakThrottled('Next, proceed toward Viewpoint ${nextVp.order}.');
+            }
+          }
+        }
+      } else {
+        final isVisited = reachedId != null && _state.visitedIds.contains(reachedId);
+        _state = _state.copyWith(
+          navigationStatus: isVisited
+              ? TourNavigationStatus.waitingForDeparture
+              : TourNavigationStatus.waitingAtViewpoint,
+        );
+      }
       _notifyState();
     }
   }
@@ -613,7 +691,7 @@ class TourNavigationEngine {
     if (_state.isVoiceGuidanceEnabled && _viewpoints.isNotEmpty) {
       final firstVp = _viewpoints.first;
       _speakThrottled(
-        'Begin the Underground tour. Proceed toward Viewpoint ${firstVp.order}.',
+        'Begin the ${_getFloorTourName(_state.activeFloorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
       );
     }
   }

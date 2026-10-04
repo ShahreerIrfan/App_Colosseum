@@ -172,6 +172,7 @@ class GpsLocationService {
 
   /// Snaps the local playground anchor to a specific canvas coordinate (e.g. a Viewpoint or Entry).
   void snapToCanvasOffset(Offset canvasOffset, {String floorId = 'floor_underground'}) {
+    _trackingMode = GpsTrackingMode.localPlayground;
     _playgroundAnchorCanvas = canvasOffset;
     _frozenCanvasOffset = canvasOffset;
     _lastFilteredX = canvasOffset.dx;

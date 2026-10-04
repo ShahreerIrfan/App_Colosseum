@@ -26,115 +26,58 @@ class ViewpointMarker extends StatelessWidget {
 
     final primaryColor = colors.primary;
     final isThreeDigits = viewpoint.order >= 100;
-    final markerWidth = isThreeDigits
-        ? (isSelected ? 42.0 : 34.0)
-        : (isSelected ? 34.0 : 28.0);
-    final markerHeight = isSelected ? 34.0 : 28.0;
+    // Fixed dimensions ensure the pin center NEVER shifts when selected or played
+    final markerWidth = isThreeDigits ? 38.0 : 30.0;
+    final markerHeight = 30.0;
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Active / Now Playing Callout Badge above marker
-          if (isSelected) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 4.0),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8.0,
-                vertical: 3.0,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(10.0),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 0.8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 6.0,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isPlaying) ...[
-                    Container(
-                      width: 6.0,
-                      height: 6.0,
-                      margin: const EdgeInsets.only(right: 5.0),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF4CAF50),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                  Flexible(
-                    child: Text(
-                      isPlaying
-                          ? 'Stop ${viewpoint.order} · Now Playing'
-                          : (viewpoint.isVisited
-                              ? 'Stop ${viewpoint.order} · Visited'
-                              : 'Stop ${viewpoint.order}'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11.0,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // Numbered Pin (circular or rounded pill for 3 digits)
-          Stack(
+      child: Center(
+        child: SizedBox(
+          width: 48.0,
+          height: 48.0,
+          child: Stack(
             alignment: Alignment.center,
+            clipBehavior: Clip.none,
             children: [
-              // Halo for active target or selected marker
+              // Halo for active target or selected / playing marker
               if (isSelected || isTarget)
                 Container(
                   width: markerWidth + (isSelected ? 10.0 : 6.0),
                   height: markerHeight + (isSelected ? 10.0 : 6.0),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20.0),
-                    color: primaryColor.withValues(
-                      alpha: isSelected ? 0.22 : 0.14,
-                    ),
+                    color: isPlaying
+                        ? const Color(0xFF4CAF50).withValues(alpha: 0.28)
+                        : primaryColor.withValues(
+                            alpha: isSelected ? 0.25 : 0.14,
+                          ),
                   ),
                 ),
 
-              // Main Marker Body
+              // Main Marker Body - Anchored perfectly at the exact center (0, 0)
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: markerWidth,
                 height: markerHeight,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(17.0),
+                  borderRadius: BorderRadius.circular(16.0),
                   color: isSelected
-                      ? primaryColor
+                      ? (isPlaying ? const Color(0xFF2E7D32) : primaryColor)
                       : (viewpoint.isVisited
                           ? primaryColor.withValues(alpha: 0.14)
                           : colors.card),
                   border: Border.all(
-                    color: isSelected ? Colors.white : primaryColor,
+                    color: isPlaying
+                        ? const Color(0xFF4CAF50)
+                        : (isSelected ? Colors.white : primaryColor),
                     width: isSelected ? 2.0 : 1.6,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.18),
-                      blurRadius: 4.0,
+                      color: Colors.black.withValues(alpha: isSelected ? 0.25 : 0.18),
+                      blurRadius: isSelected ? 6.0 : 4.0,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -144,9 +87,7 @@ class ViewpointMarker extends StatelessWidget {
                   '${viewpoint.order}',
                   style: TextStyle(
                     color: isSelected ? Colors.white : primaryColor,
-                    fontSize: isThreeDigits
-                        ? (isSelected ? 11.0 : 10.5)
-                        : (isSelected ? 13.0 : 12.0),
+                    fontSize: isThreeDigits ? 10.5 : 12.0,
                     fontWeight: FontWeight.w800,
                     height: 1.0,
                     decoration: TextDecoration.none,
@@ -157,8 +98,8 @@ class ViewpointMarker extends StatelessWidget {
               // Visited status corner indicator
               if (viewpoint.isVisited && !isSelected)
                 Positioned(
-                  top: -4.0,
-                  right: -4.0,
+                  top: 4.0,
+                  right: 2.0,
                   child: Container(
                     width: 13.0,
                     height: 13.0,
@@ -180,7 +121,7 @@ class ViewpointMarker extends StatelessWidget {
                 ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

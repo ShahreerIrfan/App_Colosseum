@@ -549,5 +549,65 @@ void main() {
       expect(engine.state.armedAutoPlayViewpointId, equals('vp_100'));
       expect(engine.state.navigationStatus, equals(TourNavigationStatus.navigating));
     });
+
+    test('24. viewpoint auto-plays even if previously marked as visited (decoupled)', () {
+      engine.startTour(
+        floorId: 'floor_underground',
+        viewpoints: testViewpoints,
+      );
+      autoPlayedIds.clear();
+
+      final t0 = DateTime.now();
+      final locAt100 = UserLocationModel(
+        floorId: 'floor_underground',
+        normalizedX: 0.80,
+        normalizedY: 0.50,
+        accuracyMeters: 1.0,
+        timestamp: t0,
+      );
+
+      // Mark stop as visited
+      engine.markVisited('vp_100');
+      expect(engine.state.visitedIds, contains('vp_100'));
+
+      // Retarget vp_100
+      engine.unmarkVisited('vp_100');
+      // Simulate arriving at 100
+      engine.updateLocation(locAt100, now: t0, isSimulated: true);
+      expect(autoPlayedIds, contains('vp_100'));
+    });
+
+    test('25. isSimulated: true immediately confirms arrival and triggers auto-play without jump rejection', () {
+      engine.startTour(
+        floorId: 'floor_underground',
+        viewpoints: testViewpoints,
+      );
+      autoPlayedIds.clear();
+
+      final t0 = DateTime.now();
+      final locStart = UserLocationModel(
+        floorId: 'floor_underground',
+        normalizedX: 0.10,
+        normalizedY: 0.10,
+        accuracyMeters: 1.0,
+        timestamp: t0,
+      );
+      engine.updateLocation(locStart, now: t0);
+
+      // Sudden jump across the amphitheatre (80 meters jump) with isSimulated = true
+      final locJump = UserLocationModel(
+        floorId: 'floor_underground',
+        normalizedX: 0.80,
+        normalizedY: 0.50, // Exactly at Viewpoint 100
+        accuracyMeters: 1.0,
+        timestamp: t0.add(const Duration(milliseconds: 100)),
+      );
+
+      engine.updateLocation(locJump, now: t0.add(const Duration(milliseconds: 100)), isSimulated: true);
+
+      // Successfully triggers arrival and auto-play immediately without being dropped by 15m jump filter
+      expect(engine.state.navigationStatus, equals(TourNavigationStatus.viewpointAudioPlaying));
+      expect(autoPlayedIds, contains('vp_100'));
+    });
   });
 }

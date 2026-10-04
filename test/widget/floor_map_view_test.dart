@@ -245,4 +245,92 @@ void main() {
       expect(controller.isPlaygroundMode.value, isTrue);
     },
   );
+
+  testWidgets(
+    'Viewpoint number badge remains strictly stationary at exact map coordinates when selected or unselected',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = Get.put(FloorMapController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const FloorMapView(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final vp100Text = find.descendant(
+        of: find.byType(ViewpointMarker),
+        matching: find.text('100'),
+      );
+      expect(vp100Text, findsOneWidget);
+
+      // Record unselected center position
+      final unselectedCenter = tester.getCenter(vp100Text);
+
+      // Select Viewpoint 100 via controller (as occurs on auto-play / arrival)
+      controller.selectViewpoint(controller.viewpoints.first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.selectedViewpoint.value?.id, 'vp_100');
+
+      // Verify the center position of the number badge has NOT moved
+      final selectedCenter = tester.getCenter(vp100Text);
+      expect((selectedCenter.dx - unselectedCenter.dx).abs(), lessThan(0.5));
+      expect((selectedCenter.dy - unselectedCenter.dy).abs(), lessThan(0.5));
+
+      // Close / deselect viewpoint
+      final closeButton = find.byKey(const Key('close_viewpoint_card')).last;
+      await tester.tap(closeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.selectedViewpoint.value, isNull);
+
+      // Verify after deselect the number badge center remains identical
+      final afterDeselectCenter = tester.getCenter(vp100Text);
+      expect((afterDeselectCenter.dx - unselectedCenter.dx).abs(), lessThan(0.5));
+      expect((afterDeselectCenter.dy - unselectedCenter.dy).abs(), lessThan(0.5));
+    },
+  );
+
+  testWidgets(
+    'Tapping on the map screen does NOT shift user location or place simulated location',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = Get.put(FloorMapController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const FloorMapView(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // In-bounds GPS position placed
+      controller.updateGpsPosition(41.890250, 12.492820);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final originalLocation = controller.userLocation.value;
+      expect(originalLocation, isNotNull);
+
+      // Tap empty area on map canvas
+      await tester.tapAt(const Offset(300, 400));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Location must remain unchanged
+      expect(controller.userLocation.value?.latLng.latitude, originalLocation?.latLng.latitude);
+      expect(controller.userLocation.value?.latLng.longitude, originalLocation?.latLng.longitude);
+    },
+  );
 }
+

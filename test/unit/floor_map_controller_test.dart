@@ -222,11 +222,54 @@ void main() {
       expect(controller.userLocation.value, isNotNull);
       expect(controller.userLocation.value!.normalizedX, equals(0.80));
       expect(controller.userLocation.value!.normalizedY, equals(0.50));
+      expect(controller.isDisplacementPaused.value, isTrue); // Live drift is paused
 
       // Coordinate Unification: LatLng must match viewpoint 100 exactly
       final vp100 = controller.viewpoints.first;
       expect(controller.userLocation.value!.latLng.latitude, closeTo(vp100.latLng.latitude, 0.000001));
       expect(controller.userLocation.value!.latLng.longitude, closeTo(vp100.latLng.longitude, 0.000001));
+    });
+
+    test('snapToTarget sequentially advances through stops on subsequent taps', () {
+      controller.togglePlaygroundMode();
+      expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
+
+      // 1st snap -> Viewpoint 100
+      controller.snapToTarget();
+      expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
+      expect(controller.selectedViewpoint.value?.id, equals('vp_100'));
+
+      // 2nd snap while at Viewpoint 100 -> advances to Viewpoint 101
+      controller.snapToTarget();
+      expect(controller.tourState.value.navigationTargetId, equals('vp_101'));
+      expect(controller.selectedViewpoint.value?.id, equals('vp_101'));
+      expect(controller.userLocation.value!.normalizedX, equals(0.88));
+
+      // 3rd snap while at Viewpoint 101 -> advances to Viewpoint 102
+      controller.snapToTarget();
+      expect(controller.tourState.value.navigationTargetId, equals('vp_102'));
+      expect(controller.selectedViewpoint.value?.id, equals('vp_102'));
+      expect(controller.userLocation.value!.normalizedX, equals(0.68));
+    });
+
+    test('snapToTarget prioritizes selectedViewpoint when developer explicitly selects a different stop', () {
+      controller.togglePlaygroundMode();
+      
+      // Start at Viewpoint 100
+      controller.snapToTarget();
+      expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
+
+      // Developer selects Viewpoint 104 on the map
+      final vp104 = controller.viewpoints.firstWhere((vp) => vp.id == 'vp_104');
+      controller.selectViewpoint(vp104);
+      expect(controller.selectedViewpoint.value?.id, equals('vp_104'));
+
+      // Tap Snap Stop -> snaps directly to Viewpoint 104
+      controller.snapToTarget();
+      expect(controller.tourState.value.navigationTargetId, equals('vp_104'));
+      expect(controller.selectedViewpoint.value?.id, equals('vp_104'));
+      expect(controller.userLocation.value!.normalizedX, equals(0.48));
+      expect(controller.userLocation.value!.normalizedY, equals(0.50));
     });
 
     test('setSimulatedLocation enables FoodPanda/Uber style tap-to-place anywhere on satellite map', () {
@@ -258,11 +301,9 @@ void main() {
       expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
     });
 
-    test('genuine narration completion triggers onAudioCompleted and marks stop visited', () async {
+    test('genuine narration completion triggers onAudioCompleted without force-marking visited (decoupled)', () async {
       expect(controller.tourState.value.visitedIds, isEmpty);
 
-      // Snap to Viewpoint 100
-      controller.snapToTarget();
       final vp = controller.viewpoints.first;
       controller.selectViewpoint(vp);
 
@@ -273,8 +314,25 @@ void main() {
       // Native TTS completes narration
       controller.ttsService.handleNativeCompletion();
 
+      // Audio narration completes without force-marking the stop as visited
+      expect(controller.isPlayingAudio.value, isFalse);
+      expect(controller.tourState.value.visitedIds, isEmpty);
+
+      // User independently marks as visited
+      controller.toggleVisited('vp_100');
       expect(controller.tourState.value.visitedIds, contains('vp_100'));
       expect(controller.tourState.value.navigationTargetId, equals('vp_101'));
+    });
+
+    test('viewpoint audio guide plays independently even when viewpoint is already marked as visited (fully decoupled)', () {
+      // Pre-mark viewpoint 100 as visited
+      controller.toggleVisited('vp_100');
+      expect(controller.tourState.value.visitedIds, contains('vp_100'));
+
+      // Selecting visited viewpoint still freely plays audio guide
+      controller.selectViewpoint(controller.viewpoints.first);
+      controller.toggleAudio();
+      expect(controller.isPlayingAudio.value, isTrue);
     });
 
     test('toggleAudio pauses narration and resumes from bookmark position', () {
@@ -320,6 +378,57 @@ void main() {
       // Resume audio
       controller.toggleAudio();
       expect(controller.isPlayingAudio.value, isTrue);
+    });
+
+    test('loads Level 1 viewpoints (200-208) and itinerary segments when floorId is floor_1', () {
+      Get.reset();
+      final level1Ctrl = FloorMapController();
+      level1Ctrl.floorId.value = 'floor_1';
+      level1Ctrl.onInit();
+
+      expect(level1Ctrl.floorName.value, 'Floor 1');
+      expect(level1Ctrl.viewpoints.length, 9);
+      expect(level1Ctrl.viewpoints.first.order, 200);
+      expect(level1Ctrl.viewpoints.last.order, 208);
+      expect(level1Ctrl.itinerarySegments.length, 8);
+      expect(level1Ctrl.itinerarySegments.first.fromId, 'vp_200');
+      expect(level1Ctrl.itinerarySegments.first.toId, 'vp_201');
+      expect(level1Ctrl.tourState.value.navigationTargetId, 'vp_200');
+      level1Ctrl.onClose();
+    });
+
+    test('loads Level 2 viewpoints (300-306) and itinerary segments when floorId is floor_2', () {
+      Get.reset();
+      final level2Ctrl = FloorMapController();
+      level2Ctrl.floorId.value = 'floor_2';
+      level2Ctrl.onInit();
+
+      expect(level2Ctrl.floorName.value, 'Floor 2');
+      expect(level2Ctrl.viewpoints.length, 7);
+      expect(level2Ctrl.viewpoints.first.order, 300);
+      expect(level2Ctrl.viewpoints.last.order, 306);
+      expect(level2Ctrl.itinerarySegments.length, 6);
+      expect(level2Ctrl.itinerarySegments.first.fromId, 'vp_300');
+      expect(level2Ctrl.itinerarySegments.first.toId, 'vp_301');
+      expect(level2Ctrl.tourState.value.navigationTargetId, 'vp_300');
+      level2Ctrl.onClose();
+    });
+
+    test('loads Level 3 viewpoints (400-404) and itinerary segments when floorId is floor_3', () {
+      Get.reset();
+      final level3Ctrl = FloorMapController();
+      level3Ctrl.floorId.value = 'floor_3';
+      level3Ctrl.onInit();
+
+      expect(level3Ctrl.floorName.value, 'Floor 3');
+      expect(level3Ctrl.viewpoints.length, 5);
+      expect(level3Ctrl.viewpoints.first.order, 400);
+      expect(level3Ctrl.viewpoints.last.order, 404);
+      expect(level3Ctrl.itinerarySegments.length, 4);
+      expect(level3Ctrl.itinerarySegments.first.fromId, 'vp_400');
+      expect(level3Ctrl.itinerarySegments.first.toId, 'vp_401');
+      expect(level3Ctrl.tourState.value.navigationTargetId, 'vp_400');
+      level3Ctrl.onClose();
     });
   });
 }

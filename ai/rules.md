@@ -151,3 +151,13 @@ Just like `index.css` in Next.js / Tailwind CSS projects, all design tokens are 
    - Mock external sensor streams and HTTP client responses.
 3. **Widget Tests:**
    - Test UI components under `test/widget/` using `tester.pumpWidget(GetMaterialApp(...))`.
+
+---
+
+## 7. Build & Distribution Rules (Universal Release Artifacts)
+
+1. **Mandatory Universal (Fat) Build Rule:**
+   - **Always generate Universal (Fat) APKs** (`flutter build apk --release --no-tree-shake-icons`).
+   - ❌ **Forbidden:** Never use `--split-per-abi` for direct tourist sideloading or on-site delivery.
+   - **Rationale:** A split APK (e.g. `arm64-v8a` only) immediately crashes on 32-bit (`armeabi-v7a`), x86, or emulator/rental devices with fatal `INSTALL_FAILED_NO_MATCHING_ABIS`. Universal APKs bundle all ABIs to ensure 100% device compatibility across varied visitor hardware.
+

@@ -34,11 +34,6 @@ class FloorMapView extends GetView<FloorMapController> {
                   minZoom: FloorMapController.minZoom,
                   maxZoom: FloorMapController.maxZoom,
                   onPositionChanged: controller.onPositionChanged,
-                  onTap: (tapPosition, latLng) {
-                    if (controller.isPlaygroundMode.value) {
-                      controller.setSimulatedLocation(latLng);
-                    }
-                  },
                   cameraConstraint: CameraConstraint.containCenter(
                     bounds: GeodesicUtils.createBoundsFromDimensions(
                       center: FloorMapController.colosseumCenter,
@@ -83,9 +78,9 @@ class FloorMapView extends GetView<FloorMapController> {
 
                         return Marker(
                           point: vp.latLng,
-                          width: isSelected ? 220.0 : 48.0,
-                          height: isSelected ? 76.0 : 48.0,
-                          alignment: isSelected ? Alignment.bottomCenter : Alignment.center,
+                          width: 48.0,
+                          height: 48.0,
+                          alignment: Alignment.center,
                           child: ViewpointMarker(
                             viewpoint: vp,
                             isSelected: isSelected,
@@ -415,10 +410,6 @@ class FloorMapView extends GetView<FloorMapController> {
                       ),
                     ),
                   );
-                }
-
-                if (!controller.floorId.value.contains('underground')) {
-                  return const SizedBox.shrink();
                 }
 
                 final state = controller.tourState.value;

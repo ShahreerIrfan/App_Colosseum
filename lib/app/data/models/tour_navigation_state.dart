@@ -89,7 +89,7 @@ class TourConfig {
     this.maxAcceptableAccuracyMeters = 25.0,
     this.arenaWidthMeters = 86.0,
     this.arenaHeightMeters = 54.0,
-    this.autoMarkVisitedOnAudioComplete = true,
+    this.autoMarkVisitedOnAudioComplete = false,
   });
 }
 
