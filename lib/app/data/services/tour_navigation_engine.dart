@@ -40,6 +40,7 @@ class TourNavigationEngine {
     Offset? exitLocation,
     bool isVoiceGuidanceEnabled = true,
     bool isAutoPlayEnabled = true,
+    Set<String>? initialVisitedIds,
   }) {
     _viewpoints = List.from(viewpoints);
     _entryLocation = entryLocation;
@@ -49,31 +50,47 @@ class TourNavigationEngine {
     // Sort viewpoints by order if present
     _viewpoints.sort((a, b) => a.order.compareTo(b.order));
 
-    final firstTarget = _viewpoints.isNotEmpty
-        ? _viewpoints.first.id
-        : (_exitLocation != null ? 'EXIT' : null);
+    final initialVisited = initialVisitedIds != null
+        ? Set<String>.from(initialVisitedIds)
+        : <String>{};
+
+    for (int i = 0; i < _viewpoints.length; i++) {
+      if (initialVisited.contains(_viewpoints[i].id)) {
+        _viewpoints[i] = _viewpoints[i].copyWith(isVisited: true);
+      }
+    }
+
+    final firstUnvisited = _findNextItineraryTarget(initialVisited, const <String>{});
+    final effectiveFirstTarget = firstUnvisited ??
+        (_viewpoints.isNotEmpty
+            ? _viewpoints.first.id
+            : (_exitLocation != null ? 'EXIT' : null));
 
     _state = TourNavigationState(
       itineraryId: '${floorId}_tour',
       activeFloorId: floorId,
-      navigationTargetId: firstTarget,
+      navigationTargetId: effectiveFirstTarget,
       previousTargetId: null,
-      armedAutoPlayViewpointId: firstTarget,
-      navigationStatus: TourNavigationStatus.navigating,
+      armedAutoPlayViewpointId: effectiveFirstTarget,
+      navigationStatus: initialVisited.length >= _viewpoints.length && _viewpoints.isNotEmpty
+          ? TourNavigationStatus.itineraryComplete
+          : TourNavigationStatus.navigating,
       isVoiceGuidanceEnabled: isVoiceGuidanceEnabled,
       isAutoPlayEnabled: isAutoPlayEnabled,
-      visitedIds: <String>{},
+      visitedIds: initialVisited,
       skippedIds: <String>{},
       autoPlayedViewpointIds: <String>{},
     );
 
     _notifyState();
 
-    if (isVoiceGuidanceEnabled && _viewpoints.isNotEmpty) {
-      final firstVp = _viewpoints.first;
-      _speakThrottled(
-        'Begin the ${_getFloorTourName(floorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
-      );
+    if (isVoiceGuidanceEnabled && _viewpoints.isNotEmpty && effectiveFirstTarget != null && effectiveFirstTarget != 'EXIT') {
+      final firstVp = _viewpoints.where((vp) => vp.id == effectiveFirstTarget).firstOrNull;
+      if (firstVp != null) {
+        _speakThrottled(
+          'Begin the ${_getFloorTourName(floorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
+        );
+      }
     }
   }
 

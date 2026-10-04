@@ -744,4 +744,18 @@ class ColosseumTourData {
       ],
     ),
   ];
+
+  /// Returns all viewpoints belonging to a given floor level.
+  static List<ViewpointModel> getViewpointsForFloor(String floorId) {
+    final fid = floorId.toLowerCase();
+    if (fid.contains('underground')) return undergroundViewpoints;
+    if (fid.contains('2')) return level2Viewpoints;
+    if (fid.contains('3')) return level3Viewpoints;
+    return level1Viewpoints;
+  }
+
+  /// Returns total viewpoint count for a given floor level.
+  static int getViewpointCountForFloor(String floorId) {
+    return getViewpointsForFloor(floorId).length;
+  }
 }

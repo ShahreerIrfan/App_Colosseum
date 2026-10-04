@@ -64,4 +64,42 @@ void main() {
       expect(controller.selectedFloorId.value, 'floor_1');
     },
   );
+
+  testWidgets(
+    'FloorsView dynamically displays completed count badge (e.g. completed: 5) and updates to Completed when all visited',
+    (WidgetTester tester) async {
+      final controller = Get.put(FloorsController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const FloorsView(),
+          getPages: AppPages.routes,
+        ),
+      );
+
+      // Initially all floors have completed: 0
+      expect(find.text('completed: 0'), findsNWidgets(4));
+
+      // Mark 5 viewpoints as visited on Underground
+      controller.visitedService.setVisitedIdsForTesting([
+        'vp_100', 'vp_101', 'vp_102', 'vp_103', 'vp_104'
+      ]);
+      await tester.pump();
+
+      // Underground card now displays "completed: 5"
+      expect(find.text('completed: 5'), findsOneWidget);
+      expect(find.text('completed: 0'), findsNWidgets(3));
+
+      // Complete all 7 viewpoints on Underground
+      controller.visitedService.setVisitedIdsForTesting([
+        'vp_100', 'vp_101', 'vp_102', 'vp_103', 'vp_104', 'vp_105', 'vp_106'
+      ]);
+      await tester.pump();
+
+      // Underground now displays "Completed"
+      expect(find.text('Completed'), findsOneWidget);
+      expect(find.text('completed: 5'), findsNothing);
+    },
+  );
 }

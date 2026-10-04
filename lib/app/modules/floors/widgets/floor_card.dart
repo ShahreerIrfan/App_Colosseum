@@ -31,7 +31,7 @@ class FloorCard extends StatelessWidget {
 
     return Semantics(
       label:
-          '${floor.floorName}, ${floor.viewpointCount} viewpoints${isSelected ? ', current floor' : ''}${floor.isCompleted ? ', completed' : ''}',
+          '${floor.floorName}, ${floor.viewpointCount} viewpoints, completed: ${floor.completedCount}${isSelected ? ', current floor' : ''}${floor.isCompleted ? ', completed' : ''}',
       button: true,
       selected: isSelected,
       child: Material(
@@ -59,7 +59,7 @@ class FloorCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // Left Column: Floor Title and Viewpoint Badge
+                // Left Column: Floor Title, Viewpoint Badge, and Completed Count
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,9 +79,11 @@ class FloorCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8.0),
 
-                      // Viewpoint Count Badge & optional completed chip
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                      // Viewpoint Count Badge & Completed Count Badge
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 6.0,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -106,33 +108,78 @@ class FloorCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (floor.isCompleted) ...[
-                            const SizedBox(width: 8.0),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8.0,
-                                vertical: 4.0,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(6.0),
-                                border: Border.all(
-                                  color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                'Completed',
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: const Color(0xFF2E7D32),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11.0,
-                                ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 4.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: floor.isCompleted
+                                  ? const Color(0xFF2E7D32).withValues(alpha: 0.10)
+                                  : (floor.completedCount > 0
+                                      ? colors.primary.withValues(alpha: 0.10)
+                                      : colors.secondary.withValues(alpha: 0.5)),
+                              borderRadius: BorderRadius.circular(6.0),
+                              border: Border.all(
+                                color: floor.isCompleted
+                                    ? const Color(0xFF2E7D32).withValues(alpha: 0.28)
+                                    : (floor.completedCount > 0
+                                        ? colors.primary.withValues(alpha: 0.25)
+                                        : colors.border.withValues(alpha: 0.5)),
+                                width: 0.8,
                               ),
                             ),
-                          ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (floor.isCompleted) ...[
+                                  const Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 13.0,
+                                    color: Color(0xFF2E7D32),
+                                  ),
+                                  const SizedBox(width: 4.0),
+                                ],
+                                Text(
+                                  floor.isCompleted
+                                      ? 'Completed'
+                                      : 'completed: ${floor.completedCount}',
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: floor.isCompleted
+                                        ? const Color(0xFF2E7D32)
+                                        : (floor.completedCount > 0
+                                            ? colors.primary
+                                            : colors.mutedForeground),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11.5,
+                                    letterSpacing: 0.1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
+
+                      // Linear Progress Bar
+                      if (floor.viewpointCount > 0) ...[
+                        const SizedBox(height: 9.0),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2.0),
+                          child: SizedBox(
+                            height: 3.5,
+                            child: LinearProgressIndicator(
+                              value: floor.progress,
+                              backgroundColor: colors.border.withValues(alpha: 0.35),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                floor.isCompleted
+                                    ? const Color(0xFF2E7D32)
+                                    : colors.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

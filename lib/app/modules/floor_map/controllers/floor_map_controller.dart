@@ -16,6 +16,7 @@ import '../../../data/services/compass_service.dart';
 import '../../../data/services/gps_location_service.dart';
 import '../../../data/services/tour_navigation_engine.dart';
 import '../../../data/services/tts_service.dart';
+import '../../../data/services/visited_viewpoints_service.dart';
 
 /// Controller managing floor map state, camera transformations, viewpoints, and audio playback.
 class FloorMapController extends GetxController {
@@ -23,16 +24,22 @@ class FloorMapController extends GetxController {
   final TourNavigationEngine tourEngine;
   final CompassService compassService;
   final GpsLocationService gpsService;
+  final VisitedViewpointsService visitedService;
 
   FloorMapController({
     TtsService? ttsService,
     TourNavigationEngine? tourEngine,
     CompassService? compassService,
     GpsLocationService? gpsService,
+    VisitedViewpointsService? visitedService,
   })  : ttsService = ttsService ?? TtsService(),
         tourEngine = tourEngine ?? TourNavigationEngine(),
         compassService = compassService ?? CompassService(),
-        gpsService = gpsService ?? GpsLocationService();
+        gpsService = gpsService ?? GpsLocationService(),
+        visitedService = visitedService ??
+            (Get.isRegistered<VisitedViewpointsService>()
+                ? Get.find<VisitedViewpointsService>()
+                : Get.put(VisitedViewpointsService()));
 
   final landmarkName = 'Colosseum'.obs;
   final floorName = 'Underground (Hypogeum)'.obs;
@@ -447,10 +454,16 @@ class FloorMapController extends GetxController {
       activeFloorId = 'floor_1';
     }
 
-    viewpoints.assignAll(currentViewpoints);
+    final storedVisited = visitedService.getVisitedForFloor(activeFloorId);
+    final populatedViewpoints = currentViewpoints.map((vp) {
+      return vp.copyWith(isVisited: storedVisited.contains(vp.id));
+    }).toList();
+
+    viewpoints.assignAll(populatedViewpoints);
     tourEngine.startTour(
       floorId: activeFloorId,
-      viewpoints: currentViewpoints,
+      viewpoints: populatedViewpoints,
+      initialVisitedIds: storedVisited,
       isVoiceGuidanceEnabled: tourState.value.isVoiceGuidanceEnabled,
       isAutoPlayEnabled: tourState.value.isAutoPlayEnabled,
     );
@@ -615,8 +628,10 @@ class FloorMapController extends GetxController {
       final current = viewpoints[index];
       if (current.isVisited) {
         tourEngine.unmarkVisited(targetId);
+        visitedService.unmarkVisited(targetId);
       } else {
         tourEngine.markVisited(targetId);
+        visitedService.markVisited(targetId);
       }
     }
   }
@@ -648,6 +663,7 @@ class FloorMapController extends GetxController {
     _currentSpeechStartOffset = 0;
     _lastSpokenCharIndex = 0;
     tourEngine.resetTour();
+    visitedService.clearFloor(floorId.value);
     for (int i = 0; i < viewpoints.length; i++) {
       viewpoints[i] = viewpoints[i].copyWith(isVisited: false);
     }

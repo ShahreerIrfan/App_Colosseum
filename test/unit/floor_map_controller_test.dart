@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:colosseum_client/app/data/services/visited_viewpoints_service.dart';
 import 'package:colosseum_client/app/modules/floor_map/controllers/floor_map_controller.dart';
 
 import '../helpers/mock_tts.dart';
@@ -429,6 +430,40 @@ void main() {
       expect(level3Ctrl.itinerarySegments.first.toId, 'vp_401');
       expect(level3Ctrl.tourState.value.navigationTargetId, 'vp_400');
       level3Ctrl.onClose();
+    });
+
+    test('toggleVisited synchronizes with VisitedViewpointsService', () {
+      expect(controller.visitedService.isVisited('vp_100'), isFalse);
+
+      // Toggle visited on vp_100
+      controller.toggleVisited('vp_100');
+      expect(controller.visitedService.isVisited('vp_100'), isTrue);
+      expect(controller.visitedService.getCompletedCountForFloor('floor_underground'), equals(1));
+
+      // Toggle again to unmark
+      controller.toggleVisited('vp_100');
+      expect(controller.visitedService.isVisited('vp_100'), isFalse);
+      expect(controller.visitedService.getCompletedCountForFloor('floor_underground'), equals(0));
+    });
+
+    test('restores saved visited viewpoints on floor load and advances target to first unvisited stop', () {
+      Get.reset();
+      final visitedService = VisitedViewpointsService();
+      visitedService.setVisitedIdsForTesting(['vp_100', 'vp_101']);
+      Get.put(visitedService);
+
+      final ctrl = FloorMapController(visitedService: visitedService);
+      ctrl.floorId.value = 'floor_underground';
+      ctrl.onInit();
+
+      // vp_100 and vp_101 are loaded as visited
+      expect(ctrl.viewpoints[0].isVisited, isTrue);
+      expect(ctrl.viewpoints[1].isVisited, isTrue);
+      expect(ctrl.viewpoints[2].isVisited, isFalse);
+
+      // Target was advanced past visited stops to first unvisited stop (vp_102)
+      expect(ctrl.tourState.value.navigationTargetId, equals('vp_102'));
+      ctrl.onClose();
     });
   });
 }
