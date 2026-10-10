@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:colosseum_client/app/data/models/map_view_type.dart';
 import 'package:colosseum_client/app/data/services/visited_viewpoints_service.dart';
 import 'package:colosseum_client/app/modules/floor_map/controllers/floor_map_controller.dart';
 
@@ -214,11 +215,11 @@ void main() {
       expect(controller.isDisplacementPaused.value, isFalse);
     });
 
-    test('snapToTarget snaps user location directly to current tour target with exact LatLng match', () {
+    test('snapToTarget snaps user location directly to current tour target with exact LatLng match', () async {
       controller.togglePlaygroundMode();
       expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
 
-      controller.snapToTarget();
+      await controller.snapToTarget();
       expect(controller.isUserInLocation.value, isTrue);
       expect(controller.userLocation.value, isNotNull);
       expect(controller.userLocation.value!.normalizedX, equals(0.80));
@@ -231,33 +232,33 @@ void main() {
       expect(controller.userLocation.value!.latLng.longitude, closeTo(vp100.latLng.longitude, 0.000001));
     });
 
-    test('snapToTarget sequentially advances through stops on subsequent taps', () {
+    test('snapToTarget sequentially advances through stops on subsequent taps', () async {
       controller.togglePlaygroundMode();
       expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
 
       // 1st snap -> Viewpoint 100
-      controller.snapToTarget();
+      await controller.snapToTarget();
       expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
       expect(controller.selectedViewpoint.value?.id, equals('vp_100'));
 
       // 2nd snap while at Viewpoint 100 -> advances to Viewpoint 101
-      controller.snapToTarget();
+      await controller.snapToTarget();
       expect(controller.tourState.value.navigationTargetId, equals('vp_101'));
       expect(controller.selectedViewpoint.value?.id, equals('vp_101'));
       expect(controller.userLocation.value!.normalizedX, equals(0.88));
 
       // 3rd snap while at Viewpoint 101 -> advances to Viewpoint 102
-      controller.snapToTarget();
+      await controller.snapToTarget();
       expect(controller.tourState.value.navigationTargetId, equals('vp_102'));
       expect(controller.selectedViewpoint.value?.id, equals('vp_102'));
       expect(controller.userLocation.value!.normalizedX, equals(0.68));
     });
 
-    test('snapToTarget prioritizes selectedViewpoint when developer explicitly selects a different stop', () {
+    test('snapToTarget prioritizes selectedViewpoint when developer explicitly selects a different stop', () async {
       controller.togglePlaygroundMode();
       
       // Start at Viewpoint 100
-      controller.snapToTarget();
+      await controller.snapToTarget();
       expect(controller.tourState.value.navigationTargetId, equals('vp_100'));
 
       // Developer selects Viewpoint 104 on the map
@@ -266,20 +267,20 @@ void main() {
       expect(controller.selectedViewpoint.value?.id, equals('vp_104'));
 
       // Tap Snap Stop -> snaps directly to Viewpoint 104
-      controller.snapToTarget();
+      await controller.snapToTarget();
       expect(controller.tourState.value.navigationTargetId, equals('vp_104'));
       expect(controller.selectedViewpoint.value?.id, equals('vp_104'));
       expect(controller.userLocation.value!.normalizedX, equals(0.48));
       expect(controller.userLocation.value!.normalizedY, equals(0.50));
     });
 
-    test('setSimulatedLocation enables FoodPanda/Uber style tap-to-place anywhere on satellite map', () {
+    test('setSimulatedLocation enables FoodPanda/Uber style tap-to-place anywhere on satellite map', () async {
       controller.togglePlaygroundMode();
       expect(controller.isPlaygroundMode.value, isTrue);
 
       // 1. Developer in Bangladesh taps anywhere on satellite map
       final tappedPoint = controller.viewpoints[1].latLng; // Viewpoint 101 LatLng
-      controller.setSimulatedLocation(tappedPoint);
+      await controller.setSimulatedLocation(tappedPoint);
 
       expect(controller.isUserInLocation.value, isTrue);
       expect(controller.userLocation.value, isNotNull);
@@ -387,7 +388,7 @@ void main() {
       level1Ctrl.floorId.value = 'floor_1';
       level1Ctrl.onInit();
 
-      expect(level1Ctrl.floorName.value, 'Floor 1');
+      expect(level1Ctrl.floorName.value, 'Level 1');
       expect(level1Ctrl.viewpoints.length, 9);
       expect(level1Ctrl.viewpoints.first.order, 200);
       expect(level1Ctrl.viewpoints.last.order, 208);
@@ -404,7 +405,7 @@ void main() {
       level2Ctrl.floorId.value = 'floor_2';
       level2Ctrl.onInit();
 
-      expect(level2Ctrl.floorName.value, 'Floor 2');
+      expect(level2Ctrl.floorName.value, 'Level 2');
       expect(level2Ctrl.viewpoints.length, 7);
       expect(level2Ctrl.viewpoints.first.order, 300);
       expect(level2Ctrl.viewpoints.last.order, 306);
@@ -421,7 +422,7 @@ void main() {
       level3Ctrl.floorId.value = 'floor_3';
       level3Ctrl.onInit();
 
-      expect(level3Ctrl.floorName.value, 'Floor 3');
+      expect(level3Ctrl.floorName.value, 'Level 3');
       expect(level3Ctrl.viewpoints.length, 5);
       expect(level3Ctrl.viewpoints.first.order, 400);
       expect(level3Ctrl.viewpoints.last.order, 404);
@@ -464,6 +465,255 @@ void main() {
       // Target was advanced past visited stops to first unvisited stop (vp_102)
       expect(ctrl.tourState.value.navigationTargetId, equals('vp_102'));
       ctrl.onClose();
+    });
+
+    test('toggleFloorMenu, openFloorMenu, closeFloorMenu control floor menu visibility', () {
+      expect(controller.isFloorMenuOpen.value, isFalse);
+
+      controller.openFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isTrue);
+
+      controller.closeFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isFalse);
+
+      controller.toggleFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isTrue);
+
+      controller.toggleFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isFalse);
+    });
+
+    test('switchFloor updates all coordinated states atomically and closes menu', () async {
+      // Start on underground
+      expect(controller.currentFloor.value.id, equals('floor_underground'));
+      expect(controller.viewpoints.first.order, equals(100));
+
+      // Select viewpoint and start audio
+      controller.selectViewpoint(controller.viewpoints.first);
+      controller.toggleAudio();
+      expect(controller.selectedViewpoint.value, isNotNull);
+      expect(controller.isPlayingAudio.value, isTrue);
+
+      controller.openFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isTrue);
+
+      // Switch to Level 2
+      await controller.switchFloor('floor_2');
+
+      // Menu closed
+      expect(controller.isFloorMenuOpen.value, isFalse);
+      // Floor switched
+      expect(controller.currentFloor.value.id, equals('floor_2'));
+      expect(controller.floorName.value, equals('Level 2'));
+      // Audio stopped and card closed
+      expect(controller.selectedViewpoint.value, isNull);
+      expect(controller.isPlayingAudio.value, isFalse);
+      // Viewpoints swapped to Level 2 (300-306)
+      expect(controller.viewpoints.length, equals(7));
+      expect(controller.viewpoints.first.order, equals(300));
+      expect(controller.viewpoints.last.order, equals(306));
+      // Navigation target is vp_300
+      expect(controller.tourState.value.navigationTargetId, equals('vp_300'));
+    });
+
+    test('switchFloor to same floor only closes menu and does not reload', () async {
+      controller.openFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isTrue);
+
+      final currentFloorId = controller.currentFloor.value.id;
+      await controller.switchFloor(currentFloorId);
+
+      expect(controller.isFloorMenuOpen.value, isFalse);
+      expect(controller.currentFloor.value.id, equals(currentFloorId));
+    });
+
+    test('switchFloor preserves visited progress per floor independently', () async {
+      // Mark vp_100 visited on underground
+      await controller.switchFloor('floor_underground');
+      controller.toggleVisited('vp_100');
+      expect(controller.viewpoints[0].isVisited, isTrue);
+
+      // Switch to Level 1
+      await controller.switchFloor('floor_1');
+      expect(controller.viewpoints.every((v) => !v.isVisited), isTrue);
+
+      // Mark vp_200 visited on Level 1
+      controller.toggleVisited('vp_200');
+      expect(controller.viewpoints[0].isVisited, isTrue);
+
+      // Switch back to Underground - vp_100 is still visited
+      await controller.switchFloor('floor_underground');
+      expect(controller.viewpoints[0].isVisited, isTrue);
+
+      // Switch back to Level 1 - vp_200 is still visited
+      await controller.switchFloor('floor_1');
+      expect(controller.viewpoints[0].isVisited, isTrue);
+    });
+
+    test('initializes with default MapViewType.general', () {
+      expect(controller.selectedMapView.value, equals(MapViewType.general));
+      expect(controller.currentMapViewDisplayName, equals('General View'));
+      expect(controller.currentMapViewShortName, equals('General'));
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+    });
+
+    test('toggleMapViewMenu, openMapViewMenu, closeMapViewMenu, and closeAllBottomMenus', () {
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+
+      controller.openMapViewMenu();
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+
+      controller.closeMapViewMenu();
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+
+      controller.toggleMapViewMenu();
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+
+      controller.toggleMapViewMenu();
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+
+      // closeAllBottomMenus closes both
+      controller.openFloorMenu();
+      controller.openMapViewMenu();
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+      controller.closeAllBottomMenus();
+      expect(controller.isFloorMenuOpen.value, isFalse);
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+    });
+
+    test('mutual menu exclusivity: opening one bottom menu automatically closes the other', () {
+      // Open floor menu
+      controller.openFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isTrue);
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+
+      // Now open map view menu -> floor menu closes
+      controller.openMapViewMenu();
+      expect(controller.isFloorMenuOpen.value, isFalse);
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+
+      // Now open floor menu -> map view menu closes
+      controller.openFloorMenu();
+      expect(controller.isFloorMenuOpen.value, isTrue);
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+    });
+
+    test('switchMapView updates selectedMapView and preserves floor, viewpoint, audio, and camera', () {
+      // Setup active viewpoint and audio
+      controller.selectViewpoint(controller.viewpoints.first);
+      controller.toggleAudio();
+      expect(controller.selectedViewpoint.value, isNotNull);
+      expect(controller.isPlayingAudio.value, isTrue);
+      final activeFloorId = controller.currentFloor.value.id;
+
+      controller.openMapViewMenu();
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+
+      // Switch to Satellite View
+      controller.switchMapView(MapViewType.satellite);
+
+      // Selected map view updated and menu closed
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
+      expect(controller.currentMapViewShortName, equals('Satellite'));
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+
+      // Floor context strictly unchanged
+      expect(controller.currentFloor.value.id, equals(activeFloorId));
+      expect(controller.viewpoints.first.order, equals(100));
+
+      // Viewpoint card and audio strictly preserved
+      expect(controller.selectedViewpoint.value, isNotNull);
+      expect(controller.isPlayingAudio.value, isTrue);
+    });
+
+    test('switchMapView to same active view only closes menu without reload', () {
+      expect(controller.selectedMapView.value, equals(MapViewType.general));
+      controller.openMapViewMenu();
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+
+      controller.switchMapView(MapViewType.general);
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+      expect(controller.selectedMapView.value, equals(MapViewType.general));
+    });
+
+    test('switchFloor preserves the currently selected map view mode', () async {
+      // Select Satellite view
+      controller.switchMapView(MapViewType.satellite);
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
+
+      // Switch floor to Level 1
+      await controller.switchFloor('floor_1');
+
+      // Floor changed to Level 1
+      expect(controller.currentFloor.value.id, equals('floor_1'));
+      // Map view mode remains Satellite
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
+    });
+
+    test('calculates floor-based completed viewpoints progress accurately from currently selected floor only', () async {
+      // 1. Initial Underground: 0 completed out of 7
+      expect(controller.currentFloor.value.id, equals('floor_underground'));
+      expect(controller.currentFloorTotalViewpoints, equals(7));
+      expect(controller.currentFloorCompletedViewpoints, equals(0));
+      expect(controller.currentFloorProgressText, equals('Completed: 0/7'));
+      expect(controller.isCurrentFloorComplete, isFalse);
+
+      // 2. Mark Viewpoint 100 visited -> Completed: 1/7
+      controller.toggleVisited('vp_100');
+      expect(controller.currentFloorCompletedViewpoints, equals(1));
+      expect(controller.currentFloorProgressText, equals('Completed: 1/7'));
+      expect(controller.currentFloorProgressRatio, closeTo(1 / 7, 0.001));
+
+      // 3. Mark Viewpoint 101 visited -> Completed: 2/7
+      controller.toggleVisited('vp_101');
+      expect(controller.currentFloorCompletedViewpoints, equals(2));
+      expect(controller.currentFloorProgressText, equals('Completed: 2/7'));
+
+      // 4. Unmark Viewpoint 100 -> Completed: 1/7
+      controller.toggleVisited('vp_100');
+      expect(controller.currentFloorCompletedViewpoints, equals(1));
+      expect(controller.currentFloorProgressText, equals('Completed: 1/7'));
+
+      // 5. Switch to Level 1: 0 completed out of 9 (Underground progress must NOT leak)
+      await controller.switchFloor('floor_1');
+      expect(controller.currentFloorTotalViewpoints, equals(9));
+      expect(controller.currentFloorCompletedViewpoints, equals(0));
+      expect(controller.currentFloorProgressText, equals('Completed: 0/9'));
+
+      // Mark 4 visited on Level 1 -> Completed: 4/9
+      controller.toggleVisited('vp_200');
+      controller.toggleVisited('vp_201');
+      controller.toggleVisited('vp_202');
+      controller.toggleVisited('vp_203');
+      expect(controller.currentFloorCompletedViewpoints, equals(4));
+      expect(controller.currentFloorProgressText, equals('Completed: 4/9'));
+
+      // 6. Switch back to Underground: previous Underground progress (1/7) is restored
+      await controller.switchFloor('floor_underground');
+      expect(controller.currentFloorTotalViewpoints, equals(7));
+      expect(controller.currentFloorCompletedViewpoints, equals(1));
+      expect(controller.currentFloorProgressText, equals('Completed: 1/7'));
+
+      // 7. Changing map view (General -> Satellite) does NOT reset or alter floor progress
+      controller.switchMapView(MapViewType.satellite);
+      expect(controller.currentFloorCompletedViewpoints, equals(1));
+      expect(controller.currentFloorProgressText, equals('Completed: 1/7'));
+
+      // 8. Complete state on Level 3 (5 out of 5)
+      await controller.switchFloor('floor_3');
+      expect(controller.currentFloorTotalViewpoints, equals(5));
+      for (final vp in controller.viewpoints) {
+        controller.toggleVisited(vp.id);
+      }
+      expect(controller.currentFloorCompletedViewpoints, equals(5));
+      expect(controller.isCurrentFloorComplete, isTrue);
+      expect(controller.currentFloorProgressText, equals('✓ Completed 5/5'));
+
+      // 9. Reset tour resets current floor progress to 0/5
+      controller.resetTour();
+      expect(controller.currentFloorCompletedViewpoints, equals(0));
+      expect(controller.currentFloorProgressText, equals('Completed: 0/5'));
+      expect(controller.isCurrentFloorComplete, isFalse);
     });
   });
 }

@@ -4,8 +4,14 @@ import 'package:get/get.dart';
 
 import '../../../core/theme/theme_extensions.dart';
 import '../../../core/utils/geodesic_utils.dart';
+import '../../../data/models/floor_definition.dart';
+import '../../../data/models/map_view_type.dart';
 import '../../../data/models/tour_navigation_state.dart';
 import '../controllers/floor_map_controller.dart';
+import '../widgets/floor_bottom_bar.dart';
+import '../widgets/floor_progress_indicator.dart';
+import '../widgets/floor_selection_menu.dart';
+import '../widgets/map_view_selection_menu.dart';
 import '../widgets/user_location_puck.dart';
 import '../widgets/viewpoint_detail_card.dart';
 import '../widgets/viewpoint_marker.dart';
@@ -19,12 +25,20 @@ class FloorMapView extends GetView<FloorMapController> {
     final colors = context.colors;
     final textTheme = context.textTheme;
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // 1. Dominant Google Maps Pure Satellite Viewport
+    return PopScope(
+      canPop: !controller.isFloorMenuOpen.value && !controller.isMapViewMenuOpen.value,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (controller.isFloorMenuOpen.value || controller.isMapViewMenuOpen.value) {
+          controller.closeAllBottomMenus();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              // 1. Dominant Google Maps Viewport (General / Satellite)
             Positioned.fill(
               child: FlutterMap(
                 mapController: controller.mapController,
@@ -46,26 +60,43 @@ class FloorMapView extends GetView<FloorMapController> {
                   ),
                 ),
                 children: [
-                  // Layer 1: Google Maps Pure Satellite Tiles (lyrs=s)
-                  TileLayer(
-                    urlTemplate:
-                        'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-                    subdomains: const ['0', '1', '2', '3'],
-                    userAgentPackageName: 'com.example.colosseum_client',
-                    maxZoom: 21,
-                  ),
-
-                  // Layer 2: Guided Itinerary Tour Walking Path
+                  // Layer 1: Dynamic Google Maps Base Tiles (General vs Satellite)
                   Obx(() {
-                    if (controller.itinerarySegments.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return PolylineLayer(
-                      polylines: controller.buildItineraryPolylines(colors),
+                    final viewType = controller.selectedMapView.value;
+                    final isSatellite = viewType == MapViewType.satellite;
+
+                    return TileLayer(
+                      key: ValueKey(viewType),
+                      urlTemplate: isSatellite
+                          ? 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
+                          : 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                      subdomains: const ['0', '1', '2', '3'],
+                      userAgentPackageName: 'com.example.colosseum_client',
+                      maxZoom: 21,
+                      errorTileCallback: (tile, error, stackTrace) {
+                        if (isSatellite) {
+                          controller.onSatelliteTileError();
+                        }
+                      },
                     );
                   }),
 
-                  // Layer 3: Interactive Viewpoint Markers (100–106)
+                  // Layer 3: Guided Itinerary Tour Walking Path & Architectural Geometry
+                  Obx(() {
+                    final itinerary = controller.itinerarySegments;
+                    final architectural = controller.buildFloorArchitecturalPolylines(colors);
+                    if (itinerary.isEmpty && architectural.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return PolylineLayer(
+                      polylines: [
+                        ...architectural,
+                        ...controller.buildItineraryPolylines(colors),
+                      ],
+                    );
+                  }),
+
+                  // Layer 3: Interactive Viewpoint Markers
                   Obx(() {
                     final selectedVp = controller.selectedViewpoint.value;
                     final isPlaying = controller.isPlayingAudio.value;
@@ -102,6 +133,7 @@ class FloorMapView extends GetView<FloorMapController> {
 
                     final user = controller.userLocation.value!;
                     final heading = controller.effectiveHeading;
+                    final isViewingOther = controller.isViewingDifferentFloor;
 
                     return MarkerLayer(
                       markers: [
@@ -111,10 +143,15 @@ class FloorMapView extends GetView<FloorMapController> {
                           height: 64.0,
                           alignment: Alignment.center,
                           child: IgnorePointer(
-                            child: UserLocationPuck(
-                              headingDegrees: heading,
-                              accuracyMeters: user.accuracyMeters,
-                              puckColor: const Color(0xFF00A6FF), // Sky blue
+                            child: Opacity(
+                              opacity: isViewingOther ? 0.40 : 1.0,
+                              child: UserLocationPuck(
+                                headingDegrees: heading,
+                                accuracyMeters: user.accuracyMeters,
+                                puckColor: isViewingOther
+                                    ? colors.foreground.withValues(alpha: 0.6)
+                                    : const Color(0xFF00A6FF), // Sky blue
+                              ),
                             ),
                           ),
                         ),
@@ -139,7 +176,13 @@ class FloorMapView extends GetView<FloorMapController> {
                     elevation: 2.0,
                     shadowColor: colors.foreground.withValues(alpha: 0.1),
                     child: InkWell(
-                      onTap: () => Get.back(),
+                      onTap: () {
+                        if (controller.isFloorMenuOpen.value) {
+                          controller.closeFloorMenu();
+                        } else {
+                          Get.back();
+                        }
+                      },
                       customBorder: const CircleBorder(),
                       child: Container(
                         width: 44.0,
@@ -414,8 +457,13 @@ class FloorMapView extends GetView<FloorMapController> {
 
                 final state = controller.tourState.value;
                 final isPlayground = controller.isPlaygroundMode.value;
-                final statusText = _getTourStatusText(state);
-                final statusIcon = _getTourStatusIcon(state.navigationStatus);
+                final isViewingOther = controller.isViewingDifferentFloor;
+                final statusText = isViewingOther
+                    ? 'Viewing ${controller.currentFloor.value.displayName}'
+                    : _getTourStatusText(state);
+                final statusIcon = isViewingOther
+                    ? Icons.visibility_rounded
+                    : _getTourStatusIcon(state.navigationStatus);
 
                 return Center(
                   child: Container(
@@ -795,12 +843,15 @@ class FloorMapView extends GetView<FloorMapController> {
               }),
             ),
 
-            // 5. Contextual Bottom Viewpoint Detail Card
+            // 5. Contextual Bottom Viewpoint Detail Card (floats above persistent bottom bar)
             Positioned(
               left: 16.0,
               right: 16.0,
-              bottom: 16.0,
+              bottom: 74.0,
               child: Obx(() {
+                if (controller.isFloorMenuOpen.value || controller.isMapViewMenuOpen.value) {
+                  return const SizedBox.shrink();
+                }
                 final selectedVp = controller.selectedViewpoint.value;
 
                 return AnimatedSwitcher(
@@ -836,9 +887,145 @@ class FloorMapView extends GetView<FloorMapController> {
                 );
               }),
             ),
+
+            // 6. Subtle background scrim when any bottom menu is open (tapping closes menus)
+            Positioned.fill(
+              child: Obx(() {
+                final isOpen = controller.isFloorMenuOpen.value || controller.isMapViewMenuOpen.value;
+                return IgnorePointer(
+                  ignoring: !isOpen,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: isOpen ? 1.0 : 0.0,
+                    child: GestureDetector(
+                      key: const Key('floor_menu_scrim'),
+                      onTap: controller.closeAllBottomMenus,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.16),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            // 7. Anchored Floating Floor Selection Menu (opens upward above bottom bar)
+            Positioned(
+              left: 16.0,
+              right: 16.0,
+              bottom: 74.0,
+              child: Obx(() {
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  reverseDuration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.20),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: controller.isFloorMenuOpen.value
+                      ? FloorSelectionMenu(
+                          key: const ValueKey('floor_selection_menu'),
+                          floors: controller.availableFloors,
+                          activeFloorId: controller.floorId.value,
+                          onSelectFloor: controller.switchFloor,
+                          onClose: controller.closeFloorMenu,
+                        )
+                      : const SizedBox.shrink(key: ValueKey('empty_floor_menu')),
+                );
+              }),
+            ),
+
+            // 8. Anchored Floating Map View Selection Menu (opens upward above bottom bar)
+            Positioned(
+              left: 16.0,
+              right: 16.0,
+              bottom: 74.0,
+              child: Obx(() {
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  reverseDuration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.20),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: controller.isMapViewMenuOpen.value
+                      ? MapViewSelectionMenu(
+                          key: const ValueKey('map_view_selection_menu'),
+                          activeViewType: controller.selectedMapView.value,
+                          onSelectMapView: controller.switchMapView,
+                          onClose: controller.closeMapViewMenu,
+                        )
+                      : const SizedBox.shrink(key: ValueKey('empty_map_view_menu')),
+                );
+              }),
+            ),
+
+            // 9. Persistent Bottom Navigation Bar (fixed above Android system inset)
+            Positioned(
+              left: 16.0,
+              right: 16.0,
+              bottom: 12.0,
+              child: Obx(
+                () => FloorBottomBar(
+                  margin: EdgeInsets.zero,
+                  items: [
+                    BottomNavItem(
+                      key: const Key('floor_selection_bottom_button'),
+                      icon: Icons.layers_rounded,
+                      label: 'Floor Selection',
+                      subtitle: controller.currentFloorShortName,
+                      isSelected: controller.isFloorMenuOpen.value,
+                      onTap: controller.toggleFloorMenu,
+                      semanticLabel: 'Choose Colosseum floor',
+                    ),
+                    BottomNavItem(
+                      key: const Key('map_view_bottom_button'),
+                      icon: Icons.map_rounded,
+                      label: 'Map View',
+                      subtitle: controller.currentMapViewShortName,
+                      isSelected: controller.isMapViewMenuOpen.value,
+                      onTap: controller.toggleMapViewMenu,
+                      semanticLabel: 'Change map view',
+                    ),
+                  ],
+                  trailing: Obx(
+                    () => FloorProgressIndicator(
+                      completedCount: controller.currentFloorCompletedViewpoints,
+                      totalCount: controller.currentFloorTotalViewpoints,
+                      progressRatio: controller.currentFloorProgressRatio,
+                      isCompleted: controller.isCurrentFloorComplete,
+                      text: controller.currentFloorProgressText,
+                      semanticLabel: controller.currentFloorProgressSemanticLabel,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
+    ),
     );
   }
 

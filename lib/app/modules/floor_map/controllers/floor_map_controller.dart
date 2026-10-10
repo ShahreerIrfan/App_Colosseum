@@ -6,17 +6,27 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/geodesic_utils.dart';
+import '../../../data/models/floor_definition.dart';
 import '../../../data/models/itinerary_segment_model.dart';
+import '../../../data/models/map_view_type.dart';
 import '../../../data/models/tour_navigation_state.dart';
-import '../../../data/providers/colosseum_tour_data.dart';
 import '../../../data/models/user_location_model.dart';
 import '../../../data/models/user_orientation_state.dart';
 import '../../../data/models/viewpoint_model.dart';
+import '../../../data/repositories/i_tour_repository.dart';
+import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../data/services/compass_service.dart';
 import '../../../data/services/gps_location_service.dart';
 import '../../../data/services/tour_navigation_engine.dart';
 import '../../../data/services/tts_service.dart';
 import '../../../data/services/visited_viewpoints_service.dart';
+
+/// Saved camera position and zoom state for a specific floor.
+class FloorCameraState {
+  final LatLng center;
+  final double zoom;
+  const FloorCameraState({required this.center, required this.zoom});
+}
 
 /// Controller managing floor map state, camera transformations, viewpoints, and audio playback.
 class FloorMapController extends GetxController {
@@ -25,6 +35,7 @@ class FloorMapController extends GetxController {
   final CompassService compassService;
   final GpsLocationService gpsService;
   final VisitedViewpointsService visitedService;
+  final ITourRepository tourRepository;
 
   FloorMapController({
     TtsService? ttsService,
@@ -32,6 +43,7 @@ class FloorMapController extends GetxController {
     CompassService? compassService,
     GpsLocationService? gpsService,
     VisitedViewpointsService? visitedService,
+    ITourRepository? tourRepository,
   })  : ttsService = ttsService ?? TtsService(),
         tourEngine = tourEngine ?? TourNavigationEngine(),
         compassService = compassService ?? CompassService(),
@@ -39,11 +51,102 @@ class FloorMapController extends GetxController {
         visitedService = visitedService ??
             (Get.isRegistered<VisitedViewpointsService>()
                 ? Get.find<VisitedViewpointsService>()
-                : Get.put(VisitedViewpointsService()));
+                : Get.put(VisitedViewpointsService())),
+        tourRepository = tourRepository ??
+            (Get.isRegistered<ITourRepository>()
+                ? Get.find<ITourRepository>()
+                : TourRepositoryImpl());
 
   final landmarkName = 'Colosseum'.obs;
   final floorName = 'Underground (Hypogeum)'.obs;
   final floorId = 'floor_underground'.obs;
+
+  /// Single source of truth floor definition
+  final currentFloor = FloorDefinition.underground.obs;
+
+  /// List of monumental floors loaded dynamically from repository
+  final availableFloors = <FloorDefinition>[...FloorDefinition.allFloors].obs;
+
+  /// Single source of truth for the base map view presentation (General vs Satellite).
+  final selectedMapView = MapViewType.general.obs;
+
+  /// Whether the floating floor selection menu is open
+  final isFloorMenuOpen = false.obs;
+
+  /// Whether the floating map view selection menu is open
+  final isMapViewMenuOpen = false.obs;
+
+  /// Non-blocking flag for satellite tile loading error
+  final hasSatelliteError = false.obs;
+
+  /// Guard to prevent rapid re-entrant floor switches
+  final isFloorSwitching = false.obs;
+
+  /// Per-floor saved camera states
+  final Map<String, FloorCameraState> _savedCameraStates = <String, FloorCameraState>{};
+
+  /// Physical floor ID where user is physically detected or anchored
+  final physicalFloorId = 'floor_underground'.obs;
+
+  /// Whether user is currently viewing a different floor than their physical location
+  bool get isViewingDifferentFloor =>
+      isUserInLocation.value && physicalFloorId.value != currentFloor.value.id;
+
+  String get physicalFloorName =>
+      FloorDefinition.fromId(physicalFloorId.value).displayName;
+
+  String get currentFloorShortName => currentFloor.value.shortName;
+
+  /// User-facing display name of the active map view mode.
+  String get currentMapViewDisplayName => selectedMapView.value.displayName;
+
+  /// Short display label for bottom bar action button.
+  String get currentMapViewShortName => selectedMapView.value.shortName;
+
+  /// Total number of viewpoints on the currently selected floor.
+  int get currentFloorTotalViewpoints => viewpoints.length;
+
+  /// Number of completed (visited) viewpoints on the currently selected floor only.
+  int get currentFloorCompletedViewpoints =>
+      viewpoints.where((vp) => vp.isVisited).length;
+
+  /// Completion ratio (0.0 to 1.0) on the currently selected floor.
+  double get currentFloorProgressRatio {
+    if (viewpoints.isEmpty) return 0.0;
+    return (currentFloorCompletedViewpoints / currentFloorTotalViewpoints)
+        .clamp(0.0, 1.0);
+  }
+
+  /// Whether all viewpoints on the currently selected floor are completed.
+  bool get isCurrentFloorComplete =>
+      viewpoints.isNotEmpty &&
+      currentFloorCompletedViewpoints == currentFloorTotalViewpoints;
+
+  /// Live user-facing formatted progress label: "Completed: 2/7" or "✓ Completed 7/7".
+  String get currentFloorProgressText {
+    if (viewpoints.isEmpty) return 'No viewpoints';
+    if (isCurrentFloorComplete) {
+      return '✓ Completed $currentFloorCompletedViewpoints/$currentFloorTotalViewpoints';
+    }
+    return 'Completed: $currentFloorCompletedViewpoints/$currentFloorTotalViewpoints';
+  }
+
+  /// Accessibility semantic description for current floor progress.
+  String get currentFloorProgressSemanticLabel {
+    if (viewpoints.isEmpty) {
+      return 'No viewpoints on ${currentFloor.value.displayName}';
+    }
+    if (isCurrentFloorComplete) {
+      return 'All $currentFloorTotalViewpoints viewpoints completed on ${currentFloor.value.displayName}';
+    }
+    return '$currentFloorCompletedViewpoints of $currentFloorTotalViewpoints viewpoints completed on ${currentFloor.value.displayName}';
+  }
+
+  /// Session-cached last viewed floor ID
+  static String? lastViewedFloorId;
+
+  /// Session-cached last viewed map view mode
+  static MapViewType? lastViewedMapView;
 
   late final MapController mapController;
   late final TransformationController transformationController;
@@ -92,18 +195,6 @@ class FloorMapController extends GetxController {
   /// Architectural Guided Itinerary Segments for the current floor
   final itinerarySegments = <ItinerarySegmentModel>[].obs;
 
-  /// Viewpoints for all 4 monumental levels (centralized in ColosseumTourData)
-  static const List<ViewpointModel> undergroundViewpoints = ColosseumTourData.undergroundViewpoints;
-  static const List<ViewpointModel> floor1Viewpoints = ColosseumTourData.level1Viewpoints;
-  static const List<ViewpointModel> floor2Viewpoints = ColosseumTourData.level2Viewpoints;
-  static const List<ViewpointModel> floor3Viewpoints = ColosseumTourData.level3Viewpoints;
-
-  /// Architectural Guided Itinerary Segments for all 4 levels
-  static const List<ItinerarySegmentModel> undergroundItinerary = ColosseumTourData.undergroundItinerary;
-  static const List<ItinerarySegmentModel> level1Itinerary = ColosseumTourData.level1Itinerary;
-  static const List<ItinerarySegmentModel> level2Itinerary = ColosseumTourData.level2Itinerary;
-  static const List<ItinerarySegmentModel> level3Itinerary = ColosseumTourData.level3Itinerary;
-
   @override
   void onInit() {
     super.onInit();
@@ -116,12 +207,20 @@ class FloorMapController extends GetxController {
       if (args.containsKey('landmarkName') && args['landmarkName'] != null) {
         landmarkName.value = args['landmarkName'].toString();
       }
+      if (args.containsKey('floorId') && args['floorId'] != null) {
+        final def = FloorDefinition.fromId(args['floorId'].toString());
+        currentFloor.value = def;
+        floorId.value = def.id;
+        floorName.value = def.displayName;
+      }
       if (args.containsKey('floorName') && args['floorName'] != null) {
         floorName.value = args['floorName'].toString();
       }
-      if (args.containsKey('floorId') && args['floorId'] != null) {
-        floorId.value = args['floorId'].toString();
-      }
+    } else if (floorId.value != 'floor_underground') {
+      final def = FloorDefinition.fromId(floorId.value);
+      currentFloor.value = def;
+      floorId.value = def.id;
+      floorName.value = def.displayName;
     }
 
     // Initialize Text-to-Speech service, Tour Navigation Engine, Device Compass & GPS
@@ -132,6 +231,7 @@ class FloorMapController extends GetxController {
 
     // Load viewpoints according to selected floor
     _loadFloorData();
+    _loadAvailableFloors();
   }
 
   int _currentSpeechStartOffset = 0;
@@ -175,6 +275,11 @@ class FloorMapController extends GetxController {
     ttsService.init();
     ttsService.onStart = () {
       isPlayingAudio.value = true;
+      if (ttsService.currentSpeechType == TtsSpeechType.narration) {
+        if (_audioProgressTimer == null) {
+          _startAudioProgressTimer();
+        }
+      }
     };
     ttsService.onNarrationComplete = () {
       _stopAudioProgressTimer();
@@ -217,7 +322,6 @@ class FloorMapController extends GetxController {
       _lastSpokenCharIndex = 0;
       audioProgress.value = 0.0;
       if (viewpoint.description.isNotEmpty) {
-        _startAudioProgressTimer();
         ttsService.speakNarration(viewpoint.description);
       }
     };
@@ -241,6 +345,10 @@ class FloorMapController extends GetxController {
         if (updatedSelected != null) {
           selectedViewpoint.value = updatedSelected;
         }
+      }
+
+      if (changed) {
+        viewpoints.refresh();
       }
 
       _refreshItinerarySegments();
@@ -321,19 +429,16 @@ class FloorMapController extends GetxController {
   }
 
   /// Snaps user location anchor to the target viewpoint with smart sequential advance for developer testing.
-  void snapToTarget() {
+  Future<void> snapToTarget() async {
     if (viewpoints.isEmpty) return;
 
     // 0. Cleanly stop any active audio from previous stop before snapping
-    if (isPlayingAudio.value || ttsService.currentSpeechType != TtsSpeechType.none) {
-      _stopAudioProgressTimer();
-      isPlayingAudio.value = false;
-      audioProgress.value = 0.0;
-      ttsService.stop();
-    }
+    _stopAudioProgressTimer();
+    isPlayingAudio.value = false;
+    audioProgress.value = 0.0;
+    await ttsService.stop();
 
     // 1. Freeze physical GPS drift so real sensor noise does not push user puck away
-    gpsService.pauseDisplacement();
     isDisplacementPaused.value = true;
     isPlaygroundMode.value = true;
 
@@ -369,6 +474,7 @@ class FloorMapController extends GetxController {
     // 4. Update GPS service and local reactive coordinates
     final canvasOffset = Offset(targetVp.normalizedX, targetVp.normalizedY);
     gpsService.snapToCanvasOffset(canvasOffset, floorId: floorId.value);
+    gpsService.pauseDisplacement();
 
     final snappedLoc = UserLocationModel(
       floorId: floorId.value,
@@ -390,14 +496,12 @@ class FloorMapController extends GetxController {
   }
 
   /// Sets a simulated user location from a tapped geographic coordinate on the satellite map (FoodPanda / Uber style).
-  void setSimulatedLocation(LatLng point) {
+  Future<void> setSimulatedLocation(LatLng point) async {
     // Cleanly stop any active audio when placing location
-    if (isPlayingAudio.value || ttsService.currentSpeechType != TtsSpeechType.none) {
-      _stopAudioProgressTimer();
-      isPlayingAudio.value = false;
-      audioProgress.value = 0.0;
-      ttsService.stop();
-    }
+    _stopAudioProgressTimer();
+    isPlayingAudio.value = false;
+    audioProgress.value = 0.0;
+    await ttsService.stop();
 
     final canvasOffset = GeodesicUtils.latLngToCanvasOffset(point);
     // Pause any live physical GPS drift while manually placing position
@@ -431,52 +535,73 @@ class FloorMapController extends GetxController {
 
   void _loadFloorData() {
     final fid = floorId.value.toLowerCase();
-    final List<ViewpointModel> currentViewpoints;
-    final String activeFloorId;
+    final FloorDefinition def;
 
     final hasCustomName = (Get.arguments is Map) && (Get.arguments as Map).containsKey('floorName');
 
-    if (fid.contains('underground')) {
-      if (!hasCustomName) floorName.value = 'Underground (Hypogeum)';
-      currentViewpoints = undergroundViewpoints;
-      activeFloorId = 'floor_underground';
-    } else if (fid.contains('2')) {
-      if (!hasCustomName) floorName.value = 'Floor 2';
-      currentViewpoints = floor2Viewpoints;
-      activeFloorId = 'floor_2';
-    } else if (fid.contains('3')) {
-      if (!hasCustomName) floorName.value = 'Floor 3';
-      currentViewpoints = floor3Viewpoints;
-      activeFloorId = 'floor_3';
+    if (fid.contains('underground') || fid == '0') {
+      def = FloorDefinition.underground;
+    } else if (fid.contains('2') || fid == 'floor_2') {
+      def = FloorDefinition.level2;
+    } else if (fid.contains('3') || fid == 'floor_3') {
+      def = FloorDefinition.level3;
     } else {
-      if (!hasCustomName) floorName.value = 'Floor 1';
-      currentViewpoints = floor1Viewpoints;
-      activeFloorId = 'floor_1';
+      def = FloorDefinition.level1;
     }
 
-    final storedVisited = visitedService.getVisitedForFloor(activeFloorId);
-    final populatedViewpoints = currentViewpoints.map((vp) {
+    currentFloor.value = def;
+    floorId.value = def.id;
+    if (!hasCustomName) {
+      floorName.value = def.displayName;
+    }
+    lastViewedFloorId = def.id;
+
+    final storedVisited = visitedService.getVisitedForFloor(
+        def.id, def.viewpoints.map((v) => v.id));
+    final populatedViewpoints = def.viewpoints.map((vp) {
       return vp.copyWith(isVisited: storedVisited.contains(vp.id));
     }).toList();
 
     viewpoints.assignAll(populatedViewpoints);
     tourEngine.startTour(
-      floorId: activeFloorId,
+      floorId: def.id,
       viewpoints: populatedViewpoints,
       initialVisitedIds: storedVisited,
       isVoiceGuidanceEnabled: tourState.value.isVoiceGuidanceEnabled,
       isAutoPlayEnabled: tourState.value.isAutoPlayEnabled,
     );
     _refreshItinerarySegments();
+    _loadRepositoryFloorData(def.id);
+  }
+
+  Future<void> _loadRepositoryFloorData(String targetFloorId) async {
+    try {
+      final repoFloor = await tourRepository.getFloorById(targetFloorId);
+      if (repoFloor != null && repoFloor.id == currentFloor.value.id) {
+        currentFloor.value = repoFloor;
+        final storedVisited = visitedService.getVisitedForFloor(
+            repoFloor.id, repoFloor.viewpoints.map((v) => v.id));
+        final populatedViewpoints = repoFloor.viewpoints.map((vp) {
+          return vp.copyWith(isVisited: storedVisited.contains(vp.id));
+        }).toList();
+        viewpoints.assignAll(populatedViewpoints);
+        _refreshItinerarySegments();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadAvailableFloors() async {
+    try {
+      final loadedFloors = await tourRepository.getFloors();
+      if (loadedFloors.isNotEmpty) {
+        availableFloors.assignAll(loadedFloors);
+      }
+    } catch (_) {}
   }
 
   /// Returns the architectural walking itinerary for the currently active floor.
   List<ItinerarySegmentModel> _getCurrentFloorItinerary() {
-    final fid = floorId.value.toLowerCase();
-    if (fid.contains('underground')) return undergroundItinerary;
-    if (fid.contains('2')) return level2Itinerary;
-    if (fid.contains('3')) return level3Itinerary;
-    return level1Itinerary;
+    return currentFloor.value.itinerary;
   }
 
   /// Recalculates completed and active status on itinerary walking segments.
@@ -667,6 +792,7 @@ class FloorMapController extends GetxController {
     for (int i = 0; i < viewpoints.length; i++) {
       viewpoints[i] = viewpoints[i].copyWith(isVisited: false);
     }
+    viewpoints.refresh();
     selectedViewpoint.value = null;
     isPlayingAudio.value = false;
     audioProgress.value = 0.0;
@@ -719,6 +845,12 @@ class FloorMapController extends GetxController {
   /// Handles camera movement changes on the satellite map.
   void onPositionChanged(MapCamera camera, bool hasGesture) {
     currentZoom.value = camera.zoom;
+    if (hasGesture) {
+      _savedCameraStates[currentFloor.value.id] = FloorCameraState(
+        center: camera.center,
+        zoom: camera.zoom,
+      );
+    }
   }
 
   /// Centers the satellite map view on a specific viewpoint.
@@ -824,5 +956,182 @@ class FloorMapController extends GetxController {
     } catch (_) {}
 
     transformationController.value = Matrix4.identity();
+  }
+
+  /// Toggles visibility of the floating floor selection menu.
+  void toggleFloorMenu() {
+    if (isFloorMenuOpen.value) {
+      closeFloorMenu();
+    } else {
+      openFloorMenu();
+    }
+  }
+
+  /// Opens the floating floor selection menu and closes any other bottom menu.
+  void openFloorMenu() {
+    isMapViewMenuOpen.value = false;
+    isFloorMenuOpen.value = true;
+  }
+
+  /// Closes the floating floor selection menu.
+  void closeFloorMenu() {
+    isFloorMenuOpen.value = false;
+  }
+
+  /// Toggles visibility of the floating map view selection menu.
+  void toggleMapViewMenu() {
+    if (isMapViewMenuOpen.value) {
+      closeMapViewMenu();
+    } else {
+      openMapViewMenu();
+    }
+  }
+
+  /// Opens the floating map view selection menu and closes any other bottom menu.
+  void openMapViewMenu() {
+    isFloorMenuOpen.value = false;
+    isMapViewMenuOpen.value = true;
+  }
+
+  /// Closes the floating map view selection menu.
+  void closeMapViewMenu() {
+    isMapViewMenuOpen.value = false;
+  }
+
+  /// Closes all anchored bottom menus (floor menu, map view menu).
+  void closeAllBottomMenus() {
+    isFloorMenuOpen.value = false;
+    isMapViewMenuOpen.value = false;
+  }
+
+  /// Centralized action to switch base map view between General and Satellite.
+  ///
+  /// Strictly preserves:
+  /// - Current floor context and geometry
+  /// - Viewpoints and visited progress
+  /// - Itinerary route and navigation target
+  /// - Active viewpoint card selection
+  /// - Audio narration playback and bookmark position
+  /// - Active TTS navigation guidance
+  /// - User location and compass heading
+  /// - Camera zoom and pan coordinates
+  void switchMapView(MapViewType type) {
+    if (selectedMapView.value == type) {
+      closeMapViewMenu();
+      return;
+    }
+
+    closeMapViewMenu();
+    selectedMapView.value = type;
+    lastViewedMapView = type;
+  }
+
+  /// Non-blocking callback when satellite tiles encounter fetch failure.
+  void onSatelliteTileError() {
+    hasSatelliteError.value = true;
+  }
+
+  /// Centralized floor switching action coordinating:
+  /// 1. Close floor menu
+  /// 2. Stop/pause old-floor audio narration and speech timers
+  /// 3. Pause old-floor navigation
+  /// 4. Clear selected old-floor viewpoint card
+  /// 5. Save old floor camera state
+  /// 6. Update selectedFloorId & single source of truth
+  /// 7. Load target floor configuration
+  /// 8. Load target floor map & architectural geometry
+  /// 9. Load target viewpoints
+  /// 10. Load target itinerary
+  /// 11. Load target calibration
+  /// 12. Restore/default target floor camera
+  /// 13. Restore target floor visited progress
+  /// 14. Update header
+  /// 15. Reevaluate location rendering
+  Future<void> switchFloor(String targetFloorId) async {
+    if (isFloorSwitching.value) return;
+
+    final targetDef = FloorDefinition.fromId(targetFloorId);
+
+    // If user selected the already active floor, close menu and do nothing destructive
+    if (targetDef.id == currentFloor.value.id) {
+      closeFloorMenu();
+      return;
+    }
+
+    isFloorSwitching.value = true;
+
+    // 1. Close floor menu
+    closeFloorMenu();
+
+    // 2. Stop/pause old-floor audio narration and progress timers
+    _stopAudioProgressTimer();
+    _currentSpeechStartOffset = 0;
+    _lastSpokenCharIndex = 0;
+    isPlayingAudio.value = false;
+    audioProgress.value = 0.0;
+    await ttsService.stop();
+
+    // 3. Pause old-floor navigation guidance
+    tourEngine.onUserStopOrCloseAudio();
+
+    // 4. Clear selected old-floor viewpoint card
+    selectedViewpoint.value = null;
+    isCardCollapsed.value = false;
+
+    // 5. Save old floor camera state
+    try {
+      _savedCameraStates[currentFloor.value.id] = FloorCameraState(
+        center: mapController.camera.center,
+        zoom: mapController.camera.zoom,
+      );
+    } catch (_) {}
+
+    // 6. Update single source of truth floor state
+    currentFloor.value = targetDef;
+    floorId.value = targetDef.id;
+    floorName.value = targetDef.displayName;
+    lastViewedFloorId = targetDef.id;
+
+    // 7, 8, 9, 10, 11, 13. Load target floor configuration, viewpoints, route, visited progress
+    final storedVisited = visitedService.getVisitedForFloor(targetDef.id);
+    final populatedViewpoints = targetDef.viewpoints.map((vp) {
+      return vp.copyWith(isVisited: storedVisited.contains(vp.id));
+    }).toList();
+
+    viewpoints.assignAll(populatedViewpoints);
+
+    tourEngine.startTour(
+      floorId: targetDef.id,
+      viewpoints: populatedViewpoints,
+      initialVisitedIds: storedVisited,
+      isVoiceGuidanceEnabled: tourState.value.isVoiceGuidanceEnabled,
+      isAutoPlayEnabled: tourState.value.isAutoPlayEnabled,
+    );
+
+    _refreshItinerarySegments();
+
+    // 12. Restore or default target floor camera
+    if (_savedCameraStates.containsKey(targetDef.id)) {
+      final saved = _savedCameraStates[targetDef.id]!;
+      try {
+        mapController.move(saved.center, saved.zoom);
+      } catch (_) {}
+    } else {
+      try {
+        mapController.move(targetDef.center, targetDef.defaultZoom);
+      } catch (_) {}
+    }
+
+    // Update GPS service tracking floor calibration
+    gpsService.startTracking(floorId: targetDef.id);
+
+    // Subtle safety buffer to disable repeated rapid switching
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    isFloorSwitching.value = false;
+  }
+
+  /// Builds architectural visual geometry polylines for the active floor level.
+  List<Polyline> buildFloorArchitecturalPolylines(AppColors colors) {
+    return const [];
   }
 }

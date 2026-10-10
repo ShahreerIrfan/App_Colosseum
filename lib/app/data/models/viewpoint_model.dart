@@ -35,6 +35,38 @@ class ViewpointModel {
     this.imageAsset,
   });
 
+  factory ViewpointModel.fromJson(Map<String, dynamic> json) {
+    return ViewpointModel(
+      id: json['id'] as String? ?? '',
+      floorId: json['floorId'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      order: (json['order'] as num?)?.toInt() ?? 0,
+      normalizedX: (json['normalizedX'] as num?)?.toDouble() ?? 0.0,
+      normalizedY: (json['normalizedY'] as num?)?.toDouble() ?? 0.0,
+      description: json['description'] as String? ?? '',
+      audioDuration: json['audioDuration'] as String? ?? '2 min',
+      isVisited: json['isVisited'] as bool? ?? false,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      imageAsset: json['imageAsset'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'floorId': floorId,
+        'title': title,
+        'order': order,
+        'normalizedX': normalizedX,
+        'normalizedY': normalizedY,
+        'description': description,
+        'audioDuration': audioDuration,
+        'isVisited': isVisited,
+        'latitude': latitude,
+        'longitude': longitude,
+        'imageAsset': imageAsset,
+      };
+
   ViewpointModel copyWith({
     String? id,
     String? floorId,

@@ -60,6 +60,16 @@ class SplashView extends GetView<SplashController> {
                     letterSpacing: 0.5,
                   ),
                 ),
+                const SizedBox(height: 24),
+                Obx(() => Text(
+                      controller.syncStatusMessage.value,
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colors.primary.withValues(alpha: 0.8),
+                        fontSize: 12,
+                        letterSpacing: 0.3,
+                      ),
+                    )),
                 const Spacer(flex: 3),
               ],
             ),

@@ -75,7 +75,7 @@ class ViewpointDetailCard extends StatelessWidget {
             if (isPlaying || progress > 0.0)
               ClipRRect(
                 child: LinearProgressIndicator(
-                  value: progress > 0.0 ? progress : null,
+                  value: progress.clamp(0.0, 1.0),
                   minHeight: 2.5,
                   backgroundColor: colors.border.withValues(alpha: 0.4),
                   valueColor: AlwaysStoppedAnimation<Color>(colors.primary),

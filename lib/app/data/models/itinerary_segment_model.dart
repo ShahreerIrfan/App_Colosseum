@@ -23,6 +23,36 @@ class ItinerarySegmentModel {
     this.isActive = false,
   });
 
+  factory ItinerarySegmentModel.fromJson(Map<String, dynamic> json) {
+    final rawPoints = json['points'] as List<dynamic>? ?? [];
+    final points = rawPoints.map<Offset>((p) {
+      if (p is Map) {
+        final x = (p['x'] ?? p['dx'] ?? 0.0) as num;
+        final y = (p['y'] ?? p['dy'] ?? 0.0) as num;
+        return Offset(x.toDouble(), y.toDouble());
+      } else if (p is List && p.length >= 2) {
+        return Offset((p[0] as num).toDouble(), (p[1] as num).toDouble());
+      }
+      return Offset.zero;
+    }).toList();
+
+    return ItinerarySegmentModel(
+      fromId: json['fromId'] as String? ?? '',
+      toId: json['toId'] as String? ?? '',
+      points: points,
+      isCompleted: json['isCompleted'] as bool? ?? false,
+      isActive: json['isActive'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'fromId': fromId,
+        'toId': toId,
+        'points': points.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+        'isCompleted': isCompleted,
+        'isActive': isActive,
+      };
+
   ItinerarySegmentModel copyWith({
     String? fromId,
     String? toId,

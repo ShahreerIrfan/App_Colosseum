@@ -332,5 +332,265 @@ void main() {
       expect(controller.userLocation.value?.latLng.longitude, originalLocation?.latLng.longitude);
     },
   );
+
+  testWidgets(
+    'FloorMapView renders persistent FloorBottomBar, opens FloorSelectionMenu, and switches floor atomically to Level 2',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = Get.put(FloorMapController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const FloorMapView(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // 1. Bottom menu bar is visible and persistent
+      final floorSelectionButton = find.byKey(const Key('floor_selection_bottom_button'));
+      expect(floorSelectionButton, findsOneWidget);
+      expect(find.text('Floor Selection'), findsOneWidget);
+      expect(find.text('Underground (Hypogeum)'), findsAtLeastNWidgets(1));
+
+      // Initially, floor selection menu is NOT visible
+      expect(find.byKey(const Key('floor_menu_item_floor_2')), findsNothing);
+
+      // 2. Tap Floor Selection button to open menu
+      await tester.tap(floorSelectionButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.isFloorMenuOpen.value, isTrue);
+      // Verify all 4 floor options are rendered
+      expect(find.byKey(const Key('floor_menu_item_floor_underground')), findsOneWidget);
+      expect(find.byKey(const Key('floor_menu_item_floor_1')), findsOneWidget);
+      expect(find.byKey(const Key('floor_menu_item_floor_2')), findsOneWidget);
+      expect(find.byKey(const Key('floor_menu_item_floor_3')), findsOneWidget);
+
+      // Verify active checkmark is rendered for Underground
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+
+      // 3. Tap Level 2 in the menu
+      await tester.tap(find.byKey(const Key('floor_menu_item_floor_2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // Menu closes
+      expect(controller.isFloorMenuOpen.value, isFalse);
+      expect(find.byKey(const Key('floor_menu_item_floor_2')), findsNothing);
+
+      // Top header updates to Level 2
+      expect(find.text('Level 2'), findsAtLeastNWidgets(1));
+      expect(controller.currentFloor.value.id, 'floor_2');
+
+      // Markers are updated: Level 2 has 7 viewpoints (300-306)
+      expect(find.text('300'), findsOneWidget);
+      expect(find.text('306'), findsOneWidget);
+      expect(find.text('100'), findsNothing);
+
+      // 4. Test closing menu by tapping scrim
+      await tester.tap(floorSelectionButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(controller.isFloorMenuOpen.value, isTrue);
+
+      final scrim = find.byKey(const Key('floor_menu_scrim'));
+      expect(scrim, findsOneWidget);
+      await tester.tap(scrim);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.isFloorMenuOpen.value, isFalse);
+    },
+  );
+
+  testWidgets(
+    'FloorMapView renders Map View button, opens MapViewSelectionMenu, switches to Satellite View, and handles mutual menu exclusivity',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = Get.put(FloorMapController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const FloorMapView(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // 1. Both bottom buttons are rendered
+      final floorBtn = find.byKey(const Key('floor_selection_bottom_button'));
+      final mapViewBtn = find.byKey(const Key('map_view_bottom_button'));
+      expect(floorBtn, findsOneWidget);
+      expect(mapViewBtn, findsOneWidget);
+      expect(find.text('Map View'), findsOneWidget);
+      expect(find.text('General'), findsOneWidget);
+
+      // Initially neither menu is visible
+      expect(find.byKey(const Key('map_view_item_satellite')), findsNothing);
+      expect(find.byKey(const Key('floor_menu_item_floor_1')), findsNothing);
+
+      // 2. Tap Map View button to open menu
+      await tester.tap(mapViewBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+      expect(find.text('Select map view'), findsOneWidget);
+      expect(find.byKey(const Key('map_view_item_general')), findsOneWidget);
+      expect(find.byKey(const Key('map_view_item_satellite')), findsOneWidget);
+      // General view is initially active and has checkmark
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+
+      // 3. Test mutual menu exclusivity: tapping Floor button while Map View menu is open
+      await tester.tap(floorBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+      expect(controller.isFloorMenuOpen.value, isTrue);
+      expect(find.byKey(const Key('floor_menu_item_floor_1')), findsOneWidget);
+
+      // Tap Map View button again -> Floor menu closes and Map View menu opens
+      await tester.tap(mapViewBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.isFloorMenuOpen.value, isFalse);
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+      expect(find.byKey(const Key('map_view_item_satellite')), findsOneWidget);
+
+      // 4. Tap Satellite View option in menu
+      await tester.tap(find.byKey(const Key('map_view_item_satellite')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Menu closes and map view switches to Satellite
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+      expect(controller.selectedMapView.value.name, 'satellite');
+      expect(find.text('Satellite'), findsOneWidget);
+
+      // Overlays remain fully intact
+      expect(find.byType(TileLayer), findsOneWidget);
+      expect(find.byType(PolylineLayer), findsOneWidget);
+      expect(find.byType(ViewpointMarker), findsNWidgets(7));
+
+      // 5. Test closing menu via scrim
+      await tester.tap(mapViewBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(controller.isMapViewMenuOpen.value, isTrue);
+
+      final scrim = find.byKey(const Key('floor_menu_scrim'));
+      await tester.tap(scrim);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(controller.isMapViewMenuOpen.value, isFalse);
+    },
+  );
+
+  testWidgets(
+    'FloorMapView renders floor-based completed viewpoints progress indicator in bottom bar and updates dynamically on visit toggle and floor switch',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      Get.put(FloorMapController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const FloorMapView(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // 1. Initial Underground: progress indicator is rendered with Completed: 0/7
+      expect(find.byKey(const Key('floor_progress_indicator')), findsOneWidget);
+      expect(find.text('Completed: 0/7'), findsOneWidget);
+
+      // 2. Select Viewpoint 100 to open card
+      final vp100Marker = find.text('100');
+      expect(vp100Marker, findsOneWidget);
+      await tester.tap(vp100Marker);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // 3. Tap Mark as Visited
+      final visitedButton = find.byKey(const Key('toggle_visited_button'));
+      expect(visitedButton, findsOneWidget);
+      await tester.tap(visitedButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Progress updates to Completed: 1/7
+      expect(find.text('Completed: 1/7'), findsOneWidget);
+
+      // 4. Tap Unmark as Visited -> immediately drops back to Completed: 0/7
+      await tester.tap(visitedButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(find.text('Completed: 0/7'), findsOneWidget);
+
+      // Mark it visited again
+      await tester.tap(visitedButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('Completed: 1/7'), findsOneWidget);
+
+      // 5. Dismiss detail card
+      final closeButton = find.byKey(const Key('close_viewpoint_card')).last;
+      await tester.tap(closeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // 6. Switch floor to Level 1
+      final floorSelectionButton = find.byKey(const Key('floor_selection_bottom_button'));
+      await tester.tap(floorSelectionButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      await tester.tap(find.byKey(const Key('floor_menu_item_floor_1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // Level 1 has 9 viewpoints, none visited -> Completed: 0/9 (No leakage from Underground)
+      expect(find.text('Completed: 0/9'), findsOneWidget);
+
+      // 7. Switch Map View to Satellite -> Level 1 progress remains Completed: 0/9
+      final mapViewBtn = find.byKey(const Key('map_view_bottom_button'));
+      await tester.tap(mapViewBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      await tester.tap(find.byKey(const Key('map_view_item_satellite')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(find.text('Completed: 0/9'), findsOneWidget);
+
+      // 8. Switch back to Underground -> Underground progress (1/7) is restored accurately
+      await tester.tap(floorSelectionButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      await tester.tap(find.byKey(const Key('floor_menu_item_floor_underground')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Completed: 1/7'), findsOneWidget);
+    },
+  );
 }
+
 

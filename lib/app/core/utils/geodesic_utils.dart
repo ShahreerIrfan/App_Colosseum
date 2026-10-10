@@ -99,6 +99,47 @@ abstract class GeodesicUtils {
     );
   }
 
+  /// Calculates the 4 corner coordinates in LatLng for a rotated rectangular footprint with anchor offsets.
+  static RotatedCorners calculateRotatedCorners({
+    required LatLng center,
+    required double widthMeters,
+    required double heightMeters,
+    required double rotationDegrees,
+    double anchorX = 0.5,
+    double anchorY = 0.5,
+  }) {
+    final leftDist = anchorX * widthMeters;
+    final rightDist = (1.0 - anchorX) * widthMeters;
+    final topDist = anchorY * heightMeters;
+    final bottomDist = (1.0 - anchorY) * heightMeters;
+
+    final rad = rotationDegrees * math.pi / 180.0;
+    final cosR = math.cos(rad);
+    final sinR = math.sin(rad);
+
+    const metersPerDegreeLat = 111139.0;
+    final metersPerDegreeLng =
+        111139.0 * math.cos(center.latitude * math.pi / 180.0);
+
+    LatLng calcCorner(double xLocal, double yLocal) {
+      // Local coordinate system: x = East (+right), y = North (+up)
+      // Clockwise rotation by rotationDegrees:
+      final eastMeters = xLocal * cosR + yLocal * sinR;
+      final northMeters = -xLocal * sinR + yLocal * cosR;
+
+      final lat = center.latitude + (northMeters / metersPerDegreeLat);
+      final lng = center.longitude + (eastMeters / metersPerDegreeLng);
+      return LatLng(lat, lng);
+    }
+
+    return RotatedCorners(
+      topLeft: calcCorner(-leftDist, topDist),
+      bottomLeft: calcCorner(-leftDist, -bottomDist),
+      bottomRight: calcCorner(rightDist, -bottomDist),
+      topRight: calcCorner(rightDist, topDist),
+    );
+  }
+
   /// Converts normalized canvas coordinate ([0.0, 1.0] x [0.0, 1.0]) back to geographic [LatLng] on the Colosseum monument.
   static LatLng canvasToLatLng(
     math.Point<double> point, {
@@ -172,3 +213,37 @@ abstract class GeodesicUtils {
     );
   }
 }
+
+/// Geographic coordinates for the 4 corners of a rotated bounding box.
+class RotatedCorners {
+  final LatLng topLeft;
+  final LatLng bottomLeft;
+  final LatLng bottomRight;
+  final LatLng topRight;
+
+  const RotatedCorners({
+    required this.topLeft,
+    required this.bottomLeft,
+    required this.bottomRight,
+    required this.topRight,
+  });
+
+  /// Calculates a non-rotated enclosing [LatLngBounds] encompassing all 4 corners.
+  LatLngBounds get bounds {
+    final points = [topLeft, bottomLeft, bottomRight, topRight];
+    double minLat = points[0].latitude;
+    double maxLat = points[0].latitude;
+    double minLng = points[0].longitude;
+    double maxLng = points[0].longitude;
+
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+
+    return LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+  }
+}
+

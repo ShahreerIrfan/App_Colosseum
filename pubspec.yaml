@@ -41,6 +41,9 @@ dependencies:
   flutter_compass: ^0.8.1
   geolocator: ^14.1.1
   shared_preferences: ^2.5.5
+  http: ^1.6.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -68,6 +71,7 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/logo/
+    - assets/data/
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

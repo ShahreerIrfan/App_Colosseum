@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../providers/colosseum_tour_data.dart';
-
 /// Centralized persistent service that tracks and synchronizes visited viewpoints
 /// across all Colosseum floors, backed by device local storage (SharedPreferences).
 class VisitedViewpointsService extends GetxService {
@@ -57,24 +55,54 @@ class VisitedViewpointsService extends GetxService {
     }
   }
 
+  final Map<String, Set<String>> _floorViewpointMap = {};
+
+  /// Dynamically registers viewpoint IDs for a floor from repository / Hive data.
+  void registerFloorViewpoints(String floorId, Iterable<String> viewpointIds) {
+    _floorViewpointMap[floorId] = viewpointIds.toSet();
+  }
+
   /// Returns the set of visited viewpoint IDs belonging to the given floor.
-  Set<String> getVisitedForFloor(String floorId) {
-    final floorVps = ColosseumTourData.getViewpointsForFloor(floorId);
-    final floorIds = floorVps.map((vp) => vp.id).toSet();
+  Set<String> getVisitedForFloor(String floorId, [Iterable<String>? knownViewpointIds]) {
+    if (knownViewpointIds != null) {
+      registerFloorViewpoints(floorId, knownViewpointIds);
+    }
+    final floorIds = _floorViewpointMap[floorId] ?? _getFallbackViewpointIds(floorId);
     return visitedViewpointIds.intersection(floorIds);
   }
 
   /// Returns the total count of completed (visited) viewpoints on a given floor.
-  int getCompletedCountForFloor(String floorId) {
-    return getVisitedForFloor(floorId).length;
+  int getCompletedCountForFloor(String floorId, [Iterable<String>? knownViewpointIds]) {
+    return getVisitedForFloor(floorId, knownViewpointIds).length;
   }
 
   /// Clears visited viewpoints belonging to a specific floor level.
-  Future<void> clearFloor(String floorId) async {
-    final floorVps = ColosseumTourData.getViewpointsForFloor(floorId);
-    final floorIds = floorVps.map((vp) => vp.id).toSet();
+  Future<void> clearFloor(String floorId, [Iterable<String>? knownViewpointIds]) async {
+    final floorIds = _floorViewpointMap[floorId] ??
+        knownViewpointIds?.toSet() ??
+        _getFallbackViewpointIds(floorId);
     visitedViewpointIds.removeAll(floorIds);
     await _persist();
+  }
+
+  /// Default heuristic fallback for viewpoint IDs per floor
+  static Set<String> _getFallbackViewpointIds(String floorId) {
+    if (floorId.contains('underground') || floorId == '0') {
+      return {
+        'vp_100', 'vp_101', 'vp_102', 'vp_103', 'vp_104', 'vp_105', 'vp_106'
+      };
+    } else if (floorId.contains('2') || floorId == 'floor_2') {
+      return {
+        'vp_300', 'vp_301', 'vp_302', 'vp_303', 'vp_304', 'vp_305', 'vp_306'
+      };
+    } else if (floorId.contains('3') || floorId == 'floor_3') {
+      return {'vp_400', 'vp_401', 'vp_402', 'vp_403', 'vp_404'};
+    } else {
+      return {
+        'vp_200', 'vp_201', 'vp_202', 'vp_203', 'vp_204', 'vp_205', 'vp_206',
+        'vp_207', 'vp_208'
+      };
+    }
   }
 
   /// Clears all visited viewpoints across all floors.

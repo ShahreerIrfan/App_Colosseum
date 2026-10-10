@@ -14,6 +14,9 @@ class TtsService {
   final FlutterTts _flutterTts;
   bool _isInitialized = false;
 
+  int _generation = 0;
+  bool _awaitingNativeStart = false;
+
   VoidCallback? onStart;
   VoidCallback? onComplete;
   VoidCallback? onNarrationComplete;
@@ -58,16 +61,22 @@ class TtsService {
         }
 
         _flutterTts.setStartHandler(() {
+          _awaitingNativeStart = false;
           onStart?.call();
         });
 
-        _flutterTts.setCompletionHandler(handleNativeCompletion);
+        _flutterTts.setCompletionHandler(() {
+          // A completion that arrives before this utterance's onStart is left over
+          // from a previous utterance, so drop it.
+          if (_awaitingNativeStart) return;
+          handleNativeCompletion();
+        });
 
         _flutterTts.setCancelHandler(() {
-          _currentSpeechType = TtsSpeechType.none;
-          _activeInstructionOnDone = null;
-          _activeNarrationOnDone = null;
-          onStop?.call();
+          // Native cancel is an asynchronous echo of Dart's stop() or speak*().
+          // Dart already cleans up its own state in stop() and speak*(),
+          // so do NOT clear active callbacks or trigger onStop here to prevent stale cancels
+          // from wiping out subsequent speech requests.
         });
 
         _flutterTts.setPauseHandler(() {
@@ -102,6 +111,7 @@ class TtsService {
   void handleNativeCompletion() {
     _instructionSafetyTimer?.cancel();
     _instructionSafetyTimer = null;
+    _awaitingNativeStart = false;
 
     final type = _currentSpeechType;
     _currentSpeechType = TtsSpeechType.none;
@@ -121,25 +131,29 @@ class TtsService {
 
   /// Speaks a navigation voice instruction without triggering narration complete events.
   Future<void> speakInstruction(String text, {VoidCallback? onDone}) async {
+    final myGen = ++_generation;
     _instructionSafetyTimer?.cancel();
     _instructionSafetyTimer = null;
+    _currentSpeechType = TtsSpeechType.none;
+    _activeInstructionOnDone = null;
+    _activeNarrationOnDone = null;
+
     try {
       if (!_isInitialized) {
         await init();
       }
       if (text.trim().isNotEmpty) {
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          _currentSpeechType = TtsSpeechType.none;
-          _activeInstructionOnDone = null;
-          _activeNarrationOnDone = null;
           try {
             await _flutterTts.stop();
           } catch (_) {}
+          if (myGen != _generation) return;
         }
 
         _currentSpeechType = TtsSpeechType.instruction;
         _activeInstructionOnDone = onDone;
         _activeNarrationOnDone = null;
+        _awaitingNativeStart = true;
 
         // In test environments or desktop headless runners, complete immediately without scheduling background timers
         if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
@@ -148,9 +162,11 @@ class TtsService {
         }
 
         // Safety fallback timer: ensure onDone always executes even if native TTS drops completion event
-        final estimatedMs = ((text.length / 10.0) * 1000).toInt().clamp(2000, 4500);
+        final estimatedMs = ((text.length / 8.0) * 1000).toInt().clamp(3000, 7000);
         _instructionSafetyTimer = Timer(Duration(milliseconds: estimatedMs), () {
-          if (_currentSpeechType == TtsSpeechType.instruction && _activeInstructionOnDone != null) {
+          if (myGen == _generation &&
+              _currentSpeechType == TtsSpeechType.instruction &&
+              _activeInstructionOnDone != null) {
             handleNativeCompletion();
           }
         });
@@ -170,8 +186,13 @@ class TtsService {
 
   /// Speaks a viewpoint guide description narration and invokes [onNarrationComplete] when done.
   Future<void> speakNarration(String text, {VoidCallback? onDone}) async {
+    final myGen = ++_generation;
     _instructionSafetyTimer?.cancel();
     _instructionSafetyTimer = null;
+    _currentSpeechType = TtsSpeechType.none;
+    _activeInstructionOnDone = null;
+    _activeNarrationOnDone = null;
+
     try {
       if (!_isInitialized) {
         await init();
@@ -181,17 +202,16 @@ class TtsService {
         // so that any native flush/abort completion event from previous speech
         // is discarded and cannot trigger premature onNarrationComplete events.
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          _currentSpeechType = TtsSpeechType.none;
-          _activeInstructionOnDone = null;
-          _activeNarrationOnDone = null;
           try {
             await _flutterTts.stop();
           } catch (_) {}
+          if (myGen != _generation) return;
         }
 
         _currentSpeechType = TtsSpeechType.narration;
         _activeNarrationOnDone = onDone;
         _activeInstructionOnDone = null;
+        _awaitingNativeStart = true;
         await _flutterTts.speak(text);
       } else {
         _currentSpeechType = TtsSpeechType.none;
@@ -284,11 +304,14 @@ class TtsService {
 
   /// Stops the current speech
   Future<void> stop() async {
+    _generation++;
+    _awaitingNativeStart = false;
     _instructionSafetyTimer?.cancel();
     _instructionSafetyTimer = null;
     _currentSpeechType = TtsSpeechType.none;
     _activeInstructionOnDone = null;
     _activeNarrationOnDone = null;
+    onStop?.call();
     try {
       await _flutterTts.stop();
     } catch (e) {

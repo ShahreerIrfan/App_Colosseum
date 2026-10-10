@@ -177,7 +177,11 @@ class TourNavigationEngine {
     final userOffset = Offset(location.normalizedX, location.normalizedY);
 
     // 5. Evaluate Departure from Previous Stop (Hysteresis)
-    _evaluateDeparture(userOffset, currentTime);
+    // When isSimulated is true (developer snap / manual placement), skip departure instruction
+    // to prevent collision with immediate arrival instruction on the same tick.
+    if (!isSimulated) {
+      _evaluateDeparture(userOffset, currentTime);
+    }
 
     // 6. Evaluate Target Proximity & Arrival
     _evaluateTargetProximity(userOffset, currentTime, isSimulated: isSimulated);

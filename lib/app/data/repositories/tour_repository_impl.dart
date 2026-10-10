@@ -1,0 +1,72 @@
+import '../datasources/local/tour_local_data_source.dart';
+import '../datasources/remote/tour_remote_data_source.dart';
+import '../models/floor_definition.dart';
+import '../models/landmark_overlay_model.dart';
+import '../models/sync_manifest_model.dart';
+import 'i_tour_repository.dart';
+
+/// Implementation of [ITourRepository] orchestrating remote syncing with Hive local cache.
+class TourRepositoryImpl implements ITourRepository {
+  final ITourRemoteDataSource remoteDataSource;
+  final ITourLocalDataSource localDataSource;
+
+  TourRepositoryImpl({
+    ITourRemoteDataSource? remoteDataSource,
+    ITourLocalDataSource? localDataSource,
+  })  : remoteDataSource = remoteDataSource ?? TourRemoteDataSource(),
+        localDataSource = localDataSource ?? TourLocalDataSource();
+
+  @override
+  Future<bool> syncTourBundle({String lang = 'en'}) async {
+    try {
+      final remoteManifest = await remoteDataSource.getSyncManifest();
+      final cachedManifest = await localDataSource.getCachedManifest();
+
+      // Check if cache needs update
+      if (cachedManifest == null ||
+          cachedManifest.dataHash != remoteManifest.dataHash) {
+        final bundle = await remoteDataSource.getTourBundle(lang: lang);
+        await localDataSource.saveTourBundle(bundle, lang: lang);
+        return true;
+      }
+      return false;
+    } catch (_) {
+      // Offline fallback: continue using cached data silently
+      return false;
+    }
+  }
+
+  @override
+  Future<List<FloorDefinition>> getFloors({
+    String lang = 'en',
+    bool forceRefresh = false,
+  }) async {
+    if (forceRefresh) {
+      await syncTourBundle(lang: lang);
+    }
+    return localDataSource.getCachedFloors(lang: lang);
+  }
+
+  @override
+  Future<FloorDefinition?> getFloorById(
+    String floorId, {
+    String lang = 'en',
+  }) async {
+    return localDataSource.getCachedFloorById(floorId, lang: lang);
+  }
+
+  @override
+  Future<List<MapLandmarkOverlay>> getLandmarkOverlays({
+    bool forceRefresh = false,
+  }) async {
+    if (forceRefresh) {
+      await syncTourBundle();
+    }
+    return localDataSource.getCachedLandmarkOverlays();
+  }
+
+  @override
+  Future<TourSyncManifestModel?> getCurrentManifest() async {
+    return localDataSource.getCachedManifest();
+  }
+}
