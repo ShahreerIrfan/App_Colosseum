@@ -1,22 +1,36 @@
+import 'dart:async';
+
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../data/models/landmark_marker_model.dart';
 import '../../../data/models/landmark_overlay_model.dart';
 import '../../../data/models/map_view_type.dart';
+import '../../../data/models/user_orientation_state.dart';
 import '../../../data/providers/colosseum_landmark_overlays.dart';
 import '../../../data/providers/landmark_markers_provider.dart';
 import '../../../data/repositories/i_tour_repository.dart';
 import '../../../data/repositories/tour_repository_impl.dart';
+import '../../../data/services/compass_service.dart';
+import '../../../data/services/gps_location_service.dart';
 import '../../../routes/app_pages.dart';
 
 class HomeController extends GetxController {
   late final MapController mapController;
   final ITourRepository tourRepository;
+  final GpsLocationService gpsLocationService;
+  final CompassService compassService;
+
+  StreamSubscription<Position>? _positionSubscription;
+  StreamSubscription<UserOrientationState>? _compassSubscription;
 
   static const LatLng colosseumCoordinates = LatLng(41.890210, 12.492231);
   static const double defaultZoom = 16.5;
+
+  /// Radius of the Colosseum archaeological boundary zone in meters.
+  static const double zoneBoundaryRadiusMeters = 600.0;
 
   final currentZoom = defaultZoom.obs;
 
@@ -38,11 +52,42 @@ class HomeController extends GetxController {
   /// Active base map view type (General vs Satellite).
   final selectedMapView = MapViewType.general.obs;
 
-  HomeController({ITourRepository? tourRepository})
-      : tourRepository = tourRepository ??
+  /// Real-time user geographic location.
+  final userLocation = Rxn<LatLng>();
+
+  /// Real-time user device heading in degrees [0, 360).
+  final userHeading = RxnDouble();
+
+  /// Estimated GPS accuracy in meters.
+  final locationAccuracy = 3.0.obs;
+
+  /// Metric distance from the user's current location to the Colosseum center in meters.
+  double? get distanceToColosseumMeters {
+    final user = userLocation.value;
+    if (user == null) return null;
+    return GpsLocationService.calculateDistanceToCenter(
+      user.latitude,
+      user.longitude,
+    );
+  }
+
+  /// Whether the user is currently located inside the 600m Colosseum zone.
+  bool get isUserInZone {
+    final d = distanceToColosseumMeters;
+    if (d == null) return false;
+    return d <= zoneBoundaryRadiusMeters;
+  }
+
+  HomeController({
+    ITourRepository? tourRepository,
+    GpsLocationService? gpsLocationService,
+    CompassService? compassService,
+  })  : tourRepository = tourRepository ??
             (Get.isRegistered<ITourRepository>()
                 ? Get.find<ITourRepository>()
-                : TourRepositoryImpl());
+                : TourRepositoryImpl()),
+        gpsLocationService = gpsLocationService ?? GpsLocationService(),
+        compassService = compassService ?? CompassService();
 
   @override
   void onInit() {
@@ -50,6 +95,7 @@ class HomeController extends GetxController {
     mapController = MapController();
     _initLandmarkMarkers();
     _initLandmarkOverlays();
+    _initLocationTracking();
   }
 
   void _initLandmarkMarkers() {
@@ -153,8 +199,52 @@ class HomeController extends GetxController {
         : MapViewType.general;
   }
 
+  void _initLocationTracking() {
+    try {
+      _compassSubscription = compassService.orientationStream.listen((state) {
+        if (state.headingDegrees != null) {
+          userHeading.value = state.headingDegrees;
+        }
+      });
+      compassService.startListening();
+    } catch (_) {}
+
+    try {
+      Geolocator.isLocationServiceEnabled().then((enabled) {
+        if (enabled) {
+          gpsLocationService.checkAndRequestPermissions().then((granted) {
+            if (granted) {
+              _positionSubscription = Geolocator.getPositionStream(
+                locationSettings: const LocationSettings(
+                  accuracy: LocationAccuracy.bestForNavigation,
+                  distanceFilter: 2,
+                ),
+              ).listen(
+                (pos) {
+                  userLocation.value = LatLng(pos.latitude, pos.longitude);
+                  locationAccuracy.value = pos.accuracy;
+                },
+                onError: (_) {},
+              );
+            }
+          }).catchError((_) {});
+        }
+      }).catchError((_) {});
+    } catch (_) {}
+  }
+
+  /// Sets or updates the user's geographic location (for live tracking or unit testing).
+  void setUserLocation(LatLng? location, {double? heading, double? accuracy}) {
+    userLocation.value = location;
+    if (heading != null) userHeading.value = heading;
+    if (accuracy != null) locationAccuracy.value = accuracy;
+  }
+
   @override
   void onClose() {
+    _positionSubscription?.cancel();
+    _compassSubscription?.cancel();
+    compassService.stopListening();
     mapController.dispose();
     super.onClose();
   }

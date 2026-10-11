@@ -6,9 +6,11 @@ import 'package:get/get.dart';
 
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/theme_extensions.dart';
+import '../../../core/utils/contain_circle_camera_constraint.dart';
 import '../../../data/models/map_view_type.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/landmark_markers_layer.dart';
+import '../widgets/user_location_map_marker.dart';
 
 class AllPointsMapView extends GetView<HomeController> {
   const AllPointsMapView({super.key});
@@ -46,6 +48,10 @@ class AllPointsMapView extends GetView<HomeController> {
                     initialZoom: HomeController.defaultZoom,
                     minZoom: 13.0,
                     maxZoom: 18.5,
+                    cameraConstraint: const ContainCircleCameraConstraint(
+                      circleCenter: HomeController.colosseumCoordinates,
+                      circleRadiusMeters: HomeController.zoneBoundaryRadiusMeters,
+                    ),
                     onPositionChanged: controller.onPositionChanged,
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all,
@@ -67,7 +73,34 @@ class AllPointsMapView extends GetView<HomeController> {
                       );
                     }),
 
-                    // Layer 2: Classic Location Pins + Labels for Roman Monuments (All 5 Locations)
+                    // Layer 2: 600-meter boundary circle centered on Colosseum
+                    // Greenish when user is in the circle, reddish otherwise
+                    Obx(() {
+                      final inZone = controller.isUserInZone;
+                      final circleColor = inZone
+                          ? const Color(0xFF2E7D32).withValues(alpha: 0.12)
+                          : colors.primary.withValues(alpha: 0.12);
+                      final borderColor = inZone
+                          ? const Color(0xFF2E7D32).withValues(alpha: 0.75)
+                          : colors.primary.withValues(alpha: 0.75);
+
+                      return CircleLayer(
+                        key: const Key('colosseum_boundary_circle_layer'),
+                        circles: [
+                          CircleMarker(
+                            key: const Key('colosseum_boundary_circle'),
+                            point: HomeController.colosseumCoordinates,
+                            radius: HomeController.zoneBoundaryRadiusMeters,
+                            useRadiusInMeter: true,
+                            color: circleColor,
+                            borderColor: borderColor,
+                            borderStrokeWidth: 2.0,
+                          ),
+                        ],
+                      );
+                    }),
+
+                    // Layer 3: Classic Location Pins + Labels for Roman Monuments (All 5 Locations)
                     Obx(() {
                       if (!controller.isLandmarksVisible.value) {
                         return const SizedBox.shrink();
@@ -79,8 +112,84 @@ class AllPointsMapView extends GetView<HomeController> {
                         onLandmarkTap: controller.selectLandmark,
                       );
                     }),
+
+                    // Layer 4: Live User Location Marker (anchored at real-world coordinates)
+                    Obx(() {
+                      final user = controller.userLocation.value;
+                      if (user == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return MarkerLayer(
+                        key: const Key('user_location_layer'),
+                        markers: [
+                          Marker(
+                            key: const Key('user_location_marker'),
+                            point: user,
+                            width: 44.0,
+                            height: 44.0,
+                            alignment: Alignment.center,
+                            child: UserLocationMapMarker(
+                              headingDegrees: controller.userHeading.value,
+                              puckColor: const Color(0xFF00A6FF),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
                   ],
                 ),
+              ),
+
+              // Top Warning Overlay: "you are not in the zone" banner when outside the 600m circle
+              Positioned(
+                top: 56,
+                left: 12,
+                right: 12,
+                child: Obx(() {
+                  if (controller.isUserInZone) {
+                    return const SizedBox.shrink();
+                  }
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: Material(
+                      color: colors.card,
+                      borderRadius: AppRadius.borderMd,
+                      elevation: 2,
+                      child: Container(
+                        key: const Key('out_of_zone_banner'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14.0,
+                          vertical: 8.0,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: AppRadius.borderMd,
+                          border: Border.all(
+                            color: colors.destructive,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 16,
+                              color: colors.destructive,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'you are not in the zone',
+                              style: textTheme.labelMedium?.copyWith(
+                                color: colors.destructive,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
               ),
 
               // Top Controls Overlay (Map View Toggle + Recenter on Colosseum)

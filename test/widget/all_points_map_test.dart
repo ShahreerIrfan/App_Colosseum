@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:colosseum_client/app/core/theme/app_colors.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
 import 'package:colosseum_client/app/modules/home/controllers/home_controller.dart';
 import 'package:colosseum_client/app/modules/home/views/allPointsMap.dart';
@@ -39,9 +41,10 @@ void main() {
       );
       await tester.pump();
 
-      // Verify FlutterMap is rendered with TileLayer and LandmarkMarkersLayer
+      // Verify FlutterMap is rendered with TileLayer, CircleLayer, and LandmarkMarkersLayer
       expect(find.byType(FlutterMap), findsOneWidget);
       expect(find.byType(TileLayer), findsOneWidget);
+      expect(find.byType(CircleLayer), findsOneWidget);
       expect(find.byType(LandmarkMarkersLayer), findsOneWidget);
 
       // Verify large image overlays were removed from the map
@@ -158,6 +161,69 @@ void main() {
       expect(find.text('Floor 1'), findsOneWidget);
       expect(find.text('Floor 2'), findsOneWidget);
       expect(find.text('Floor 3'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Displays "you are not in the zone" banner and reddish circle when user is outside zone',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1000, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final controller = Get.put(HomeController());
+      // Set location 700m away from Colosseum (outside 600m zone)
+      controller.setUserLocation(const LatLng(41.896510, 12.492231));
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const AllPointsMapView(),
+        ),
+      );
+      await tester.pump();
+
+      // Verify "you are not in the zone" text is displayed at the top
+      expect(find.text('you are not in the zone'), findsOneWidget);
+      expect(find.byKey(const Key('out_of_zone_banner')), findsOneWidget);
+
+      // Verify user location marker is rendered on the map
+      expect(find.byKey(const Key('user_location_marker')), findsOneWidget);
+
+      // Verify the circle is reddish (primary color theme)
+      final circleLayer = tester.widget<CircleLayer>(find.byType(CircleLayer));
+      expect(circleLayer.circles.first.color, equals(AppTheme.lightTheme.extension<AppColors>()!.primary.withValues(alpha: 0.12)));
+    },
+  );
+
+  testWidgets(
+    'Hides warning banner, renders greenish circle, and displays user location puck when user is in zone',
+    (WidgetTester tester) async {
+      final controller = Get.put(HomeController());
+      // Set location at Arch of Constantine (~139m from Colosseum, well within 600m)
+      controller.setUserLocation(const LatLng(41.889762, 12.490667));
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const AllPointsMapView(),
+        ),
+      );
+      await tester.pump();
+
+      // Verify "you are not in the zone" text is NOT present
+      expect(find.text('you are not in the zone'), findsNothing);
+      expect(find.byKey(const Key('out_of_zone_banner')), findsNothing);
+
+      // Verify user location marker is rendered
+      expect(find.byKey(const Key('user_location_marker')), findsOneWidget);
+
+      // Verify the circle is greenish (Roman Laurel Green)
+      final circleLayer = tester.widget<CircleLayer>(find.byType(CircleLayer));
+      expect(circleLayer.circles.first.color, equals(const Color(0xFF2E7D32).withValues(alpha: 0.12)));
     },
   );
 }
