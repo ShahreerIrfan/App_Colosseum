@@ -7,6 +7,7 @@ import '../modules/floor_map/views/floor_map_view.dart';
 import '../modules/floors/bindings/floors_binding.dart';
 import '../modules/floors/views/floors_view.dart';
 import '../modules/home/bindings/home_binding.dart';
+import '../modules/home/views/allPointsMap.dart';
 import '../modules/home/views/home_view.dart';
 import '../modules/language/bindings/language_binding.dart';
 import '../modules/language/views/language_view.dart';
@@ -34,6 +35,11 @@ class AppPages {
     GetPage(
       name: _Paths.home,
       page: () => const HomeView(),
+      binding: HomeBinding(),
+    ),
+    GetPage(
+      name: _Paths.allPointsMap,
+      page: () => const AllPointsMapView(),
       binding: HomeBinding(),
     ),
     GetPage(

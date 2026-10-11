@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
@@ -56,11 +56,19 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
-    // 6. Home/Main screen with map is now visible
-    expect(find.byType(FlutterMap), findsOneWidget);
-    expect(find.text('Colosseum'), findsOneWidget); // Recenter button label (marker pointer was replaced by clickable overlay)
+    // 6. Home screen with 'next' button is now visible
+    expect(find.byKey(const Key('home_next_button')), findsOneWidget);
+    expect(find.text('next'), findsOneWidget);
 
-    // 7. Verify previous onboarding screens are not on the stack
+    // 7. Tap 'next' to proceed to AllPointsMap
+    await tester.tap(find.byKey(const Key('home_next_button')));
+    await tester.pumpAndSettle();
+
+    // 8. AllPointsMap screen with map is now visible
+    expect(find.byKey(const Key('home_recenter_button')), findsOneWidget);
+    expect(find.text('Colosseum'), findsWidgets); // Recenter button + Landmark marker label
+
+    // 9. Verify previous onboarding screens are not on the stack
     expect(find.text('Choose your language'), findsNothing);
     expect(find.text('AUDIO GUIDE'), findsNothing);
   });

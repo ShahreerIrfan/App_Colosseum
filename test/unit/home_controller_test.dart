@@ -66,6 +66,28 @@ void main() {
       expect(controller.selectedMapView.value, MapViewType.satellite);
     });
 
+    test('initializes with 5 landmark markers and colosseum selected by default', () {
+      expect(controller.landmarkMarkers.length, 5);
+      expect(controller.selectedLandmarkId.value, 'colosseum');
+    });
+
+    test('selectLandmark updates selectedLandmarkId correctly', () {
+      controller.selectLandmark('arch_of_constantine');
+      expect(controller.selectedLandmarkId.value, 'arch_of_constantine');
+
+      controller.selectLandmark('ludus_magnus');
+      expect(controller.selectedLandmarkId.value, 'ludus_magnus');
+    });
+
+    test('updateLandmarkMarker updates marker in list', () {
+      final colosseum = controller.landmarkMarkers.firstWhere((m) => m.id == 'colosseum');
+      final updated = colosseum.copyWith(name: 'Colosseum Amphitheatre');
+      controller.updateLandmarkMarker(updated);
+
+      final found = controller.landmarkMarkers.firstWhere((m) => m.id == 'colosseum');
+      expect(found.name, 'Colosseum Amphitheatre');
+    });
+
     test('updateLandmarkOverlay updates specific overlay in list', () {
       final colosseum = controller.landmarkOverlays.firstWhere((o) => o.id == 'colosseum');
       final updated = colosseum.copyWith(opacity: 0.7);

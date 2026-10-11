@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 
 import '../../../core/theme/theme_extensions.dart';
 import '../../../core/utils/geodesic_utils.dart';
-import '../../../data/models/floor_definition.dart';
 import '../../../data/models/map_view_type.dart';
 import '../../../data/models/tour_navigation_state.dart';
 import '../controllers/floor_map_controller.dart';

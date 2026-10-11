@@ -2,9 +2,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../data/models/landmark_marker_model.dart';
 import '../../../data/models/landmark_overlay_model.dart';
 import '../../../data/models/map_view_type.dart';
 import '../../../data/providers/colosseum_landmark_overlays.dart';
+import '../../../data/providers/landmark_markers_provider.dart';
 import '../../../data/repositories/i_tour_repository.dart';
 import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../routes/app_pages.dart';
@@ -18,10 +20,16 @@ class HomeController extends GetxController {
 
   final currentZoom = defaultZoom.obs;
 
-  /// Single source of truth for the 5 calibrated landmark overlays.
+  /// Single source of truth for the 5 classic landmark pin markers.
+  final landmarkMarkers = <LandmarkMarkerModel>[].obs;
+
+  /// Currently selected landmark id (defaults to 'colosseum').
+  final selectedLandmarkId = RxnString('colosseum');
+
+  /// Single source of truth for the 5 calibrated landmark overlays (legacy / offline sync).
   final landmarkOverlays = <MapLandmarkOverlay>[].obs;
 
-  /// Global toggle for landmark ground overlay rendering.
+  /// Global toggle for landmark marker rendering.
   final isLandmarksVisible = true.obs;
 
   /// Debug mode toggle for developer alignment tools and visual bounds.
@@ -40,7 +48,12 @@ class HomeController extends GetxController {
   void onInit() {
     super.onInit();
     mapController = MapController();
+    _initLandmarkMarkers();
     _initLandmarkOverlays();
+  }
+
+  void _initLandmarkMarkers() {
+    landmarkMarkers.assignAll(LandmarkMarkersProvider.all);
   }
 
   void _initLandmarkOverlays() {
@@ -77,11 +90,32 @@ class HomeController extends GetxController {
     );
   }
 
+  /// Selects a landmark marker and activates its highlighted state.
+  /// If Colosseum is tapped while already selected, navigates directly to FloorsView.
+  void selectLandmark(String landmarkId) {
+    if (selectedLandmarkId.value == landmarkId) {
+      if (landmarkId == 'colosseum') {
+        onColosseumTapped();
+      }
+    } else {
+      selectedLandmarkId.value = landmarkId;
+    }
+  }
+
+  /// Updates properties of a specific landmark marker in the reactive list.
+  void updateLandmarkMarker(LandmarkMarkerModel updated) {
+    final index = landmarkMarkers.indexWhere((m) => m.id == updated.id);
+    if (index != -1) {
+      landmarkMarkers[index] = updated;
+    }
+  }
+
   void onPositionChanged(MapCamera camera, bool hasGesture) {
     currentZoom.value = camera.zoom;
   }
 
   void centerOnColosseum() {
+    selectedLandmarkId.value = 'colosseum';
     try {
       mapController.move(colosseumCoordinates, defaultZoom);
     } catch (_) {

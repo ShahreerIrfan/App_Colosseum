@@ -9,6 +9,7 @@ abstract class Routes {
   static const home = _Paths.home;
   static const floors = _Paths.floors;
   static const floorMap = _Paths.floorMap;
+  static const allPointsMap = _Paths.allPointsMap;
 
   // Compatibility aliases
   static const SPLASH = _Paths.splash;
@@ -16,6 +17,7 @@ abstract class Routes {
   static const HOME = _Paths.home;
   static const FLOORS = _Paths.floors;
   static const FLOOR_MAP = _Paths.floorMap;
+  static const ALL_POINTS_MAP = _Paths.allPointsMap;
 }
 
 abstract class _Paths {
@@ -25,5 +27,6 @@ abstract class _Paths {
   static const home = '/home';
   static const floors = '/floors';
   static const floorMap = '/floor-map';
+  static const allPointsMap = '/all-points-map';
 }
 
