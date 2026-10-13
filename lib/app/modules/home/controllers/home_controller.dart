@@ -15,6 +15,7 @@ import '../../../data/repositories/i_tour_repository.dart';
 import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../data/services/compass_service.dart';
 import '../../../data/services/gps_location_service.dart';
+import '../../../data/services/pedestrian_street_router.dart';
 import '../../../routes/app_pages.dart';
 import '../views/allPointsMap.dart';
 
@@ -89,40 +90,14 @@ class HomeController extends GetxController {
     }).toList();
   }
 
-  /// Dynamically calculated planned itinerary route points starting from user location.
+  /// Dynamically calculated planned itinerary route points following real streets and roads.
   List<LatLng> get currentTourRoutePoints {
     if (!isTourActive.value) return const [];
     final start = userLocation.value ?? defaultTourStartLocation;
     final remaining = remainingTourLandmarks;
     if (remaining.isEmpty) return const [];
 
-    final route = <LatLng>[start];
-    final unvisited = List<LandmarkMarkerModel>.from(remaining);
-    var current = start;
-
-    while (unvisited.isNotEmpty) {
-      unvisited.sort((a, b) {
-        final distA = Geolocator.distanceBetween(
-          current.latitude,
-          current.longitude,
-          a.latitude,
-          a.longitude,
-        );
-        final distB = Geolocator.distanceBetween(
-          current.latitude,
-          current.longitude,
-          b.latitude,
-          b.longitude,
-        );
-        return distA.compareTo(distB);
-      });
-
-      final next = unvisited.removeAt(0);
-      route.add(next.coordinates);
-      current = next.coordinates;
-    }
-
-    return route;
+    return PedestrianStreetRouter.instance.routeItinerary(start, remaining);
   }
 
   /// Starts the interactive tour itinerary.

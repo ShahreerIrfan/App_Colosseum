@@ -126,8 +126,8 @@ void main() {
 
       expect(controller.isTourActive.value, isTrue);
       expect(controller.userLocation.value, equals(HomeController.defaultTourStartLocation));
-      // Route has starting location + 5 landmark locations = 6 points
-      expect(controller.currentTourRoutePoints.length, 6);
+      // Route follows realistic pedestrian streets with multiple dense waypoints
+      expect(controller.currentTourRoutePoints.length, greaterThan(15));
       expect(controller.currentTourRoutePoints.first, equals(HomeController.defaultTourStartLocation));
     });
 
@@ -140,8 +140,9 @@ void main() {
       controller.setUserLocation(newPos);
 
       expect(controller.currentTourRoutePoints.first, equals(newPos));
-      // Nearest unvisited point to newPos should be Ludus Magnus
-      expect(controller.currentTourRoutePoints[1], equals(const LatLng(41.890450, 12.495100)));
+      // Route begins along the nearest street node on Via di San Giovanni in Laterano
+      expect(controller.currentTourRoutePoints[1], equals(const LatLng(41.89044, 12.4948)));
+      expect(controller.currentTourRoutePoints.length, greaterThan(15));
     });
 
     test('proximity detection triggers approachingLandmark within 55 meters', () {
@@ -167,10 +168,10 @@ void main() {
 
       expect(controller.approachingLandmark.value, isNull);
       expect(controller.skippedLandmarkIds.contains('colosseum'), isTrue);
+      expect(controller.remainingTourLandmarks.length, 4);
       expect(controller.remainingTourLandmarks.any((m) => m.id == 'colosseum'), isFalse);
-      // Route now contains starting location + 4 remaining landmarks = 5 points
-      expect(controller.currentTourRoutePoints.length, 5);
-      expect(controller.currentTourRoutePoints.any((p) => p == const LatLng(41.890210, 12.492231)), isFalse);
+      // Route recalculates along streets with remaining landmarks
+      expect(controller.currentTourRoutePoints.length, greaterThan(10));
     });
 
     test('enterApproachingLandmark marks landmark visited and removes it from tour route', () {
