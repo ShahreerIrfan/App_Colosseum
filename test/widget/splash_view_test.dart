@@ -28,8 +28,8 @@ void main() {
 
     expect(find.text('COLOSSEUM'), findsOneWidget);
     expect(find.text('AUDIO GUIDE'), findsOneWidget);
-    expect(find.text('Explore 2,000 years of history'), findsOneWidget);
-    expect(find.byIcon(Icons.account_balance_rounded), findsOneWidget);
+    expect(find.text('YOUR JOURNEY THROUGH HISTORY'), findsOneWidget);
+    expect(find.byIcon(Icons.stadium_rounded), findsOneWidget);
 
     controller.onClose();
   });

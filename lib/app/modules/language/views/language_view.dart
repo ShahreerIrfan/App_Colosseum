@@ -14,74 +14,226 @@ class LanguageView extends GetView<LanguageController> {
     final colors = context.colors;
     final textTheme = context.textTheme;
 
+    final availableLanguages =
+        controller.languages.where((l) => l.isAvailable).toList();
+    final releasingSoonLanguages =
+        controller.languages.where((l) => !l.isAvailable).toList();
+
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              Text(
-                'Choose your language',
-                style: textTheme.headlineSmall?.copyWith(
-                  color: colors.foreground,
-                  fontWeight: FontWeight.w700,
-                ),
+        child: Column(
+          children: [
+            // Custom Top Header matching client design
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24.0, 12.0, 24.0, 10.0),
+              child: Column(
+                children: [
+                  // Circular Emblem with translation icon
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: colors.card,
+                      border: Border.all(
+                        color: colors.primary.withValues(alpha: 0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.primary.withValues(alpha: 0.12),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.translate_rounded,
+                        size: 32,
+                        color: colors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Select Language',
+                    style: textTheme.headlineSmall?.copyWith(
+                      color: colors.foreground,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 23,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'English audio guide is available now.\nAdditional languages will be released soon.',
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.mutedForeground,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Subtle divider
+                  Container(
+                    width: 48,
+                    height: 1,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          colors.border.withValues(alpha: 0.0),
+                          colors.primary.withValues(alpha: 0.4),
+                          colors.border.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Select the language you would like to use during your Colosseum experience.',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: Obx(() {
-                  final selectedCode = controller.selectedLanguageCode.value;
-                  return ListView.separated(
-                    itemCount: controller.languages.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final option = controller.languages[index];
-                      final isSelected = selectedCode == option.code;
+            ),
 
+            // Language Lists
+            Expanded(
+              child: Obx(() {
+                final selectedCode = controller.selectedLanguageCode.value;
+
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 12.0),
+                  children: [
+                    // Section 1: AVAILABLE NOW
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4.0, bottom: 8.0, top: 4.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: colors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'AVAILABLE NOW',
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ...availableLanguages.map((option) {
+                      final isSelected = selectedCode == option.code;
                       return LanguageTile(
-                        languageName: option.name,
+                        title: option.name,
+                        nativeName: option.nativeName,
+                        subtitle: 'Full Audio Guide',
+                        flag: option.flag,
                         isSelected: isSelected,
+                        isAvailable: true,
                         onTap: () => controller.selectLanguage(option.code),
                       );
-                    },
-                  );
-                }),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: controller.continueToHome,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colors.primary,
-                    foregroundColor: colors.primaryForeground,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: AppRadius.borderMd,
+                    }),
+
+                    const SizedBox(height: 18),
+
+                    // Section 2: RELEASING SOON
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.schedule_rounded,
+                            size: 14,
+                            color: colors.mutedForeground.withValues(alpha: 0.75),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'RELEASING SOON',
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colors.mutedForeground.withValues(alpha: 0.75),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ...releasingSoonLanguages.map((option) {
+                      final isSelected = selectedCode == option.code;
+                      return LanguageTile(
+                        title: option.name,
+                        nativeName: option.nativeName,
+                        subtitle: 'Releasing Soon',
+                        flag: option.flag,
+                        isSelected: isSelected,
+                        isAvailable: false,
+                        onTap: () => controller.selectLanguage(option.code),
+                      );
+                    }),
+                  ],
+                );
+              }),
+            ),
+
+            // Bottom CTA Button & Footnote
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 8.0, 20.0, 16.0),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: Obx(() {
+                      final selectedLang = controller.selectedLanguage;
+                      final buttonText = selectedLang.code == 'en'
+                          ? 'Continue with English'
+                          : 'Continue with ${selectedLang.name}';
+
+                      return ElevatedButton(
+                        key: const Key('language_continue_button'),
+                        onPressed: controller.continueToHome,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colors.primary,
+                          foregroundColor: colors.primaryForeground,
+                          elevation: 0,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppRadius.borderLg,
+                          ),
+                        ),
+                        child: Text(
+                          buttonText,
+                          style: textTheme.titleMedium?.copyWith(
+                            color: colors.primaryForeground,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            fontSize: 15,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'You can change your language anytime in Settings',
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.mutedForeground.withValues(alpha: 0.75),
+                      fontSize: 11,
                     ),
                   ),
-                  child: Text(
-                    'Continue',
-                    style: textTheme.titleMedium?.copyWith(
-                      color: colors.primaryForeground,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

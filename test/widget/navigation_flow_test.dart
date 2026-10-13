@@ -44,16 +44,16 @@ void main() {
     await tester.pumpAndSettle();
 
     // 3. Language selection screen is now visible
-    expect(find.text('Choose your language'), findsOneWidget);
-    expect(find.text('English'), findsOneWidget);
+    expect(find.text('Select Language'), findsOneWidget);
+    expect(find.text('English'), findsWidgets);
     expect(find.text('Italiano'), findsOneWidget);
 
     // 4. Tap 'Italiano'
     await tester.tap(find.text('Italiano'));
     await tester.pumpAndSettle();
 
-    // 5. Tap 'Continue'
-    await tester.tap(find.text('Continue'));
+    // 5. Tap Continue button
+    await tester.tap(find.byKey(const Key('language_continue_button')));
     await tester.pumpAndSettle();
 
     // 6. Home screen with 'next' button is now visible
@@ -69,7 +69,7 @@ void main() {
     expect(find.text('Colosseum'), findsWidgets); // Recenter button + Landmark marker label
 
     // 9. Verify previous onboarding screens are not on the stack
-    expect(find.text('Choose your language'), findsNothing);
+    expect(find.text('Select Language'), findsNothing);
     expect(find.text('AUDIO GUIDE'), findsNothing);
   });
 }

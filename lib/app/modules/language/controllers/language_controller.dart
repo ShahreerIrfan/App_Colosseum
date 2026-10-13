@@ -5,10 +5,19 @@ import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../routes/app_pages.dart';
 
 class LanguageOption {
-  const LanguageOption({required this.code, required this.name});
+  const LanguageOption({
+    required this.code,
+    required this.name,
+    String? nativeName,
+    this.flag = '🌐',
+    this.isAvailable = false,
+  }) : nativeName = nativeName ?? name;
 
   final String code;
   final String name;
+  final String nativeName;
+  final String flag;
+  final bool isAvailable;
 }
 
 class LanguageController extends GetxController {
@@ -21,15 +30,67 @@ class LanguageController extends GetxController {
                 : TourRepositoryImpl());
 
   final List<LanguageOption> languages = const [
-    LanguageOption(code: 'en', name: 'English'),
-    LanguageOption(code: 'it', name: 'Italiano'),
-    LanguageOption(code: 'fr', name: 'Français'),
-    LanguageOption(code: 'de', name: 'Deutsch'),
-    LanguageOption(code: 'es', name: 'Español'),
-    LanguageOption(code: 'pt', name: 'Português'),
-    LanguageOption(code: 'ja', name: '日本語'),
-    LanguageOption(code: 'ko', name: '한국어'),
+    LanguageOption(
+      code: 'en',
+      name: 'English',
+      nativeName: 'English',
+      flag: '🇬🇧',
+      isAvailable: true,
+    ),
+    LanguageOption(
+      code: 'it',
+      name: 'Italian',
+      nativeName: 'Italiano',
+      flag: '🇮🇹',
+      isAvailable: false,
+    ),
+    LanguageOption(
+      code: 'es',
+      name: 'Spanish',
+      nativeName: 'Español',
+      flag: '🇪🇸',
+      isAvailable: false,
+    ),
+    LanguageOption(
+      code: 'fr',
+      name: 'French',
+      nativeName: 'Français',
+      flag: '🇫🇷',
+      isAvailable: false,
+    ),
+    LanguageOption(
+      code: 'de',
+      name: 'German',
+      nativeName: 'Deutsch',
+      flag: '🇩🇪',
+      isAvailable: false,
+    ),
+    LanguageOption(
+      code: 'pt',
+      name: 'Portuguese',
+      nativeName: 'Português',
+      flag: '🇵🇹',
+      isAvailable: false,
+    ),
+    LanguageOption(
+      code: 'ja',
+      name: 'Japanese',
+      nativeName: '日本語',
+      flag: '🇯🇵',
+      isAvailable: false,
+    ),
+    LanguageOption(
+      code: 'ko',
+      name: 'Korean',
+      nativeName: '한국어',
+      flag: '🇰🇷',
+      isAvailable: false,
+    ),
   ];
+
+  LanguageOption get selectedLanguage =>
+      languages.firstWhere((l) => l.code == selectedLanguageCode.value,
+          orElse: () => languages.first);
 
   final selectedLanguageCode = 'en'.obs;
   final isSyncing = false.obs;
