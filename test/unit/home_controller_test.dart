@@ -141,7 +141,7 @@ void main() {
 
       expect(controller.currentTourRoutePoints.first, equals(newPos));
       // Route begins along the nearest street node on Via di San Giovanni in Laterano
-      expect(controller.currentTourRoutePoints[1], equals(const LatLng(41.89044, 12.4948)));
+      expect(controller.currentTourRoutePoints[1], equals(const LatLng(41.8904, 12.495)));
       expect(controller.currentTourRoutePoints.length, greaterThan(15));
     });
 

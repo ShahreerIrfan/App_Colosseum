@@ -6,10 +6,11 @@ import '../models/landmark_marker_model.dart';
 
 /// Offline-first pedestrian routing service for the Colosseum archaeological zone.
 ///
-/// Instead of connecting landmarks with straight lines across buildings, this service
-/// routes pedestrians along real roads, streets, sidewalks, and historic pathways
-/// (Via Claudia, Via Celio Vibenna, Piazza del Colosseo, Via di San Giovanni in Laterano,
-/// Clivo di Venere Felice, Via Sacra, Via dei Fori Imperiali, etc.).
+/// Instead of connecting landmarks with straight lines across buildings or cutting
+/// across grass fields, this service routes pedestrians with high accuracy along
+/// real roads, streets, sidewalks, and historic pathways (Via Sacra, Via Celio Vibenna,
+/// Piazza del Colosseo promenade, Via di San Gregorio, Via di San Giovanni in Laterano,
+/// Via Claudia, Clivo di Venere Felice, Via dei Fori Imperiali).
 class PedestrianStreetRouter {
   PedestrianStreetRouter._() {
     _initializeGraph();
@@ -17,133 +18,224 @@ class PedestrianStreetRouter {
 
   static final PedestrianStreetRouter instance = PedestrianStreetRouter._();
 
-  /// All mapped pedestrian and street segments around the Colosseum archaeological zone.
+  /// Mapped high-precision pedestrian and street segments around the Colosseum archaeological zone.
   static const List<List<LatLng>> _streetSegments = [
-    // 1. Via Claudia (Parco Celio from south to Piazza del Colosseo junction)
+    // Via Sacra (Arch of Constantine to Roman Forum)
     [
-      LatLng(41.887200, 12.493800),
-      LatLng(41.887650, 12.493350),
-      LatLng(41.888100, 12.492900),
-      LatLng(41.888500, 12.492500), // Default start anchor (Parco Celio)
-      LatLng(41.888800, 12.492250),
-      LatLng(41.889150, 12.492000),
-      LatLng(41.889450, 12.491820),
-      LatLng(41.889600, 12.491750), // Junction: Via Claudia / Via Celio Vibenna / Piazza
+      LatLng(41.890141, 12.490481),
+      LatLng(41.890205, 12.490257),
+      LatLng(41.890206, 12.490251),
+      LatLng(41.890303, 12.489910),
+      LatLng(41.890441, 12.489426),
+      LatLng(41.890497, 12.489230),
+      LatLng(41.890551, 12.489022),
+      LatLng(41.890572, 12.488940),
+      LatLng(41.890628, 12.488718),
+      LatLng(41.890654, 12.488645),
+      LatLng(41.890661, 12.488622),
+      LatLng(41.890683, 12.488546),
+      LatLng(41.890687, 12.488535),
+      LatLng(41.890691, 12.488519),
+      LatLng(41.890761, 12.488572),
+      LatLng(41.890814, 12.488584),
+      LatLng(41.890882, 12.488577),
+      LatLng(41.890909, 12.488533),
+      LatLng(41.890953, 12.488459),
+      LatLng(41.890991, 12.488404),
+      LatLng(41.891025, 12.488373),
+      LatLng(41.891096, 12.488346),
+      LatLng(41.891112, 12.488334),
+      LatLng(41.891123, 12.488316),
+      LatLng(41.891151, 12.488248),
+      LatLng(41.891169, 12.488224),
+      LatLng(41.891185, 12.488209),
+      LatLng(41.891208, 12.488190),
+      LatLng(41.891224, 12.488170),
+      LatLng(41.891254, 12.488132),
+      LatLng(41.891297, 12.488079),
+      LatLng(41.891327, 12.488043),
+      LatLng(41.891361, 12.487998),
+      LatLng(41.891397, 12.487948),
+      LatLng(41.891419, 12.487908),
+      LatLng(41.891434, 12.487878),
+      LatLng(41.891453, 12.487844),
+      LatLng(41.891473, 12.487802),
+      LatLng(41.891495, 12.487748),
+      LatLng(41.891515, 12.487684),
+      LatLng(41.891585, 12.487512),
+      LatLng(41.891630, 12.487392),
+      LatLng(41.891641, 12.487361),
+      LatLng(41.891654, 12.487329),
+      LatLng(41.891717, 12.487121),
+      LatLng(41.891797, 12.486856),
+      LatLng(41.891836, 12.486756),
+      LatLng(41.891957, 12.486594),
+      LatLng(41.891988, 12.486532),
+      LatLng(41.892071, 12.486367),
+      LatLng(41.892088, 12.486331),
+      LatLng(41.892108, 12.486287),
+      LatLng(41.892298, 12.485906),
+      LatLng(41.892370, 12.485743),
+      LatLng(41.892606, 12.485214),
+      LatLng(41.892614, 12.485195),
     ],
 
-    // 2. Via Celio Vibenna (Via Claudia junction to Arch of Constantine)
+    // Via Celio Vibenna Curve
     [
-      LatLng(41.889600, 12.491750), // Junction
-      LatLng(41.889650, 12.491400),
-      LatLng(41.889700, 12.491000),
-      LatLng(41.889762, 12.490667), // Arch of Constantine
+      LatLng(41.889299, 12.493247),
+      LatLng(41.889280, 12.493151),
+      LatLng(41.889261, 12.493045),
+      LatLng(41.889246, 12.492913),
+      LatLng(41.889241, 12.492781),
+      LatLng(41.889243, 12.492546),
+      LatLng(41.889258, 12.491908),
+      LatLng(41.889258, 12.491832),
+      LatLng(41.889253, 12.491754),
+      LatLng(41.889246, 12.491684),
+      LatLng(41.889237, 12.491612),
+      LatLng(41.889227, 12.491541),
+      LatLng(41.889214, 12.491469),
+      LatLng(41.889201, 12.491411),
+      LatLng(41.889180, 12.491326),
+      LatLng(41.889158, 12.491258),
+      LatLng(41.889135, 12.491185),
+      LatLng(41.889111, 12.491121),
+      LatLng(41.889080, 12.491046),
+      LatLng(41.889047, 12.490970),
+      LatLng(41.889007, 12.490897),
+      LatLng(41.888960, 12.490825),
+      LatLng(41.888913, 12.490756),
+      LatLng(41.888704, 12.490476),
+      LatLng(41.888670, 12.490434),
     ],
 
-    // 3. Piazza del Colosseo South-East Curve (Via Claudia junction to East junction)
+    // Via di San Gregorio & Promenade to Arch
     [
-      LatLng(41.889600, 12.491750), // Junction
-      LatLng(41.889650, 12.492300),
-      LatLng(41.889750, 12.492800),
-      LatLng(41.889900, 12.493250),
-      LatLng(41.890120, 12.493650),
-      LatLng(41.890400, 12.494100), // East junction (Via di S. Giovanni in Laterano)
+      LatLng(41.888670, 12.490434),
+      LatLng(41.888747, 12.490365),
+      LatLng(41.889000, 12.490430),
+      LatLng(41.889300, 12.490500),
+      LatLng(41.889519, 12.490567),
+      LatLng(41.889656, 12.490395),
+      LatLng(41.889753, 12.490363),
+      LatLng(41.889762, 12.490667),
     ],
 
-    // 4. Via di San Giovanni in Laterano (to Ludus Magnus)
+    // Arch of Constantine to Colosseum West Promenade
     [
-      LatLng(41.890400, 12.494100), // East junction
-      LatLng(41.890420, 12.494500),
-      LatLng(41.890440, 12.494800),
-      LatLng(41.890450, 12.495100), // Ludus Magnus
-      LatLng(41.890470, 12.495600),
+      LatLng(41.889762, 12.490667),
+      LatLng(41.889656, 12.490750),
+      LatLng(41.889705, 12.491021),
+      LatLng(41.889810, 12.491116),
+      LatLng(41.889867, 12.491208),
+      LatLng(41.890028, 12.491132),
+      LatLng(41.890183, 12.491101),
+      LatLng(41.890307, 12.491094),
+      LatLng(41.890431, 12.491109),
+      LatLng(41.890510, 12.491131),
+      LatLng(41.890648, 12.491204),
+      LatLng(41.890210, 12.492231),
     ],
 
-    // 5. Colosseum West Pedestrian Promenade (Arch of Constantine to West entrance & Metro)
+    // Colosseo Outer Pedestrian Ring
     [
-      LatLng(41.889762, 12.490667), // Arch of Constantine
-      LatLng(41.889950, 12.490900),
-      LatLng(41.890100, 12.491250),
-      LatLng(41.890210, 12.491600), // West Entrance Plaza
-      LatLng(41.890400, 12.491700),
-      LatLng(41.890700, 12.491900),
-      LatLng(41.891000, 12.492000),
-      LatLng(41.891150, 12.491950), // Metro Colosseo / Largo Agnesi
+      LatLng(41.889848, 12.493564),
+      LatLng(41.889991, 12.493636),
+      LatLng(41.890083, 12.493680),
+      LatLng(41.890132, 12.493703),
+      LatLng(41.890160, 12.493717),
+      LatLng(41.890307, 12.493741),
+      LatLng(41.890429, 12.493693),
+      LatLng(41.890501, 12.493629),
+      LatLng(41.890571, 12.493529),
+      LatLng(41.890738, 12.493200),
+      LatLng(41.890749, 12.493175),
+      LatLng(41.890846, 12.492954),
+      LatLng(41.890906, 12.492744),
+      LatLng(41.890942, 12.492520),
+      LatLng(41.890964, 12.492358),
+      LatLng(41.890971, 12.492242),
+      LatLng(41.890966, 12.492103),
+      LatLng(41.890944, 12.491915),
+      LatLng(41.890912, 12.491679),
+      LatLng(41.890885, 12.491499),
+      LatLng(41.890837, 12.491412),
+      LatLng(41.890763, 12.491309),
+      LatLng(41.890648, 12.491204),
+      LatLng(41.890594, 12.491173),
+      LatLng(41.890510, 12.491131),
+      LatLng(41.890431, 12.491109),
+      LatLng(41.890307, 12.491094),
+      LatLng(41.890183, 12.491101),
+      LatLng(41.890028, 12.491132),
+      LatLng(41.889867, 12.491208),
+      LatLng(41.889739, 12.491349),
+      LatLng(41.889599, 12.491572),
+      LatLng(41.889520, 12.491793),
+      LatLng(41.889472, 12.491962),
+      LatLng(41.889409, 12.491931),
     ],
 
-    // 6. Colosseum North-East Promenade (East junction to Metro Colosseo)
+    // Via di San Giovanni in Laterano to Ludus Magnus
     [
-      LatLng(41.890400, 12.494100), // East junction
-      LatLng(41.890650, 12.493700),
-      LatLng(41.890850, 12.493200),
-      LatLng(41.891050, 12.492600),
-      LatLng(41.891150, 12.491950), // Metro Colosseo
+      LatLng(41.890035, 12.494030),
+      LatLng(41.890147, 12.494228),
+      LatLng(41.890100, 12.494367),
+      LatLng(41.890250, 12.494700),
+      LatLng(41.890400, 12.495000),
+      LatLng(41.890450, 12.495100),
     ],
 
-    // 7. West Entrance Plaza to Colosseum Center Anchor
+    // Via Claudia (Parco Celio East to Piazza del Colosseo)
     [
-      LatLng(41.890210, 12.491600), // West entrance
-      LatLng(41.890210, 12.492231), // Colosseum Center Anchor
+      LatLng(41.887200, 12.494500),
+      LatLng(41.887800, 12.494300),
+      LatLng(41.888455, 12.494015),
+      LatLng(41.889072, 12.493715),
+      LatLng(41.889138, 12.493681),
+      LatLng(41.889299, 12.493247),
     ],
 
-    // 8. Clivo di Venere Felice (from Arch of Constantine / Promenade to Temple of Venus & Rome)
+    // Parco Celio Walkway Exit to Via Celio Vibenna
     [
-      LatLng(41.889762, 12.490667), // Arch of Constantine
-      LatLng(41.890150, 12.490550),
-      LatLng(41.890450, 12.490100),
-      LatLng(41.890750, 12.489350),
-      LatLng(41.890950, 12.488800),
-      LatLng(41.891100, 12.488300), // Temple of Venus and Rome
+      LatLng(41.888500, 12.492500),
+      LatLng(41.888800, 12.492500),
+      LatLng(41.889062, 12.492493),
+      LatLng(41.889169, 12.492597),
     ],
 
-    // 9. Via dei Fori Imperiali (from Metro Colosseo northwest)
+    // Clivo di Venere Felice Promenade
     [
-      LatLng(41.891150, 12.491950), // Metro Colosseo
+      LatLng(41.891123, 12.488316),
+      LatLng(41.891203, 12.490416),
+      LatLng(41.891369, 12.490520),
+      LatLng(41.891150, 12.491950),
+    ],
+
+    // Via dei Fori Imperiali
+    [
+      LatLng(41.891150, 12.491950),
+      LatLng(41.891412, 12.490395),
       LatLng(41.891500, 12.490900),
-      LatLng(41.891900, 12.489700),
-      LatLng(41.892300, 12.488400),
-      LatLng(41.892700, 12.487100),
+      LatLng(41.892260, 12.488908),
+      LatLng(41.892991, 12.487407),
+      LatLng(41.893470, 12.486677),
     ],
 
-    // 10. Connecting Via dei Fori Imperiali to Temple of Venus and Rome
+    // Arch of Constantine Plaza to Via Sacra Entrance
     [
-      LatLng(41.891500, 12.490900),
-      LatLng(41.891200, 12.489600),
-      LatLng(41.891100, 12.488300),
+      LatLng(41.889762, 12.490667),
+      LatLng(41.889930, 12.490377),
+      LatLng(41.890141, 12.490481),
     ],
 
-    // 11. Via Sacra (from Temple of Venus and Rome into Roman Forum)
+    // Colosseum Ring East to Via di San Giovanni in Laterano
     [
-      LatLng(41.891100, 12.488300), // Temple of Venus and Rome
-      LatLng(41.891250, 12.487800),
-      LatLng(41.891450, 12.487100), // Arch of Titus
-      LatLng(41.891750, 12.486400), // Along Basilica of Maxentius
-      LatLng(41.892100, 12.485850), // Temple of Antoninus and Faustina
-      LatLng(41.892460, 12.485320), // Roman Forum central plaza
+      LatLng(41.889848, 12.493564),
+      LatLng(41.889445, 12.493737),
+      LatLng(41.890035, 12.494030),
     ],
 
-    // 12. Rione Celio Streets (Via Celimontana & Via Capo d'Africa from Via Claudia to Ludus Magnus)
-    [
-      LatLng(41.888500, 12.492500), // Via Claudia
-      LatLng(41.888750, 12.493300), // Via Celimontana
-      LatLng(41.889200, 12.494000), // Via Capo d'Africa
-      LatLng(41.889700, 12.494600), // Via Capo d'Africa
-      LatLng(41.890100, 12.494900), // Via Capo d'Africa north
-      LatLng(41.890450, 12.495100), // Ludus Magnus
-    ],
-
-    // 13. Via Ostilia (connecting Via Celimontana to Piazza del Colosseo East)
-    [
-      LatLng(41.888750, 12.493300), // Via Celimontana
-      LatLng(41.889400, 12.493700), // Via Ostilia
-      LatLng(41.890400, 12.494100), // Piazza del Colosseo East
-    ],
-
-    // 14. Via di San Gregorio (South of Arch of Constantine)
-    [
-      LatLng(41.889762, 12.490667), // Arch of Constantine
-      LatLng(41.889100, 12.490400),
-      LatLng(41.888300, 12.490100),
-    ],
   ];
 
   final List<LatLng> _nodes = [];
@@ -175,6 +267,19 @@ class PedestrianStreetRouter {
           final dist = _calculateDistanceMeters(_nodes[u], _nodes[v]);
           _adjacency[u].add(_Edge(targetIndex: v, distance: dist));
           _adjacency[v].add(_Edge(targetIndex: u, distance: dist));
+        }
+      }
+    }
+
+    // Connect close intersection nodes and pedestrian crossings (< 12 meters)
+    for (var i = 0; i < _nodes.length; i++) {
+      for (var j = i + 1; j < _nodes.length; j++) {
+        final d = _calculateDistanceMeters(_nodes[i], _nodes[j]);
+        if (d < 12.0) {
+          if (!_adjacency[i].any((e) => e.targetIndex == j)) {
+            _adjacency[i].add(_Edge(targetIndex: j, distance: d));
+            _adjacency[j].add(_Edge(targetIndex: i, distance: d));
+          }
         }
       }
     }
@@ -277,13 +382,16 @@ class PedestrianStreetRouter {
     final streetPath = path.reversed.toList();
 
     // Assemble final route: start -> street path -> destination
-    final result = <LatLng>[start];
+    final result = <LatLng>[];
+    if (_calculateDistanceMeters(start, _nodes[startNodeIdx]) > 3.0) {
+      result.add(start);
+    }
     for (final pt in streetPath) {
       if (result.isEmpty || result.last != pt) {
         result.add(pt);
       }
     }
-    if (result.isEmpty || result.last != destination) {
+    if (_calculateDistanceMeters(result.last, destination) > 3.0) {
       result.add(destination);
     }
 
@@ -300,43 +408,31 @@ class PedestrianStreetRouter {
   ) {
     if (landmarks.isEmpty) return const [];
 
-    // Order remaining unvisited landmarks using nearest-neighbor street distance
+    final result = <LatLng>[];
     final unvisited = List<LandmarkMarkerModel>.from(landmarks);
-    final orderedLandmarks = <LandmarkMarkerModel>[];
-    var currentAnchor = userLocation;
+    var currentPos = userLocation;
 
     while (unvisited.isNotEmpty) {
+      // Sort unvisited landmarks by real walking street distance from currentPos
       unvisited.sort((a, b) {
-        final distA = walkingDistance(currentAnchor, a.coordinates);
-        final distB = walkingDistance(currentAnchor, b.coordinates);
+        final distA = walkingDistance(currentPos, a.coordinates);
+        final distB = walkingDistance(currentPos, b.coordinates);
         return distA.compareTo(distB);
       });
 
-      final next = unvisited.removeAt(0);
-      orderedLandmarks.add(next);
-      currentAnchor = next.coordinates;
-    }
+      final nextLandmark = unvisited.removeAt(0);
+      final leg = routeBetween(currentPos, nextLandmark.coordinates);
 
-    // Connect each leg along real pedestrian streets
-    final fullRoute = <LatLng>[];
-    var fromPoint = userLocation;
-
-    for (final landmark in orderedLandmarks) {
-      final leg = routeBetween(fromPoint, landmark.coordinates);
-      if (fullRoute.isEmpty) {
-        fullRoute.addAll(leg);
-      } else {
-        // Skip duplicate point between consecutive legs
-        if (leg.isNotEmpty && fullRoute.last == leg.first) {
-          fullRoute.addAll(leg.skip(1));
-        } else {
-          fullRoute.addAll(leg);
+      for (final pt in leg) {
+        if (result.isEmpty || result.last != pt) {
+          result.add(pt);
         }
       }
-      fromPoint = landmark.coordinates;
+
+      currentPos = nextLandmark.coordinates;
     }
 
-    return fullRoute;
+    return result;
   }
 }
 

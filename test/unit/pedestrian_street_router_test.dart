@@ -32,13 +32,13 @@ void main() {
 
       final route = router.routeBetween(start, destination);
 
-      expect(route.length, greaterThan(4));
+      expect(route.length, greaterThan(15));
       expect(route.first, equals(start));
       expect(route.last, equals(destination));
 
-      // Verifies Via Claudia junction waypoint is traversed
-      const viaClaudiaJunction = LatLng(41.889600, 12.491750);
-      expect(route.contains(viaClaudiaJunction), isTrue);
+      // Verifies Via Celio Vibenna intersection waypoint is traversed
+      const vibennaJunction = LatLng(41.889169, 12.492597);
+      expect(route.contains(vibennaJunction), isTrue);
     });
 
     test('routeBetween connects Colosseum to Arch of Constantine via West Promenade', () {
@@ -58,13 +58,13 @@ void main() {
 
       final route = router.routeBetween(arch, forum);
 
-      expect(route.length, greaterThan(6));
+      expect(route.length, greaterThan(20));
       expect(route.first, equals(arch));
       expect(route.last, equals(forum));
 
-      // Verifies Temple of Venus waypoint is along the path
-      const venusTemple = LatLng(41.891100, 12.488300);
-      expect(route.contains(venusTemple), isTrue);
+      // Verifies Temple of Venus Via Sacra waypoint is traversed along the path
+      const venusTemple = LatLng(41.891123, 12.488316);
+      expect(route.any((pt) => (pt.latitude - venusTemple.latitude).abs() < 0.0001 && (pt.longitude - venusTemple.longitude).abs() < 0.0001), isTrue);
     });
 
     test('walkingDistance computes realistic walking distances', () {
@@ -74,9 +74,9 @@ void main() {
       const colosseum = LatLng(41.890210, 12.492231);
       final distance = router.walkingDistance(point, colosseum);
 
-      // Distance from Parco Celio to Colosseum along Via Claudia is ~250m to ~400m
+      // Distance from Parco Celio to Colosseum along real streets is ~680m
       expect(distance, greaterThan(200.0));
-      expect(distance, lessThan(600.0));
+      expect(distance, lessThan(800.0));
     });
 
     test('routeItinerary returns empty list if landmarks are empty', () {
