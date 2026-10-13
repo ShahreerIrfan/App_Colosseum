@@ -133,16 +133,55 @@ class HomeController extends GetxController {
     }
   }
 
-  /// Checks if the user is in proximity (<= 55m) to any upcoming tour landmark.
+  /// Returns the calibrated proximity detection threshold in meters for each landmark.
+  ///
+  /// For large monuments like the Colosseum (190m diameter), visitors reach the outer
+  /// border/wall and ticket plazas at 90-130m from the geometric center.
+  static double getProximityThresholdForLandmark(String landmarkId) {
+    switch (landmarkId) {
+      case 'colosseum':
+        // Colosseum outer border is 85-100m from center; 115m reliably captures border without overlapping Arch (138m)
+        return 115.0;
+      case 'roman_forum':
+        return 120.0;
+      case 'temple_of_venus_and_rome':
+        return 95.0;
+      case 'ludus_magnus':
+        return 80.0;
+      case 'arch_of_constantine':
+      default:
+        return 70.0;
+    }
+  }
+
+  /// Checks if the user is in proximity to any upcoming tour landmark border.
   void checkProximityToLandmarks(LatLng currentPos) {
     if (!isTourActive.value) return;
-    if (approachingLandmark.value != null) return;
 
-    const proximityThresholdMeters = 55.0;
+    // If currently prompting for a landmark, check if user walked far away from it without deciding
+    if (approachingLandmark.value != null) {
+      final currentLandmark = approachingLandmark.value!;
+      final threshold = getProximityThresholdForLandmark(currentLandmark.id);
+      final distance = Geolocator.distanceBetween(
+        currentPos.latitude,
+        currentPos.longitude,
+        currentLandmark.latitude,
+        currentLandmark.longitude,
+      );
+      if (distance > threshold * 1.5) {
+        approachingLandmark.value = null;
+        hasPromptedLandmarkIds.remove(currentLandmark.id);
+      }
+      return;
+    }
+
+    LandmarkMarkerModel? closestLandmark;
+    var smallestDistance = double.infinity;
 
     for (final landmark in remainingTourLandmarks) {
       if (hasPromptedLandmarkIds.contains(landmark.id)) continue;
 
+      final threshold = getProximityThresholdForLandmark(landmark.id);
       final distance = Geolocator.distanceBetween(
         currentPos.latitude,
         currentPos.longitude,
@@ -150,11 +189,15 @@ class HomeController extends GetxController {
         landmark.longitude,
       );
 
-      if (distance <= proximityThresholdMeters) {
-        hasPromptedLandmarkIds.add(landmark.id);
-        approachingLandmark.value = landmark;
-        break;
+      if (distance <= threshold && distance < smallestDistance) {
+        smallestDistance = distance;
+        closestLandmark = landmark;
       }
+    }
+
+    if (closestLandmark != null) {
+      hasPromptedLandmarkIds.add(closestLandmark.id);
+      approachingLandmark.value = closestLandmark;
     }
   }
 
@@ -167,6 +210,11 @@ class HomeController extends GetxController {
     approachingLandmark.value = null;
     if (landmark.id == 'colosseum') {
       onColosseumTapped();
+    } else {
+      Get.toNamed(
+        Routes.floors,
+        arguments: {'landmarkName': landmark.name},
+      );
     }
   }
 

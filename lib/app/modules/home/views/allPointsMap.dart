@@ -324,13 +324,38 @@ class AllPointsMapView extends GetView<HomeController> {
                 right: 16,
                 child: Obx(() {
                   final approaching = controller.approachingLandmark.value;
-                  if (approaching != null) {
-                    return _buildArrivalPopup(context, approaching);
-                  }
-                  if (controller.isTourActive.value) {
-                    return _buildActiveTourBar(context);
-                  }
-                  return _buildStartTourButton(context);
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.0, 0.15),
+                            end: Offset.zero,
+                          ).animate(CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          )),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: approaching != null
+                        ? KeyedSubtree(
+                            key: ValueKey('popup_${approaching.id}'),
+                            child: _buildArrivalPopup(context, approaching),
+                          )
+                        : (controller.isTourActive.value
+                            ? KeyedSubtree(
+                                key: const ValueKey('active_tour_bar'),
+                                child: _buildActiveTourBar(context),
+                              )
+                            : KeyedSubtree(
+                                key: const ValueKey('start_tour_button'),
+                                child: _buildStartTourButton(context),
+                              )),
+                  );
                 }),
               ),
             ],
@@ -504,17 +529,24 @@ class AllPointsMapView extends GetView<HomeController> {
       key: const Key('landmark_arrival_popup'),
       color: colors.card,
       borderRadius: AppRadius.borderLg,
-      elevation: 6,
-      shadowColor: colors.foreground.withValues(alpha: 0.15),
+      elevation: 8,
+      shadowColor: colors.primary.withValues(alpha: 0.25),
       child: Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
           color: colors.card,
           borderRadius: AppRadius.borderLg,
           border: Border.all(
-            color: colors.primary.withValues(alpha: 0.4),
-            width: 1.5,
+            color: colors.primary,
+            width: 2.0,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: colors.primary.withValues(alpha: 0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -525,12 +557,12 @@ class AllPointsMapView extends GetView<HomeController> {
                 Container(
                   padding: const EdgeInsets.all(10.0),
                   decoration: BoxDecoration(
-                    color: colors.primary.withValues(alpha: 0.12),
+                    color: colors.primary.withValues(alpha: 0.14),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     landmark.icon,
-                    size: 22,
+                    size: 24,
                     color: colors.primary,
                   ),
                 ),
@@ -540,7 +572,7 @@ class AllPointsMapView extends GetView<HomeController> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Arrived at ${landmark.name}',
+                        'You are near ${landmark.name}',
                         style: textTheme.titleSmall?.copyWith(
                           color: colors.foreground,
                           fontWeight: FontWeight.bold,
@@ -548,11 +580,12 @@ class AllPointsMapView extends GetView<HomeController> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
-                        'Do you want to enter or skip?',
+                        'Do you want to enter ${landmark.name} or skip to next?',
                         style: textTheme.bodySmall?.copyWith(
                           color: colors.mutedForeground,
+                          fontSize: 12,
                         ),
                       ),
                     ],

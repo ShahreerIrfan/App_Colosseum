@@ -9,6 +9,7 @@ void main() {
 
   setUp(() {
     Get.reset();
+    Get.testMode = true;
   });
 
   tearDown(() {
@@ -145,13 +146,13 @@ void main() {
       expect(controller.currentTourRoutePoints.length, greaterThan(15));
     });
 
-    test('proximity detection triggers approachingLandmark within 55 meters', () {
+    test('proximity detection triggers approachingLandmark when user is near the border of Colosseum', () {
       controller.startTour();
       expect(controller.approachingLandmark.value, isNull);
 
-      // Set user position near Colosseum coordinates
-      const nearColosseum = LatLng(41.890250, 12.492231);
-      controller.setUserLocation(nearColosseum);
+      // User is at northern border/promenade of Colosseum (~91m from center, as in user test)
+      const colosseumBorderPos = LatLng(41.891000, 12.492000);
+      controller.setUserLocation(colosseumBorderPos);
 
       expect(controller.approachingLandmark.value, isNotNull);
       expect(controller.approachingLandmark.value!.id, 'colosseum');
