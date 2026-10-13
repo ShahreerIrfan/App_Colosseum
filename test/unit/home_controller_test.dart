@@ -117,5 +117,85 @@ void main() {
       expect(controller.isUserInZone, isFalse);
       expect(controller.distanceToColosseumMeters!, greaterThan(600.0));
     });
+
+    test('startTour initializes active tour, default location, and generates route', () {
+      expect(controller.isTourActive.value, isFalse);
+      expect(controller.currentTourRoutePoints, isEmpty);
+
+      controller.startTour();
+
+      expect(controller.isTourActive.value, isTrue);
+      expect(controller.userLocation.value, equals(HomeController.defaultTourStartLocation));
+      // Route has starting location + 5 landmark locations = 6 points
+      expect(controller.currentTourRoutePoints.length, 6);
+      expect(controller.currentTourRoutePoints.first, equals(HomeController.defaultTourStartLocation));
+    });
+
+    test('dynamic itinerary route updates when user moves', () {
+      controller.startTour();
+      expect(controller.currentTourRoutePoints.first, equals(HomeController.defaultTourStartLocation));
+
+      // User moves to a new location near Ludus Magnus
+      const newPos = LatLng(41.890400, 12.494800);
+      controller.setUserLocation(newPos);
+
+      expect(controller.currentTourRoutePoints.first, equals(newPos));
+      // Nearest unvisited point to newPos should be Ludus Magnus
+      expect(controller.currentTourRoutePoints[1], equals(const LatLng(41.890450, 12.495100)));
+    });
+
+    test('proximity detection triggers approachingLandmark within 55 meters', () {
+      controller.startTour();
+      expect(controller.approachingLandmark.value, isNull);
+
+      // Set user position near Colosseum coordinates
+      const nearColosseum = LatLng(41.890250, 12.492231);
+      controller.setUserLocation(nearColosseum);
+
+      expect(controller.approachingLandmark.value, isNotNull);
+      expect(controller.approachingLandmark.value!.id, 'colosseum');
+    });
+
+    test('skipApproachingLandmark marks landmark skipped and recalculates route without it', () {
+      controller.startTour();
+      const nearColosseum = LatLng(41.890250, 12.492231);
+      controller.setUserLocation(nearColosseum);
+
+      expect(controller.approachingLandmark.value?.id, 'colosseum');
+
+      controller.skipApproachingLandmark();
+
+      expect(controller.approachingLandmark.value, isNull);
+      expect(controller.skippedLandmarkIds.contains('colosseum'), isTrue);
+      expect(controller.remainingTourLandmarks.any((m) => m.id == 'colosseum'), isFalse);
+      // Route now contains starting location + 4 remaining landmarks = 5 points
+      expect(controller.currentTourRoutePoints.length, 5);
+      expect(controller.currentTourRoutePoints.any((p) => p == const LatLng(41.890210, 12.492231)), isFalse);
+    });
+
+    test('enterApproachingLandmark marks landmark visited and removes it from tour route', () {
+      controller.startTour();
+      const nearArch = LatLng(41.889762, 12.490667);
+      controller.setUserLocation(nearArch);
+
+      expect(controller.approachingLandmark.value?.id, 'arch_of_constantine');
+
+      controller.enterApproachingLandmark();
+
+      expect(controller.approachingLandmark.value, isNull);
+      expect(controller.visitedLandmarkIds.contains('arch_of_constantine'), isTrue);
+      expect(controller.remainingTourLandmarks.any((m) => m.id == 'arch_of_constantine'), isFalse);
+    });
+
+    test('stopTour stops tour and clears route points', () {
+      controller.startTour();
+      expect(controller.isTourActive.value, isTrue);
+      expect(controller.currentTourRoutePoints.isNotEmpty, isTrue);
+
+      controller.stopTour();
+
+      expect(controller.isTourActive.value, isFalse);
+      expect(controller.currentTourRoutePoints, isEmpty);
+    });
   });
 }

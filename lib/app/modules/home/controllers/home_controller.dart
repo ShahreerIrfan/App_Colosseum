@@ -61,6 +61,148 @@ class HomeController extends GetxController {
   /// Estimated GPS accuracy in meters.
   final locationAccuracy = 3.0.obs;
 
+  /// Default initial user location when starting tour without GPS fix (Parco Celio).
+  static const LatLng defaultTourStartLocation = LatLng(41.888500, 12.492500);
+
+  /// Whether active tour navigation is currently enabled.
+  final isTourActive = false.obs;
+
+  /// IDs of landmarks that user has entered/visited.
+  final visitedLandmarkIds = <String>{}.obs;
+
+  /// IDs of landmarks that user has skipped.
+  final skippedLandmarkIds = <String>{}.obs;
+
+  /// IDs of landmarks that have already prompted the user upon proximity.
+  final hasPromptedLandmarkIds = <String>{}.obs;
+
+  /// Landmark currently within proximity threshold awaiting user action (Enter or Skip).
+  final approachingLandmark = Rxn<LandmarkMarkerModel>();
+
+  /// Remaining unvisited and unskipped landmarks in the tour.
+  List<LandmarkMarkerModel> get remainingTourLandmarks {
+    final visited = visitedLandmarkIds.toSet();
+    final skipped = skippedLandmarkIds.toSet();
+    return landmarkMarkers.where((m) {
+      return !visited.contains(m.id) && !skipped.contains(m.id);
+    }).toList();
+  }
+
+  /// Dynamically calculated planned itinerary route points starting from user location.
+  List<LatLng> get currentTourRoutePoints {
+    if (!isTourActive.value) return const [];
+    final start = userLocation.value ?? defaultTourStartLocation;
+    final remaining = remainingTourLandmarks;
+    if (remaining.isEmpty) return const [];
+
+    final route = <LatLng>[start];
+    final unvisited = List<LandmarkMarkerModel>.from(remaining);
+    var current = start;
+
+    while (unvisited.isNotEmpty) {
+      unvisited.sort((a, b) {
+        final distA = Geolocator.distanceBetween(
+          current.latitude,
+          current.longitude,
+          a.latitude,
+          a.longitude,
+        );
+        final distB = Geolocator.distanceBetween(
+          current.latitude,
+          current.longitude,
+          b.latitude,
+          b.longitude,
+        );
+        return distA.compareTo(distB);
+      });
+
+      final next = unvisited.removeAt(0);
+      route.add(next.coordinates);
+      current = next.coordinates;
+    }
+
+    return route;
+  }
+
+  /// Starts the interactive tour itinerary.
+  void startTour() {
+    isTourActive.value = true;
+    visitedLandmarkIds.clear();
+    skippedLandmarkIds.clear();
+    hasPromptedLandmarkIds.clear();
+    approachingLandmark.value = null;
+    final start = userLocation.value ?? defaultTourStartLocation;
+    if (userLocation.value == null) {
+      setUserLocation(start);
+    } else {
+      checkProximityToLandmarks(start);
+    }
+    try {
+      mapController.move(start, defaultZoom);
+    } catch (_) {}
+  }
+
+  /// Stops/ends the interactive tour.
+  void stopTour() {
+    isTourActive.value = false;
+    approachingLandmark.value = null;
+  }
+
+  /// Toggles the tour state between started and stopped.
+  void toggleTour() {
+    if (isTourActive.value) {
+      stopTour();
+    } else {
+      startTour();
+    }
+  }
+
+  /// Checks if the user is in proximity (<= 55m) to any upcoming tour landmark.
+  void checkProximityToLandmarks(LatLng currentPos) {
+    if (!isTourActive.value) return;
+    if (approachingLandmark.value != null) return;
+
+    const proximityThresholdMeters = 55.0;
+
+    for (final landmark in remainingTourLandmarks) {
+      if (hasPromptedLandmarkIds.contains(landmark.id)) continue;
+
+      final distance = Geolocator.distanceBetween(
+        currentPos.latitude,
+        currentPos.longitude,
+        landmark.latitude,
+        landmark.longitude,
+      );
+
+      if (distance <= proximityThresholdMeters) {
+        hasPromptedLandmarkIds.add(landmark.id);
+        approachingLandmark.value = landmark;
+        break;
+      }
+    }
+  }
+
+  /// User action: Enters the approaching landmark.
+  void enterApproachingLandmark() {
+    final landmark = approachingLandmark.value;
+    if (landmark == null) return;
+    visitedLandmarkIds.add(landmark.id);
+    visitedLandmarkIds.refresh();
+    approachingLandmark.value = null;
+    if (landmark.id == 'colosseum') {
+      onColosseumTapped();
+    }
+  }
+
+  /// User action: Skips the approaching landmark and continues to next point.
+  void skipApproachingLandmark() {
+    final landmark = approachingLandmark.value;
+    if (landmark == null) return;
+    skippedLandmarkIds.add(landmark.id);
+    skippedLandmarkIds.refresh();
+    approachingLandmark.value = null;
+  }
+
   /// Metric distance from the user's current location to the Colosseum center in meters.
   double? get distanceToColosseumMeters {
     final user = userLocation.value;
@@ -221,8 +363,12 @@ class HomeController extends GetxController {
                 ),
               ).listen(
                 (pos) {
-                  userLocation.value = LatLng(pos.latitude, pos.longitude);
+                  final posLatLng = LatLng(pos.latitude, pos.longitude);
+                  userLocation.value = posLatLng;
                   locationAccuracy.value = pos.accuracy;
+                  if (isTourActive.value) {
+                    checkProximityToLandmarks(posLatLng);
+                  }
                 },
                 onError: (_) {},
               );
@@ -238,6 +384,9 @@ class HomeController extends GetxController {
     userLocation.value = location;
     if (heading != null) userHeading.value = heading;
     if (accuracy != null) locationAccuracy.value = accuracy;
+    if (location != null && isTourActive.value) {
+      checkProximityToLandmarks(location);
+    }
   }
 
   @override

@@ -224,4 +224,81 @@ void main() {
       expect(circleLayer.circles.first.color, equals(const Color(0xFF2E7D32).withValues(alpha: 0.12)));
     },
   );
+
+  testWidgets(
+    'Tapping "Start Tour" activates tour, renders PolylineLayer and active tour bar, and "End Tour" stops it',
+    (WidgetTester tester) async {
+      final controller = Get.put(HomeController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const AllPointsMapView(),
+        ),
+      );
+      await tester.pump();
+
+      // Initially "Start Tour" button is visible and no PolylineLayer
+      expect(find.byKey(const Key('map_start_tour_button')), findsOneWidget);
+      expect(find.text('Start Tour'), findsOneWidget);
+      expect(find.byType(PolylineLayer), findsNothing);
+
+      // Tap "Start Tour"
+      await tester.tap(find.byKey(const Key('map_start_tour_button')));
+      await tester.pump();
+
+      // Tour becomes active: PolylineLayer rendered, active tour bar rendered
+      expect(controller.isTourActive.value, isTrue);
+      expect(find.byType(PolylineLayer), findsOneWidget);
+      expect(find.byKey(const Key('map_active_tour_bar')), findsOneWidget);
+      expect(find.textContaining('remaining'), findsOneWidget);
+
+      // Tap "End Tour"
+      await tester.tap(find.byKey(const Key('map_end_tour_button')));
+      await tester.pump();
+
+      expect(controller.isTourActive.value, isFalse);
+      expect(find.byType(PolylineLayer), findsNothing);
+      expect(find.byKey(const Key('map_start_tour_button')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Approaching landmark displays arrival popup with Skip and Enter options, and skipping recalculates route',
+    (WidgetTester tester) async {
+      final controller = Get.put(HomeController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const AllPointsMapView(),
+        ),
+      );
+      await tester.pump();
+
+      // Start tour
+      await tester.tap(find.byKey(const Key('map_start_tour_button')));
+      await tester.pump();
+
+      // User walks to Arch of Constantine (< 55m)
+      controller.setUserLocation(const LatLng(41.889762, 12.490667));
+      await tester.pump();
+
+      // Arrival popup should appear
+      expect(find.byKey(const Key('landmark_arrival_popup')), findsOneWidget);
+      expect(find.text('Arrived at Arch of Constantine'), findsOneWidget);
+      expect(find.text('Do you want to enter or skip?'), findsOneWidget);
+      expect(find.byKey(const Key('tour_skip_landmark_button')), findsOneWidget);
+      expect(find.byKey(const Key('tour_enter_landmark_button')), findsOneWidget);
+
+      // Tap Skip
+      await tester.tap(find.byKey(const Key('tour_skip_landmark_button')));
+      await tester.pump();
+
+      // Popup is dismissed, landmark is skipped
+      expect(find.byKey(const Key('landmark_arrival_popup')), findsNothing);
+      expect(controller.skippedLandmarkIds.contains('arch_of_constantine'), isTrue);
+      expect(controller.approachingLandmark.value, isNull);
+    },
+  );
 }

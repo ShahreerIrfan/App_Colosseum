@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/theme_extensions.dart';
 import '../../../core/utils/contain_circle_camera_constraint.dart';
+import '../../../data/models/landmark_marker_model.dart';
 import '../../../data/models/map_view_type.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/landmark_markers_layer.dart';
@@ -100,7 +101,32 @@ class AllPointsMapView extends GetView<HomeController> {
                       );
                     }),
 
-                    // Layer 3: Classic Location Pins + Labels for Roman Monuments (All 5 Locations)
+                    // Layer 3: Tour Itinerary Route Polyline
+                    Obx(() {
+                      if (!controller.isTourActive.value) {
+                        return const SizedBox.shrink();
+                      }
+                      final points = controller.currentTourRoutePoints;
+                      if (points.length < 2) {
+                        return const SizedBox.shrink();
+                      }
+                      return PolylineLayer(
+                        key: const Key('tour_route_layer'),
+                        polylines: [
+                          Polyline(
+                            points: points,
+                            strokeWidth: 4.5,
+                            color: colors.primary,
+                            borderColor: colors.card,
+                            borderStrokeWidth: 1.5,
+                            strokeCap: StrokeCap.round,
+                            strokeJoin: StrokeJoin.round,
+                          ),
+                        ],
+                      );
+                    }),
+
+                    // Layer 4: Classic Location Pins + Labels for Roman Monuments (All 5 Locations)
                     Obx(() {
                       if (!controller.isLandmarksVisible.value) {
                         return const SizedBox.shrink();
@@ -290,8 +316,330 @@ class AllPointsMapView extends GetView<HomeController> {
                   ],
                 ),
               ),
+
+              // Bottom Tour Action / Arrival Overlay
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: Obx(() {
+                  final approaching = controller.approachingLandmark.value;
+                  if (approaching != null) {
+                    return _buildArrivalPopup(context, approaching);
+                  }
+                  if (controller.isTourActive.value) {
+                    return _buildActiveTourBar(context);
+                  }
+                  return _buildStartTourButton(context);
+                }),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStartTourButton(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = context.textTheme;
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Material(
+        color: colors.primary,
+        borderRadius: BorderRadius.circular(28),
+        elevation: 4,
+        shadowColor: colors.primary.withValues(alpha: 0.4),
+        child: InkWell(
+          key: const Key('map_start_tour_button'),
+          onTap: controller.startTour,
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 14.0,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: colors.primaryForeground.withValues(alpha: 0.25),
+                width: 1.0,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.navigation_rounded,
+                  size: 20,
+                  color: colors.primaryForeground,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Start Tour',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colors.primaryForeground,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveTourBar(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = context.textTheme;
+    final remaining = controller.remainingTourLandmarks;
+
+    return Material(
+      key: const Key('map_active_tour_bar'),
+      color: colors.card,
+      borderRadius: AppRadius.borderLg,
+      elevation: 4,
+      shadowColor: colors.foreground.withValues(alpha: 0.1),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: AppRadius.borderLg,
+          border: Border.all(color: colors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8.0),
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.directions_walk_rounded,
+                size: 20,
+                color: colors.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    remaining.isNotEmpty
+                        ? 'Next: ${remaining.first.name}'
+                        : 'Tour Complete',
+                    style: textTheme.labelLarge?.copyWith(
+                      color: colors.foreground,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    remaining.isNotEmpty
+                        ? '${remaining.length} landmark${remaining.length > 1 ? 's' : ''} remaining'
+                        : 'All landmarks visited or skipped',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.mutedForeground,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Material(
+              color: colors.destructive.withValues(alpha: 0.1),
+              borderRadius: AppRadius.borderMd,
+              child: InkWell(
+                key: const Key('map_end_tour_button'),
+                onTap: controller.stopTour,
+                borderRadius: AppRadius.borderMd,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10.0,
+                    vertical: 6.0,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.stop_circle_outlined,
+                        size: 16,
+                        color: colors.destructive,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'End Tour',
+                        style: textTheme.labelSmall?.copyWith(
+                          color: colors.destructive,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArrivalPopup(
+    BuildContext context,
+    LandmarkMarkerModel landmark,
+  ) {
+    final colors = context.colors;
+    final textTheme = context.textTheme;
+
+    return Material(
+      key: const Key('landmark_arrival_popup'),
+      color: colors.card,
+      borderRadius: AppRadius.borderLg,
+      elevation: 6,
+      shadowColor: colors.foreground.withValues(alpha: 0.15),
+      child: Container(
+        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: AppRadius.borderLg,
+          border: Border.all(
+            color: colors.primary.withValues(alpha: 0.4),
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10.0),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    landmark.icon,
+                    size: 22,
+                    color: colors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Arrived at ${landmark.name}',
+                        style: textTheme.titleSmall?.copyWith(
+                          color: colors.foreground,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Do you want to enter or skip?',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                // Skip Button
+                Expanded(
+                  child: Material(
+                    color: colors.secondary,
+                    borderRadius: AppRadius.borderMd,
+                    child: InkWell(
+                      key: const Key('tour_skip_landmark_button'),
+                      onTap: controller.skipApproachingLandmark,
+                      borderRadius: AppRadius.borderMd,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0),
+                        decoration: BoxDecoration(
+                          borderRadius: AppRadius.borderMd,
+                          border: Border.all(color: colors.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.skip_next_rounded,
+                              size: 18,
+                              color: colors.secondaryForeground,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Skip',
+                              style: textTheme.labelLarge?.copyWith(
+                                color: colors.secondaryForeground,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Enter Button
+                Expanded(
+                  child: Material(
+                    color: colors.primary,
+                    borderRadius: AppRadius.borderMd,
+                    child: InkWell(
+                      key: const Key('tour_enter_landmark_button'),
+                      onTap: controller.enterApproachingLandmark,
+                      borderRadius: AppRadius.borderMd,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0),
+                        decoration: BoxDecoration(
+                          borderRadius: AppRadius.borderMd,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.login_rounded,
+                              size: 18,
+                              color: colors.primaryForeground,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Enter',
+                              style: textTheme.labelLarge?.copyWith(
+                                color: colors.primaryForeground,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
