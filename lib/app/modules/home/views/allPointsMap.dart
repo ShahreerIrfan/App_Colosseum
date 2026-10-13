@@ -396,13 +396,13 @@ class AllPointsMapView extends GetView<HomeController> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.navigation_rounded,
+                  Icons.route_rounded,
                   size: 20,
                   color: colors.primaryForeground,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Start Tour',
+                  'Show Itinerary',
                   style: textTheme.labelLarge?.copyWith(
                     color: colors.primaryForeground,
                     fontWeight: FontWeight.bold,

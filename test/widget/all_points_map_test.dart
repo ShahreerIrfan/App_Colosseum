@@ -226,7 +226,7 @@ void main() {
   );
 
   testWidgets(
-    'Tapping "Start Tour" activates tour, renders PolylineLayer and active tour bar, and "End Tour" stops it',
+    'Tapping "Show Itinerary" activates tour, renders PolylineLayer and active tour bar, and "End Tour" stops it',
     (WidgetTester tester) async {
       final controller = Get.put(HomeController());
 
@@ -238,12 +238,12 @@ void main() {
       );
       await tester.pump();
 
-      // Initially "Start Tour" button is visible and no PolylineLayer
+      // Initially "Show Itinerary" button is visible and no PolylineLayer
       expect(find.byKey(const Key('map_start_tour_button')), findsOneWidget);
-      expect(find.text('Start Tour'), findsOneWidget);
+      expect(find.text('Show Itinerary'), findsOneWidget);
       expect(find.byType(PolylineLayer), findsNothing);
 
-      // Tap "Start Tour"
+      // Tap "Show Itinerary"
       await tester.tap(find.byKey(const Key('map_start_tour_button')));
       await tester.pump();
 
@@ -260,6 +260,7 @@ void main() {
       expect(controller.isTourActive.value, isFalse);
       expect(find.byType(PolylineLayer), findsNothing);
       expect(find.byKey(const Key('map_start_tour_button')), findsOneWidget);
+      expect(find.text('Show Itinerary'), findsOneWidget);
     },
   );
 
