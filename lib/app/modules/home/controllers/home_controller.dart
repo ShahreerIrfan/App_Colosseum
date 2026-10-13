@@ -16,6 +16,7 @@ import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../data/services/compass_service.dart';
 import '../../../data/services/gps_location_service.dart';
 import '../../../routes/app_pages.dart';
+import '../views/allPointsMap.dart';
 
 class HomeController extends GetxController {
   late final MapController mapController;
@@ -268,6 +269,15 @@ class HomeController extends GetxController {
       return overlay;
     }).toList();
     landmarkOverlays.assignAll(overlays);
+  }
+
+  /// Navigates from landing screen to AllPointsMap view.
+  void navigateToAllPointsMap() {
+    if (Get.routeTree.routes.any((route) => route.name == Routes.allPointsMap)) {
+      Get.toNamed(Routes.allPointsMap);
+    } else {
+      Get.to(() => const AllPointsMapView());
+    }
   }
 
   /// Navigation triggered when tapping on the Colosseum ground overlay image.

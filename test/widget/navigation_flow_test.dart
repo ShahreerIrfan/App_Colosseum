@@ -56,11 +56,11 @@ void main() {
     await tester.tap(find.byKey(const Key('language_continue_button')));
     await tester.pumpAndSettle();
 
-    // 6. Home screen with 'next' button is now visible
+    // 6. Home landing screen with Aurelia branding and 'Start Tour' button is now visible
     expect(find.byKey(const Key('home_next_button')), findsOneWidget);
-    expect(find.text('next'), findsOneWidget);
+    expect(find.text('Start Tour'), findsOneWidget);
 
-    // 7. Tap 'next' to proceed to AllPointsMap
+    // 7. Tap 'Start Tour' to proceed to AllPointsMap
     await tester.tap(find.byKey(const Key('home_next_button')));
     await tester.pumpAndSettle();
 

@@ -25,7 +25,7 @@ void main() {
   });
 
   testWidgets(
-    'HomeView renders empty screen with only next button',
+    'HomeView renders client UI with Aurelia branding, emblem, description, and Start Tour button',
     (WidgetTester tester) async {
       Get.put(HomeController());
 
@@ -41,14 +41,26 @@ void main() {
       // HomeView has no map directly rendered on it
       expect(find.byType(FlutterMap), findsNothing);
 
-      // Verify the next button exists and displays 'next'
+      // Verify Aurelia branding, emblem, and descriptive copy
+      expect(find.text('Aurelia'), findsOneWidget);
+      expect(
+        find.text(
+          'Explore the Colosseum through panoramic views and immersive audio narration. Navigate through 5 iconic stops.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.stadium), findsOneWidget);
+      expect(find.text('Immersive Audio Experience'), findsOneWidget);
+      expect(find.byIcon(Icons.headphones_rounded), findsOneWidget);
+
+      // Verify the Start Tour CTA button exists
       expect(find.byKey(const Key('home_next_button')), findsOneWidget);
-      expect(find.text('next'), findsOneWidget);
+      expect(find.text('Start Tour'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'Tapping next button on HomeView navigates to allPointsMap.dart',
+    'Tapping Start Tour button on HomeView navigates to allPointsMap.dart',
     (WidgetTester tester) async {
       Get.put(HomeController());
 
@@ -63,8 +75,9 @@ void main() {
 
       // Verify on HomeView
       expect(find.byKey(const Key('home_next_button')), findsOneWidget);
+      expect(find.text('Start Tour'), findsOneWidget);
 
-      // Tap 'next' button
+      // Tap 'Start Tour' button
       await tester.tap(find.byKey(const Key('home_next_button')));
       await tester.pumpAndSettle();
 
