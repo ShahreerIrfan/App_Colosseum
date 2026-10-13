@@ -202,20 +202,15 @@ class HomeController extends GetxController {
   }
 
   /// User action: Enters the approaching landmark.
+  /// Directly navigates to the landmark's detailed view (FloorMapView),
+  /// bypassing the intermediary levels selection view.
   void enterApproachingLandmark() {
     final landmark = approachingLandmark.value;
     if (landmark == null) return;
     visitedLandmarkIds.add(landmark.id);
     visitedLandmarkIds.refresh();
     approachingLandmark.value = null;
-    if (landmark.id == 'colosseum') {
-      onColosseumTapped();
-    } else {
-      Get.toNamed(
-        Routes.floors,
-        arguments: {'landmarkName': landmark.name},
-      );
-    }
+    navigateToLandmarkDetails(landmark.id);
   }
 
   /// User action: Skips the approaching landmark and continues to next point.
@@ -303,24 +298,36 @@ class HomeController extends GetxController {
     }
   }
 
+  /// Navigates directly to the landmark's detailed view (FloorMapView),
+  /// bypassing the intermediary levels selection view.
+  void navigateToLandmarkDetails(String landmarkId) {
+    selectedLandmarkId.value = landmarkId;
+    final landmark =
+        landmarkMarkers.firstWhereOrNull((m) => m.id == landmarkId);
+    final name =
+        landmark?.name ?? (landmarkId == 'colosseum' ? 'Colosseum' : landmarkId);
+    if (Get.routeTree.routes.any((route) => route.name == Routes.floorMap)) {
+      Get.toNamed(
+        Routes.floorMap,
+        arguments: {
+          'landmarkName': name,
+          'floorId': 'floor_underground',
+          'floorName': 'Underground (Hypogeum)',
+        },
+      );
+    }
+  }
+
   /// Navigation triggered when tapping on the Colosseum ground overlay image.
   void onColosseumTapped() {
-    Get.toNamed(
-      Routes.floors,
-      arguments: {'landmarkName': 'Colosseum'},
-    );
+    navigateToLandmarkDetails('colosseum');
   }
 
   /// Selects a landmark marker and activates its highlighted state.
-  /// If Colosseum is tapped while already selected, navigates directly to FloorsView.
+  /// Directly forwards to the landmark's detailed view (FloorMapView).
   void selectLandmark(String landmarkId) {
-    if (selectedLandmarkId.value == landmarkId) {
-      if (landmarkId == 'colosseum') {
-        onColosseumTapped();
-      }
-    } else {
-      selectedLandmarkId.value = landmarkId;
-    }
+    selectedLandmarkId.value = landmarkId;
+    navigateToLandmarkDetails(landmarkId);
   }
 
   /// Updates properties of a specific landmark marker in the reactive list.

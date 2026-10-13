@@ -12,13 +12,17 @@ import 'package:colosseum_client/app/modules/home/views/allPointsMap.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_markers_layer.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_overlay_layer.dart';
+import 'package:colosseum_client/app/modules/floor_map/views/floor_map_view.dart';
+import 'package:colosseum_client/app/modules/floors/views/floors_view.dart';
 import 'package:colosseum_client/app/routes/app_pages.dart';
 
 import '../helpers/mock_http_overrides.dart';
+import '../helpers/mock_tts.dart';
 
 void main() {
   setUpAll(() {
     HttpOverrides.global = MockHttpOverrides();
+    setupMockTts();
   });
 
   setUp(() {
@@ -135,7 +139,7 @@ void main() {
   );
 
   testWidgets(
-    'Tapping Colosseum marker when selected navigates to FloorsView',
+    'Tapping Colosseum marker navigates directly to FloorMapView bypassing FloorsView',
     (WidgetTester tester) async {
       Get.put(HomeController());
 
@@ -148,17 +152,18 @@ void main() {
       );
       await tester.pump();
 
-      // Colosseum is initially selected; tapping it navigates to floors
+      // Colosseum is initially selected; tapping it navigates directly to FloorMapView
       final colosseumTapFinder = find.byKey(const ValueKey('landmark_tap_colosseum'));
       expect(colosseumTapFinder, findsOneWidget);
 
       await tester.tap(colosseumTapFinder);
       await tester.pumpAndSettle();
 
-      // Verify navigated to FloorsView
-      expect(find.text('Floor 1'), findsOneWidget);
-      expect(find.text('Floor 2'), findsOneWidget);
-      expect(find.text('Floor 3'), findsOneWidget);
+      // Verify navigated directly to FloorMapView, bypassing FloorsView
+      expect(find.byType(FloorMapView), findsOneWidget);
+      expect(find.byType(FloorsView), findsNothing);
+      expect(find.text('Colosseum'), findsWidgets);
+      expect(find.text('Underground (Hypogeum)'), findsOneWidget);
     },
   );
 
@@ -300,6 +305,42 @@ void main() {
       expect(find.byKey(const Key('landmark_arrival_popup')), findsNothing);
       expect(controller.skippedLandmarkIds.contains('arch_of_constantine'), isTrue);
       expect(controller.approachingLandmark.value, isNull);
+    },
+  );
+
+  testWidgets(
+    'Approaching landmark and tapping Enter navigates directly to FloorMapView bypassing FloorsView',
+    (WidgetTester tester) async {
+      final controller = Get.put(HomeController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          initialRoute: Routes.allPointsMap,
+          getPages: AppPages.routes,
+        ),
+      );
+      await tester.pump();
+
+      // Start tour
+      await tester.tap(find.byKey(const Key('map_start_tour_button')));
+      await tester.pump();
+
+      // User walks to Arch of Constantine (< 75m)
+      controller.setUserLocation(const LatLng(41.889762, 12.490667));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('landmark_arrival_popup')), findsOneWidget);
+      expect(find.byKey(const Key('tour_enter_landmark_button')), findsOneWidget);
+
+      // Tap Enter
+      await tester.tap(find.byKey(const Key('tour_enter_landmark_button')));
+      await tester.pumpAndSettle();
+
+      // Directly navigates to FloorMapView, bypassing FloorsView
+      expect(find.byType(FloorMapView), findsOneWidget);
+      expect(find.byType(FloorsView), findsNothing);
+      expect(find.text('Arch of Constantine'), findsWidgets);
     },
   );
 }
