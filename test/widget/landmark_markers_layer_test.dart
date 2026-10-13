@@ -117,4 +117,24 @@ void main() {
 
     semantics.dispose();
   });
+
+  testWidgets('LandmarkMarkersLayer renders compact badges at zoomed-out level (zoom 15.0)', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      buildTestMap(
+        markers: LandmarkMarkersProvider.all,
+        zoom: 15.0,
+      ),
+    );
+    await tester.pump();
+
+    // Verify all 5 markers render in compact mode without error
+    expect(find.byType(LandmarkMapMarker), findsNWidgets(5));
+    expect(find.text('Colosseum'), findsOneWidget);
+    expect(find.text('Arch of Constantine'), findsOneWidget);
+    expect(find.text('Ludus Magnus'), findsOneWidget);
+    expect(find.text('Roman Forum'), findsOneWidget);
+    expect(find.text('Temple of Venus\nand Rome'), findsOneWidget);
+  });
 }

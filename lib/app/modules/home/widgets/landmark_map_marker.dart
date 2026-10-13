@@ -27,15 +27,18 @@ class LandmarkMarkerStyle {
 
 /// A compact, styled rounded-pill label badge (tooltip) displayed for the landmark.
 /// If a landmark name has more than three words, it automatically formats across two lines.
+/// Adapts padding and font sizing at lower zoom levels to eliminate badge overlap.
 class LandmarkLabelBubble extends StatelessWidget {
   final LandmarkMarkerModel landmark;
   final bool isSelected;
+  final double currentZoom;
   final LandmarkMarkerStyle style;
 
   const LandmarkLabelBubble({
     super.key,
     required this.landmark,
     this.isSelected = false,
+    this.currentZoom = 16.5,
     this.style = const LandmarkMarkerStyle(),
   });
 
@@ -55,6 +58,7 @@ class LandmarkLabelBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayName = formatName(landmark.name);
     final isMultiLine = displayName.contains('\n');
+    final isCompact = currentZoom < 15.8;
 
     // Distinct visual emphasis between default and selected states
     final backgroundColor = isSelected ? landmark.color : Colors.white;
@@ -63,13 +67,25 @@ class LandmarkLabelBubble extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.95)
         : landmark.color.withValues(alpha: 0.55);
 
+    final fontSize = isCompact
+        ? (isSelected ? 10.5 : 10.0)
+        : (isSelected ? style.selectedLabelFontSize : style.labelFontSize);
+
+    final horizontalPadding = isCompact
+        ? (isSelected ? 7.5 : 6.5)
+        : (isSelected ? 9.5 : 8.0);
+
+    final verticalPadding = isCompact
+        ? (isMultiLine ? 3.0 : 2.0)
+        : (isMultiLine ? 5.0 : 4.0);
+
+    final dotSize = isCompact ? 5.5 : 7.0;
+
     return Container(
-      constraints: const BoxConstraints(maxWidth: 165),
+      constraints: BoxConstraints(maxWidth: isCompact ? 145 : 165),
       padding: EdgeInsets.symmetric(
-        horizontal: isSelected ? 9.5 : 8.0,
-        vertical: isMultiLine
-            ? (isSelected ? 5.0 : 4.0)
-            : (isSelected ? 4.0 : 3.0),
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
       ),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -95,14 +111,14 @@ class LandmarkLabelBubble extends StatelessWidget {
           // Color indicator dot in default state; checkmark in selected state
           if (!isSelected) ...[
             Container(
-              width: 7,
-              height: 7,
+              width: dotSize,
+              height: dotSize,
               decoration: BoxDecoration(
                 color: landmark.color,
                 shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: 5),
+            SizedBox(width: isCompact ? 4.0 : 5.0),
           ],
           Flexible(
             child: Text(
@@ -111,9 +127,7 @@ class LandmarkLabelBubble extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: textColor,
-                fontSize: isSelected
-                    ? style.selectedLabelFontSize
-                    : style.labelFontSize,
+                fontSize: fontSize,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                 letterSpacing: 0.2,
                 height: 1.15,
@@ -125,7 +139,7 @@ class LandmarkLabelBubble extends StatelessWidget {
             const SizedBox(width: 4),
             Icon(
               Icons.check_circle_rounded,
-              size: 12,
+              size: isCompact ? 11 : 12,
               color: Colors.white.withValues(alpha: 0.95),
             ),
           ],
@@ -137,6 +151,7 @@ class LandmarkLabelBubble extends StatelessWidget {
 
 /// Reusable marker widget rendering the location name badge (tooltip) directly
 /// anchored at the landmark's geographic coordinates without the teardrop location pin.
+/// Adapts displacement dynamically when zooming out to maintain zero badge collision.
 class LandmarkMapMarker extends StatelessWidget {
   final LandmarkMarkerModel landmark;
   final bool isSelected;
@@ -153,6 +168,18 @@ class LandmarkMapMarker extends StatelessWidget {
     this.style = const LandmarkMarkerStyle(),
   });
 
+  /// Calculates dynamic zoom-adaptive offset to prevent overlap as map zooms out.
+  Offset get _effectiveOffset {
+    if (landmark.labelOffset == Offset.zero) return Offset.zero;
+    // When zooming out from default 16.5 down to 13.0, dynamically scale directional separation
+    final zoomDelta = (16.5 - currentZoom).clamp(0.0, 3.5);
+    final factor = 1.0 + (zoomDelta * 0.35);
+    return Offset(
+      landmark.labelOffset.dx * factor,
+      landmark.labelOffset.dy * factor,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -166,10 +193,11 @@ class LandmarkMapMarker extends StatelessWidget {
         onTap: onTap,
         child: Center(
           child: Transform.translate(
-            offset: landmark.labelOffset,
+            offset: _effectiveOffset,
             child: LandmarkLabelBubble(
               landmark: landmark,
               isSelected: isSelected,
+              currentZoom: currentZoom,
               style: style,
             ),
           ),
