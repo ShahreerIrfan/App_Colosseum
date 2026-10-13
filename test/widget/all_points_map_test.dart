@@ -9,6 +9,7 @@ import 'package:colosseum_client/app/core/theme/app_colors.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
 import 'package:colosseum_client/app/modules/home/controllers/home_controller.dart';
 import 'package:colosseum_client/app/modules/home/views/allPointsMap.dart';
+import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_markers_layer.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_overlay_layer.dart';
 import 'package:colosseum_client/app/routes/app_pages.dart';
@@ -57,12 +58,9 @@ void main() {
       expect(find.byKey(const ValueKey('landmark_marker_roman_forum')), findsOneWidget);
       expect(find.byKey(const ValueKey('landmark_marker_temple_venus_rome')), findsOneWidget);
 
-      // Verify all 5 classic teardrop pins are rendered
-      expect(find.byKey(const ValueKey('landmark_pin_colosseum')), findsOneWidget);
-      expect(find.byKey(const ValueKey('landmark_pin_arch_of_constantine')), findsOneWidget);
-      expect(find.byKey(const ValueKey('landmark_pin_ludus_magnus')), findsOneWidget);
-      expect(find.byKey(const ValueKey('landmark_pin_roman_forum')), findsOneWidget);
-      expect(find.byKey(const ValueKey('landmark_pin_temple_venus_rome')), findsOneWidget);
+      // Verify all 5 location name badges (tooltips) are rendered without teardrop pointers
+      expect(find.byType(LandmarkLabelBubble), findsNWidgets(5));
+      expect(find.byKey(const ValueKey('landmark_pin_colosseum')), findsNothing);
 
       // Verify visible labels for all 5 monuments
       expect(find.text('Colosseum'), findsWidgets);

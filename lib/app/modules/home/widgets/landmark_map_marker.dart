@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/models/landmark_marker_model.dart';
 
-/// Styling tokens and dimension defaults for landmark map pins and labels.
+/// Styling tokens and dimension defaults for landmark location name badges (tooltips).
 class LandmarkMarkerStyle {
   final double defaultPinWidth;
   final double defaultPinHeight;
@@ -25,114 +25,7 @@ class LandmarkMarkerStyle {
   });
 }
 
-/// Custom painter rendering a classic Google Maps–style teardrop location pin.
-///
-/// Features:
-/// - Vertically oriented teardrop with rounded circular head and pointed tip
-/// - Crisp white outer contrast border ensuring legibility over any map tile
-/// - Inner white circle with color-matched center dot
-/// - Soft drop shadow and selected glow effect
-class ClassicMapPinPainter extends CustomPainter {
-  final Color pinColor;
-  final bool isSelected;
-  final Color borderColor;
-
-  const ClassicMapPinPainter({
-    required this.pinColor,
-    this.isSelected = false,
-    this.borderColor = Colors.white,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final r = w / 2;
-    final tipY = h - 1.5;
-
-    final path = Path();
-    // Start at pointed bottom tip
-    path.moveTo(w / 2, tipY);
-    // Left curve sweeping up to circular head
-    path.cubicTo(
-      w * 0.08,
-      tipY * 0.65,
-      0,
-      r * 1.18,
-      0,
-      r,
-    );
-    // Top circle arc
-    path.arcToPoint(
-      Offset(w, r),
-      radius: Radius.circular(r),
-      clockwise: true,
-    );
-    // Right curve sweeping back down to pointed tip
-    path.cubicTo(
-      w,
-      r * 1.18,
-      w * 0.92,
-      tipY * 0.65,
-      w / 2,
-      tipY,
-    );
-    path.close();
-
-    // 1. Subtle drop shadow
-    final shadowPath = path.shift(const Offset(0, 1.5));
-    final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: isSelected ? 0.35 : 0.22)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, isSelected ? 4.0 : 2.5);
-    canvas.drawPath(shadowPath, shadowPaint);
-
-    // 2. Active glow when selected
-    if (isSelected) {
-      final glowPaint = Paint()
-        ..color = pinColor.withValues(alpha: 0.40)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
-      canvas.drawPath(path, glowPaint);
-    }
-
-    // 3. Pin body fill
-    final fillPaint = Paint()
-      ..color = pinColor
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-    canvas.drawPath(path, fillPaint);
-
-    // 4. Outer contrast border
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = isSelected ? 2.0 : 1.5
-      ..isAntiAlias = true;
-    canvas.drawPath(path, borderPaint);
-
-    // 5. Classic inner white circular core
-    final innerCircleRadius = r * 0.42;
-    final innerCirclePaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-    canvas.drawCircle(Offset(w / 2, r), innerCircleRadius, innerCirclePaint);
-
-    // 6. Color-matched center dot inside the core
-    final coreDotPaint = Paint()
-      ..color = pinColor
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-    canvas.drawCircle(Offset(w / 2, r), r * 0.20, coreDotPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant ClassicMapPinPainter oldDelegate) =>
-      oldDelegate.pinColor != pinColor ||
-      oldDelegate.isSelected != isSelected ||
-      oldDelegate.borderColor != borderColor;
-}
-
-/// A compact, styled rounded-pill label bubble displayed above the location pin.
+/// A compact, styled rounded-pill label badge (tooltip) displayed for the landmark.
 class LandmarkLabelBubble extends StatelessWidget {
   final LandmarkMarkerModel landmark;
   final bool isSelected;
@@ -151,14 +44,14 @@ class LandmarkLabelBubble extends StatelessWidget {
     final backgroundColor = isSelected ? landmark.color : Colors.white;
     final textColor = isSelected ? Colors.white : const Color(0xFF1E293B);
     final borderColor = isSelected
-        ? Colors.white.withValues(alpha: 0.90)
+        ? Colors.white.withValues(alpha: 0.95)
         : landmark.color.withValues(alpha: 0.55);
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 155),
+      constraints: const BoxConstraints(maxWidth: 165),
       padding: EdgeInsets.symmetric(
-        horizontal: isSelected ? 9.0 : 7.5,
-        vertical: isSelected ? 3.5 : 2.5,
+        horizontal: isSelected ? 9.5 : 8.0,
+        vertical: isSelected ? 4.0 : 3.0,
       ),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -181,17 +74,17 @@ class LandmarkLabelBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Color indicator dot in default state; star/icon in selected state
+          // Color indicator dot in default state; checkmark in selected state
           if (!isSelected) ...[
             Container(
-              width: 6,
-              height: 6,
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(
                 color: landmark.color,
                 shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 5),
           ],
           Flexible(
             child: Text(
@@ -213,8 +106,8 @@ class LandmarkLabelBubble extends StatelessWidget {
             const SizedBox(width: 4),
             Icon(
               Icons.check_circle_rounded,
-              size: 11,
-              color: Colors.white.withValues(alpha: 0.90),
+              size: 12,
+              color: Colors.white.withValues(alpha: 0.95),
             ),
           ],
         ],
@@ -223,12 +116,8 @@ class LandmarkLabelBubble extends StatelessWidget {
   }
 }
 
-/// Reusable composite marker widget attaching a styled label bubble above
-/// a classic Google Maps–style teardrop pin.
-///
-/// Anchoring Guarantee:
-/// The widget aligns to [Alignment.bottomCenter] so that the pointed bottom tip
-/// of the teardrop pin aligns precisely with the marker's geographic coordinate.
+/// Reusable marker widget rendering the location name badge (tooltip) directly
+/// anchored at the landmark's geographic coordinates without the teardrop location pin.
 class LandmarkMapMarker extends StatelessWidget {
   final LandmarkMarkerModel landmark;
   final bool isSelected;
@@ -247,14 +136,6 @@ class LandmarkMapMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pinWidth = isSelected ? style.selectedPinWidth : style.defaultPinWidth;
-    final pinHeight =
-        isSelected ? style.selectedPinHeight : style.defaultPinHeight;
-
-    // Zoom-dependent label visibility: labels stay visible at standard tour zoom (>= 13.8)
-    // or when the landmark is actively selected.
-    final showLabel = currentZoom >= 13.8 || isSelected;
-
     return Semantics(
       container: true,
       excludeSemantics: true,
@@ -264,32 +145,13 @@ class LandmarkMapMarker extends StatelessWidget {
         key: ValueKey('landmark_tap_${landmark.id}'),
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Align(
-          alignment: Alignment.bottomCenter,
+        child: Center(
           child: Transform.translate(
             offset: landmark.labelOffset,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (showLabel) ...[
-                  LandmarkLabelBubble(
-                    landmark: landmark,
-                    isSelected: isSelected,
-                    style: style,
-                  ),
-                  const SizedBox(height: 2.5),
-                ],
-                // Classic teardrop location pin
-                CustomPaint(
-                  key: ValueKey('landmark_pin_${landmark.id}'),
-                  size: Size(pinWidth, pinHeight),
-                  painter: ClassicMapPinPainter(
-                    pinColor: landmark.color,
-                    isSelected: isSelected,
-                  ),
-                ),
-              ],
+            child: LandmarkLabelBubble(
+              landmark: landmark,
+              isSelected: isSelected,
+              style: style,
             ),
           ),
         ),

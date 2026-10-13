@@ -4,12 +4,12 @@ import 'package:flutter_map/flutter_map.dart';
 import '../../../data/models/landmark_marker_model.dart';
 import 'landmark_map_marker.dart';
 
-/// FlutterMap layer widget that renders geo-anchored classic landmark pin markers and labels.
+/// FlutterMap layer widget that renders geo-anchored landmark location name badges (tooltips).
 ///
 /// Features:
-/// - Exact geographic anchoring tied to real-world coordinates ([Alignment.topCenter] with pin tip at bottom)
+/// - Geographic anchoring centered on real-world coordinates ([Alignment.center])
 /// - Zoom level visibility filtering ([minZoom] .. [maxZoom])
-/// - Selection-aware Z-indexing: The selected marker renders last to stay on top of adjacent markers
+/// - Selection-aware Z-indexing: The selected marker renders last to stay on top
 /// - Works seamlessly across both General and Satellite map views
 class LandmarkMarkersLayer extends StatelessWidget {
   /// The collection of configured landmark markers.
@@ -54,20 +54,20 @@ class LandmarkMarkersLayer extends StatelessWidget {
       return 0;
     });
 
-    // 3. Build MarkerLayer with exact geographic anchoring
+    // 3. Build MarkerLayer with geographic anchoring centered on coordinate
     return MarkerLayer(
       key: const Key('landmark_markers_layer'),
-      alignment: Alignment.topCenter,
+      alignment: Alignment.center,
       markers: visibleMarkers.map((landmark) {
         final isSelected = landmark.id == selectedLandmarkId;
-        final markerHeight = isSelected ? 86.0 : 76.0;
+        final markerHeight = isSelected ? 38.0 : 34.0;
 
         return Marker(
           key: ValueKey('landmark_marker_${landmark.id}'),
           point: landmark.coordinates,
-          width: 160.0,
+          width: 170.0,
           height: markerHeight,
-          alignment: Alignment.topCenter,
+          alignment: Alignment.center,
           child: LandmarkMapMarker(
             landmark: landmark,
             isSelected: isSelected,
