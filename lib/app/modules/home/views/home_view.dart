@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/theme/theme_extensions.dart';
 import '../controllers/home_controller.dart';
 
 /// Client landing view presenting Aurelia - Colosseum Audio Tour introduction.
-/// Matches the reference client UI design with hero background, emblem,
-/// descriptive copy, and 'Start Tour' CTA.
+/// Implements the client UI layout (hero background, circular stadium emblem,
+/// Aurelia branding, tour description, full-width Start Tour CTA, and audio indicator)
+/// strictly following the ColosseumClient Light Theme tokens.
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0908),
+      backgroundColor: colors.background,
       body: _HomeLandingContent(
         onStartTour: controller.navigateToAllPointsMap,
       ),
@@ -66,42 +70,39 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = context.textTheme;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Full-bleed hero background image
+        // Full-bleed hero background artwork
         Image.asset(
           'assets/images/background.jpg',
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF1F1A15), Color(0xFF0A0908)],
-              ),
-            ),
+          errorBuilder: (context, error, stackTrace) => Container(
+            color: colors.background,
           ),
         ),
 
-        // Dark gradient overlay for contrast
+        // Luminous light gradient vignette overlay honoring the ColosseumClient light theme
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              stops: const [0.0, 0.35, 0.65, 1.0],
+              stops: const [0.0, 0.35, 0.70, 1.0],
               colors: [
-                const Color(0xFF0A0908).withValues(alpha: 0.3),
-                const Color(0xFF0A0908).withValues(alpha: 0.5),
-                const Color(0xFF0A0908).withValues(alpha: 0.85),
-                const Color(0xFF0A0908),
+                colors.background.withValues(alpha: 0.65),
+                colors.background.withValues(alpha: 0.85),
+                colors.background.withValues(alpha: 0.95),
+                colors.background,
               ],
             ),
           ),
         ),
 
-        // Responsive content container with zero overflow protection
+        // Responsive content container with zero overflow protection across all mobile screens
         SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -123,47 +124,55 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
                               position: _slide,
                               child: Column(
                                 children: [
-                                  // Decorative Colosseum emblem
+                                  // Decorative circular Colosseum emblem
                                   Container(
-                                    padding: const EdgeInsets.all(16),
+                                    padding: const EdgeInsets.all(18),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: const Color(0xFF15120F)
-                                          .withValues(alpha: 0.6),
+                                      color: colors.card,
                                       border: Border.all(
-                                        color: const Color(0xFFC9A24B)
-                                            .withValues(alpha: 0.2),
-                                        width: 1,
+                                        color: colors.primary
+                                            .withValues(alpha: 0.25),
+                                        width: 1.5,
                                       ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: colors.primary
+                                              .withValues(alpha: 0.12),
+                                          blurRadius: 24,
+                                          spreadRadius: 2,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
                                     ),
                                     child: ShaderMask(
                                       shaderCallback: (bounds) =>
-                                          const LinearGradient(
+                                          LinearGradient(
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                         colors: [
-                                          Color(0xFFE5CB7A),
-                                          Color(0xFFC9A24B),
-                                          Color(0xFFA8692C),
+                                          colors.primary,
+                                          colors.ring,
+                                          colors.primary,
                                         ],
                                       ).createShader(bounds),
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.stadium,
-                                        size: 44,
-                                        color: Colors.white,
+                                        size: 46,
+                                        color: colors.primaryForeground,
                                       ),
                                     ),
                                   ),
                                   const SizedBox(height: 24),
 
-                                  // Roman Aurelia branding title
-                                  const Text(
+                                  // Roman Aurelia branding title in theme foreground
+                                  Text(
                                     'Aurelia',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Color(0xFFC9A24B),
-                                      letterSpacing: 4,
-                                      fontSize: 44,
+                                    style: textTheme.headlineLarge?.copyWith(
+                                      color: colors.foreground,
+                                      letterSpacing: 4.0,
+                                      fontSize: 42,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -172,28 +181,31 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
                                   // Elegant subtle divider
                                   Container(
                                     width: 48,
-                                    height: 1,
+                                    height: 1.5,
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: [
-                                          Colors.transparent,
-                                          const Color(0xFFC9A24B)
+                                          colors.primary
+                                              .withValues(alpha: 0.0),
+                                          colors.primary
                                               .withValues(alpha: 0.5),
-                                          Colors.transparent,
+                                          colors.primary
+                                              .withValues(alpha: 0.0),
                                         ],
                                       ),
                                     ),
                                   ),
                                   const SizedBox(height: 16),
 
-                                  // Tour description
-                                  const Text(
+                                  // Tour description in semantic muted foreground
+                                  Text(
                                     'Explore the Colosseum through panoramic views and immersive audio narration. Navigate through 5 iconic stops.',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(
+                                    style: textTheme.bodyMedium?.copyWith(
                                       fontSize: 14,
                                       height: 1.7,
-                                      color: Color(0xFF9B9183),
+                                      color: colors.mutedForeground,
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
                                 ],
@@ -203,7 +215,7 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
 
                           const Spacer(flex: 3),
 
-                          // Primary CTA button: Start Tour
+                          // Primary CTA button: Start Tour in Roman Imperial Red theme
                           FadeTransition(
                             opacity: _fade,
                             child: SizedBox(
@@ -213,20 +225,22 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
                                 key: const Key('home_next_button'),
                                 onPressed: widget.onStartTour,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFC9A24B),
-                                  foregroundColor: const Color(0xFF0A0908),
-                                  elevation: 0,
+                                  backgroundColor: colors.primary,
+                                  foregroundColor: colors.primaryForeground,
+                                  elevation: 4,
+                                  shadowColor: colors.primary
+                                      .withValues(alpha: 0.35),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'Start Tour',
-                                  style: TextStyle(
+                                  style: textTheme.titleMedium?.copyWith(
+                                    color: colors.primaryForeground,
                                     fontSize: 15,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.bold,
                                     letterSpacing: 1.5,
-                                    color: Color(0xFF0A0908),
                                   ),
                                 ),
                               ),
@@ -237,21 +251,24 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
                           // Subtle audio experience indicator
                           FadeTransition(
                             opacity: _fade,
-                            child: const Row(
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
                                   Icons.headphones_rounded,
-                                  size: 14,
-                                  color: Color(0xFF5C544B),
+                                  size: 15,
+                                  color: colors.mutedForeground
+                                      .withValues(alpha: 0.75),
                                 ),
-                                SizedBox(width: 6),
+                                const SizedBox(width: 6),
                                 Text(
                                   'Immersive Audio Experience',
-                                  style: TextStyle(
-                                    color: Color(0xFF5C544B),
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colors.mutedForeground
+                                        .withValues(alpha: 0.75),
                                     fontSize: 11,
-                                    letterSpacing: 1,
+                                    letterSpacing: 1.0,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
