@@ -67,7 +67,7 @@ void main() {
       expect(find.text('Arch of Constantine'), findsOneWidget);
       expect(find.text('Ludus Magnus'), findsOneWidget);
       expect(find.text('Roman Forum'), findsOneWidget);
-      expect(find.text('Temple of Venus and Rome'), findsOneWidget);
+      expect(find.text('Temple of Venus\nand Rome'), findsOneWidget);
 
       // Verify top controls exist
       expect(find.byKey(const Key('home_recenter_button')), findsOneWidget);

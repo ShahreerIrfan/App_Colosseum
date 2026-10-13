@@ -26,6 +26,7 @@ class LandmarkMarkerStyle {
 }
 
 /// A compact, styled rounded-pill label badge (tooltip) displayed for the landmark.
+/// If a landmark name has more than three words, it automatically formats across two lines.
 class LandmarkLabelBubble extends StatelessWidget {
   final LandmarkMarkerModel landmark;
   final bool isSelected;
@@ -38,8 +39,23 @@ class LandmarkLabelBubble extends StatelessWidget {
     this.style = const LandmarkMarkerStyle(),
   });
 
+  /// Automatically breaks landmark names with more than 3 words into two lines.
+  static String formatName(String name) {
+    final words = name.trim().split(RegExp(r'\s+'));
+    if (words.length <= 3) {
+      return name;
+    }
+    final mid = (words.length / 2).ceil();
+    final line1 = words.sublist(0, mid).join(' ');
+    final line2 = words.sublist(mid).join(' ');
+    return '$line1\n$line2';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final displayName = formatName(landmark.name);
+    final isMultiLine = displayName.contains('\n');
+
     // Distinct visual emphasis between default and selected states
     final backgroundColor = isSelected ? landmark.color : Colors.white;
     final textColor = isSelected ? Colors.white : const Color(0xFF1E293B);
@@ -51,7 +67,9 @@ class LandmarkLabelBubble extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 165),
       padding: EdgeInsets.symmetric(
         horizontal: isSelected ? 9.5 : 8.0,
-        vertical: isSelected ? 4.0 : 3.0,
+        vertical: isMultiLine
+            ? (isSelected ? 5.0 : 4.0)
+            : (isSelected ? 4.0 : 3.0),
       ),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -88,8 +106,8 @@ class LandmarkLabelBubble extends StatelessWidget {
           ],
           Flexible(
             child: Text(
-              landmark.name,
-              maxLines: 1,
+              displayName,
+              maxLines: isMultiLine ? 2 : 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: textColor,
@@ -98,6 +116,7 @@ class LandmarkLabelBubble extends StatelessWidget {
                     : style.labelFontSize,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                 letterSpacing: 0.2,
+                height: 1.15,
                 decoration: TextDecoration.none,
               ),
             ),

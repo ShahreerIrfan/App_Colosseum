@@ -9,6 +9,7 @@ import 'landmark_map_marker.dart';
 /// Features:
 /// - Geographic anchoring centered on real-world coordinates ([Alignment.center])
 /// - Zoom level visibility filtering ([minZoom] .. [maxZoom])
+/// - Multi-line adaptive height: dynamically expands for landmark names > 3 words
 /// - Selection-aware Z-indexing: The selected marker renders last to stay on top
 /// - Works seamlessly across both General and Satellite map views
 class LandmarkMarkersLayer extends StatelessWidget {
@@ -60,7 +61,11 @@ class LandmarkMarkersLayer extends StatelessWidget {
       alignment: Alignment.center,
       markers: visibleMarkers.map((landmark) {
         final isSelected = landmark.id == selectedLandmarkId;
-        final markerHeight = isSelected ? 38.0 : 34.0;
+        final words = landmark.name.trim().split(RegExp(r'\s+'));
+        final isMultiLine = words.length > 3;
+        final markerHeight = isMultiLine
+            ? (isSelected ? 52.0 : 46.0)
+            : (isSelected ? 38.0 : 34.0);
 
         return Marker(
           key: ValueKey('landmark_marker_${landmark.id}'),

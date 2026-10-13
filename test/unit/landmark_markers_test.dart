@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:colosseum_client/app/data/models/landmark_marker_model.dart';
 import 'package:colosseum_client/app/data/providers/landmark_markers_provider.dart';
+import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.dart';
 
 void main() {
   group('LandmarkMarkerModel and LandmarkMarkersProvider Tests', () {
@@ -95,6 +96,23 @@ void main() {
       expect(copied.name, 'Flavian Colosseum');
       expect(copied.color, Colors.amber);
       expect(copied.coordinates, original.coordinates);
+    });
+
+    test('LandmarkLabelBubble.formatName splits names with >3 words into two lines and preserves <=3 words', () {
+      // 1 to 3 words: remains on 1 line
+      expect(LandmarkLabelBubble.formatName('Colosseum'), 'Colosseum');
+      expect(LandmarkLabelBubble.formatName('Roman Forum'), 'Roman Forum');
+      expect(LandmarkLabelBubble.formatName('Arch of Constantine'), 'Arch of Constantine');
+
+      // More than 3 words: split into two lines
+      expect(
+        LandmarkLabelBubble.formatName('Temple of Venus and Rome'),
+        'Temple of Venus\nand Rome',
+      );
+      expect(
+        LandmarkLabelBubble.formatName('Four Word Landmark Here'),
+        'Four Word\nLandmark Here',
+      );
     });
   });
 }
