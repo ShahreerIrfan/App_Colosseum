@@ -161,55 +161,19 @@ class FloorMapView extends GetView<FloorMapController> {
               ),
             ),
 
-            // 2. Compact Minimal Top App Bar (Back Button + Landmark & Floor Title)
+            // 2. Compact Top App Bar (Landmark & Floor Title on Left + Exit Button on Right)
             Positioned(
               top: 12.0,
               left: 16.0,
               right: 16.0,
               child: Row(
                 children: [
-                  // Back Button
-                  Material(
-                    color: colors.card,
-                    shape: const CircleBorder(),
-                    elevation: 2.0,
-                    shadowColor: colors.foreground.withValues(alpha: 0.1),
-                    child: InkWell(
-                      onTap: () {
-                        if (controller.isFloorMenuOpen.value) {
-                          controller.closeFloorMenu();
-                        } else {
-                          Get.back();
-                        }
-                      },
-                      customBorder: const CircleBorder(),
-                      child: Container(
-                        width: 44.0,
-                        height: 44.0,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: colors.border,
-                            width: 1.0,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          Icons.arrow_back_rounded,
-                          color: colors.foreground,
-                          size: 20.0,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12.0),
-
-                  // Landmark Name & Floor Title Container
+                  // Landmark Name & Floor Title Container (Primary Anchor)
                   Expanded(
                     child: Obx(
                       () => Container(
                         height: 44.0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 14.0),
                         decoration: BoxDecoration(
                           color: colors.card,
                           borderRadius: BorderRadius.circular(22.0),
@@ -227,7 +191,13 @@ class FloorMapView extends GetView<FloorMapController> {
                         ),
                         child: Row(
                           children: [
-                            Expanded(
+                            Icon(
+                              Icons.account_balance_rounded,
+                              size: 17.0,
+                              color: colors.primary,
+                            ),
+                            const SizedBox(width: 8.0),
+                            Flexible(
                               child: Text(
                                 controller.landmarkName.value,
                                 maxLines: 1,
@@ -263,6 +233,60 @@ class FloorMapView extends GetView<FloorMapController> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10.0),
+
+                  // Exit Landmark Button (Replaces back button in optimal top-right position)
+                  Semantics(
+                    button: true,
+                    label: 'Exit landmark view and return to itinerary map',
+                    child: Material(
+                      color: colors.card,
+                      borderRadius: BorderRadius.circular(22.0),
+                      elevation: 2.0,
+                      shadowColor: colors.foreground.withValues(alpha: 0.08),
+                      child: InkWell(
+                        key: const Key('exit_landmark_button'),
+                        onTap: () {
+                          if (controller.isFloorMenuOpen.value) {
+                            controller.closeFloorMenu();
+                          }
+                          Get.back();
+                        },
+                        borderRadius: BorderRadius.circular(22.0),
+                        child: Container(
+                          height: 44.0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(22.0),
+                            border: Border.all(
+                              color: colors.border,
+                              width: 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.close_rounded,
+                                color: colors.destructive,
+                                size: 18.0,
+                              ),
+                              const SizedBox(width: 5.0),
+                              Text(
+                                'Exit',
+                                style: TextStyle(
+                                  color: colors.foreground,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.0,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

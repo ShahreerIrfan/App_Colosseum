@@ -49,7 +49,8 @@ void main() {
       // 1. Top bar and bottom bar floor name verification
       expect(find.text('Colosseum'), findsOneWidget);
       expect(find.text('Underground (Hypogeum)'), findsNWidgets(2));
-      expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+      expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
+      expect(find.text('Exit'), findsOneWidget);
 
       // 2. Out-of-Location Badge is shown initially and UserLocationPuck is hidden
       expect(find.byType(FlutterMap), findsOneWidget);
@@ -570,6 +571,40 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('Completed: 1/7'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'FloorMapView renders Exit button in top-right, closes floor menu if open and navigates back on tap',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final controller = Get.put(FloorMapController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const Scaffold(body: Text('Previous Screen')),
+        ),
+      );
+
+      // Navigate to FloorMapView
+      Get.to(() => const FloorMapView());
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FloorMapView), findsOneWidget);
+      final exitBtn = find.byKey(const Key('exit_landmark_button'));
+      expect(exitBtn, findsOneWidget);
+      expect(find.text('Exit'), findsOneWidget);
+
+      // Tap Exit button -> navigates back to previous screen
+      await tester.tap(exitBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Previous Screen'), findsOneWidget);
+      expect(find.byType(FloorMapView), findsNothing);
     },
   );
 }
