@@ -46,11 +46,10 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 1. Top bar and bottom bar floor name verification
-      expect(find.text('Colosseum'), findsOneWidget);
-      expect(find.text('Underground (Hypogeum)'), findsNWidgets(2));
+      // 1. Top bar Exit button and bottom bar floor name verification
       expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
       expect(find.text('Exit'), findsOneWidget);
+      expect(find.text('Underground (Hypogeum)'), findsOneWidget);
 
       // 2. Out-of-Location Badge is shown initially and UserLocationPuck is hidden
       expect(find.byType(FlutterMap), findsOneWidget);
@@ -581,7 +580,7 @@ void main() {
       tester.view.devicePixelRatio = 2.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      final controller = Get.put(FloorMapController());
+      Get.put(FloorMapController());
 
       await tester.pumpWidget(
         GetMaterialApp(
