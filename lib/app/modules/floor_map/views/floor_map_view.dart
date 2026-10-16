@@ -990,11 +990,13 @@ class FloorMapView extends GetView<FloorMapController> {
                       BottomNavItem(
                         key: const Key('floor_selection_bottom_button'),
                         icon: Icons.layers_rounded,
-                        label: 'Floor Selection',
-                        subtitle: controller.currentFloor.value.displayName,
+                        label: controller.landmarkName.value,
+                        subtitle:
+                            'Level : ${controller.currentFloor.value.displayName}',
                         isSelected: controller.isFloorMenuOpen.value,
                         onTap: controller.toggleFloorMenu,
-                        semanticLabel: 'Choose Colosseum floor',
+                        semanticLabel:
+                            'Choose ${controller.landmarkName.value} level',
                       ),
                     ],
                     trailing: Obx(

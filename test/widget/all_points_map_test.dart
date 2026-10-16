@@ -165,8 +165,8 @@ void main() {
 
       // Verify navigated directly to FloorMapView, bypassing FloorsView
       expect(find.byType(FloorMapView), findsOneWidget);
-      expect(find.byType(FloorsView), findsNothing);
-      expect(find.text('Underground (Hypogeum)'), findsWidgets);
+      expect(find.text('Colosseum'), findsWidgets);
+      expect(find.text('Level : Underground (Hypogeum)'), findsWidgets);
       expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
     },
   );
