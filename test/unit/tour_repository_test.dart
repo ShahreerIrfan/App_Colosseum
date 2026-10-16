@@ -96,7 +96,7 @@ void main() {
     test('LocalDataSource falls back to default floors when cache is empty',
         () async {
       final floors = await localDataSource.getCachedFloors();
-      expect(floors.length, equals(4));
+      expect(floors.length, equals(FloorDefinition.allFloors.length));
       expect(floors[0].id, equals('floor_underground'));
     });
 

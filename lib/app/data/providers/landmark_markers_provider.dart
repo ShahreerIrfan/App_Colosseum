@@ -23,6 +23,7 @@ abstract class LandmarkMarkersProvider {
     color: Color(0xFFDD1110), // Imperial Red (app primary theme)
     category: 'Amphitheatre',
     icon: Icons.stadium_rounded,
+    imagePath: 'assets/logo/Colosseum.png',
     labelOffset: Offset(0, 0),
     minZoom: 13.0,
     maxZoom: 21.0,
@@ -38,6 +39,7 @@ abstract class LandmarkMarkersProvider {
     color: Color(0xFFFF8F00), // Vibrant Amber Orange
     category: 'Triumphal Arch',
     icon: Icons.foundation_rounded,
+    imagePath: 'assets/logo/Arch of Constantine.png',
     labelOffset: Offset(-18, 28),
     minZoom: 13.0,
     maxZoom: 21.0,
@@ -53,6 +55,7 @@ abstract class LandmarkMarkersProvider {
     color: Color(0xFF1E88E5), // Mediterranean Blue
     category: 'Gladiator School',
     icon: Icons.fitness_center_rounded,
+    imagePath: 'assets/logo/Ludus Magnus.png',
     labelOffset: Offset(36, 14),
     minZoom: 13.0,
     maxZoom: 21.0,
@@ -67,6 +70,7 @@ abstract class LandmarkMarkersProvider {
     color: Color(0xFF2E7D32), // Roman Laurel Green
     category: 'Forum',
     icon: Icons.account_balance_rounded,
+    imagePath: 'assets/logo/Roman Forum.png',
     labelOffset: Offset(0, -6),
     minZoom: 13.0,
     maxZoom: 21.0,
@@ -82,6 +86,7 @@ abstract class LandmarkMarkersProvider {
     color: Color(0xFF8E24AA), // Royal Imperial Purple
     category: 'Ancient Temple',
     icon: Icons.temple_buddhist_rounded,
+    imagePath: 'assets/logo/Temple of Venus and Rome.png',
     labelOffset: Offset(-26, -22),
     minZoom: 13.0,
     maxZoom: 21.0,

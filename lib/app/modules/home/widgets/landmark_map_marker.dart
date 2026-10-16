@@ -149,8 +149,97 @@ class LandmarkLabelBubble extends StatelessWidget {
   }
 }
 
-/// Reusable marker widget rendering the location name badge (tooltip) directly
-/// anchored at the landmark's geographic coordinates without the teardrop location pin.
+/// A styled image badge marker displayed for the landmark using its correspondent
+/// graphic image from assets/logo.
+///
+/// Features:
+/// - Exact 3:1 aspect ratio matching the asset dimensions (2172 x 724)
+/// - Proportional compact scaling when zooming out to eliminate clutter
+/// - Smooth animated scale and distinct selection indicator badge when selected
+/// - Graceful fallback to text bubble if image fails to load
+class LandmarkImageBadge extends StatelessWidget {
+  final LandmarkMarkerModel landmark;
+  final bool isSelected;
+  final double width;
+  final double height;
+  final bool isCompact;
+
+  const LandmarkImageBadge({
+    super.key,
+    required this.landmark,
+    this.isSelected = false,
+    required this.width,
+    required this.height,
+    this.isCompact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: isSelected ? 1.05 : 1.0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            // The correspondent landmark logo image from assets/logo
+            Image.asset(
+              landmark.assetPath,
+              key: ValueKey('landmark_image_${landmark.id}'),
+              width: width,
+              height: height,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stackTrace) {
+                return LandmarkLabelBubble(
+                  landmark: landmark,
+                  isSelected: isSelected,
+                  currentZoom: isCompact ? 15.0 : 16.5,
+                );
+              },
+            ),
+
+            // Selection indicator badge
+            if (isSelected)
+              Positioned(
+                top: -3,
+                right: -3,
+                child: Container(
+                  key: ValueKey('landmark_selected_badge_${landmark.id}'),
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: landmark.color,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        blurRadius: 4.0,
+                        offset: const Offset(0, 1.5),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    size: isCompact ? 12.0 : 14.0,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Reusable marker widget rendering the location image badge directly
+/// anchored at the landmark's geographic coordinates.
 /// Adapts displacement dynamically when zooming out to maintain zero badge collision.
 class LandmarkMapMarker extends StatelessWidget {
   final LandmarkMarkerModel landmark;
@@ -182,6 +271,14 @@ class LandmarkMapMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = currentZoom < 15.8;
+    final badgeWidth = isCompact
+        ? (isSelected ? 126.0 : 114.0)
+        : (isSelected ? 156.0 : 140.0);
+    final badgeHeight = isCompact
+        ? (isSelected ? 42.0 : 38.0)
+        : (isSelected ? 52.0 : 46.7);
+
     return Semantics(
       container: true,
       excludeSemantics: true,
@@ -194,11 +291,12 @@ class LandmarkMapMarker extends StatelessWidget {
         child: Center(
           child: Transform.translate(
             offset: _effectiveOffset,
-            child: LandmarkLabelBubble(
+            child: LandmarkImageBadge(
               landmark: landmark,
               isSelected: isSelected,
-              currentZoom: currentZoom,
-              style: style,
+              width: badgeWidth,
+              height: badgeHeight,
+              isCompact: isCompact,
             ),
           ),
         ),

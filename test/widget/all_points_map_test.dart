@@ -13,7 +13,6 @@ import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.da
 import 'package:colosseum_client/app/modules/home/widgets/landmark_markers_layer.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_overlay_layer.dart';
 import 'package:colosseum_client/app/modules/floor_map/views/floor_map_view.dart';
-import 'package:colosseum_client/app/modules/floors/views/floors_view.dart';
 import 'package:colosseum_client/app/routes/app_pages.dart';
 
 import '../helpers/mock_http_overrides.dart';
@@ -34,7 +33,7 @@ void main() {
   });
 
   testWidgets(
-    'AllPointsMapView renders FlutterMap with TileLayer, 5 classic location pins with labels, and NO large image overlays',
+    'AllPointsMapView renders FlutterMap with TileLayer, 5 landmark logo image badges, and NO large image overlays',
     (WidgetTester tester) async {
       final controller = Get.put(HomeController());
 
@@ -55,23 +54,38 @@ void main() {
       // Verify large image overlays were removed from the map
       expect(find.byType(GeoLandmarkOverlayImageWidget), findsNothing);
 
-      // Verify all 5 classic pin markers are present on the map
+      // Verify all 5 landmark markers are present on the map
       expect(find.byKey(const ValueKey('landmark_marker_colosseum')), findsOneWidget);
       expect(find.byKey(const ValueKey('landmark_marker_arch_of_constantine')), findsOneWidget);
       expect(find.byKey(const ValueKey('landmark_marker_ludus_magnus')), findsOneWidget);
       expect(find.byKey(const ValueKey('landmark_marker_roman_forum')), findsOneWidget);
       expect(find.byKey(const ValueKey('landmark_marker_temple_venus_rome')), findsOneWidget);
 
-      // Verify all 5 location name badges (tooltips) are rendered without teardrop pointers
-      expect(find.byType(LandmarkLabelBubble), findsNWidgets(5));
-      expect(find.byKey(const ValueKey('landmark_pin_colosseum')), findsNothing);
+      // Verify all 5 location image badges are rendered with correspondent images from assets/logo
+      expect(find.byType(LandmarkImageBadge), findsNWidgets(5));
+      expect(find.byKey(const ValueKey('landmark_image_colosseum')), findsOneWidget);
+      expect(find.byKey(const ValueKey('landmark_image_arch_of_constantine')), findsOneWidget);
+      expect(find.byKey(const ValueKey('landmark_image_ludus_magnus')), findsOneWidget);
+      expect(find.byKey(const ValueKey('landmark_image_roman_forum')), findsOneWidget);
+      expect(find.byKey(const ValueKey('landmark_image_temple_venus_rome')), findsOneWidget);
 
-      // Verify visible labels for all 5 monuments
-      expect(find.text('Colosseum'), findsWidgets);
-      expect(find.text('Arch of Constantine'), findsOneWidget);
-      expect(find.text('Ludus Magnus'), findsOneWidget);
-      expect(find.text('Roman Forum'), findsOneWidget);
-      expect(find.text('Temple of Venus\nand Rome'), findsOneWidget);
+      final colosseumImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_colosseum')));
+      expect((colosseumImg.image as AssetImage).assetName, 'assets/logo/Colosseum.png');
+
+      final archImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_arch_of_constantine')));
+      expect((archImg.image as AssetImage).assetName, 'assets/logo/Arch of Constantine.png');
+
+      final ludusImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_ludus_magnus')));
+      expect((ludusImg.image as AssetImage).assetName, 'assets/logo/Ludus Magnus.png');
+
+      final forumImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_roman_forum')));
+      expect((forumImg.image as AssetImage).assetName, 'assets/logo/Roman Forum.png');
+
+      final templeImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_temple_venus_rome')));
+      expect((templeImg.image as AssetImage).assetName, 'assets/logo/Temple of Venus and Rome.png');
+
+      // Verify Colosseum recenter button text is present
+      expect(find.text('Colosseum'), findsOneWidget);
 
       // Verify top controls exist
       expect(find.byKey(const Key('home_recenter_button')), findsOneWidget);
@@ -143,7 +157,7 @@ void main() {
   );
 
   testWidgets(
-    'Tapping Colosseum marker navigates directly to FloorMapView bypassing FloorsView',
+    'Tapping Colosseum marker navigates directly to FloorMapView',
     (WidgetTester tester) async {
       Get.put(HomeController());
 
@@ -163,10 +177,10 @@ void main() {
       await tester.tap(colosseumTapFinder);
       await tester.pumpAndSettle();
 
-      // Verify navigated directly to FloorMapView, bypassing FloorsView
+      // Verify navigated directly to FloorMapView
       expect(find.byType(FloorMapView), findsOneWidget);
       expect(find.text('Colosseum'), findsWidgets);
-      expect(find.text('Level : Underground (Hypogeum)'), findsWidgets);
+      expect(find.textContaining('Underground (Hypogeum)'), findsWidgets);
       expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
     },
   );
@@ -313,7 +327,7 @@ void main() {
   );
 
   testWidgets(
-    'Approaching landmark and tapping Enter navigates directly to FloorMapView bypassing FloorsView',
+    'Approaching landmark and tapping Enter navigates directly to FloorMapView',
     (WidgetTester tester) async {
       final controller = Get.put(HomeController());
 
@@ -341,9 +355,8 @@ void main() {
       await tester.tap(find.byKey(const Key('tour_enter_landmark_button')));
       await tester.pumpAndSettle();
 
-      // Directly navigates to FloorMapView, bypassing FloorsView
+      // Directly navigates to FloorMapView
       expect(find.byType(FloorMapView), findsOneWidget);
-      expect(find.byType(FloorsView), findsNothing);
       expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
     },
   );

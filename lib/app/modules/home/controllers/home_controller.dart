@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../data/models/floor_definition.dart';
 import '../../../data/models/landmark_marker_model.dart';
 import '../../../data/models/landmark_overlay_model.dart';
 import '../../../data/models/map_view_type.dart';
@@ -305,14 +306,16 @@ class HomeController extends GetxController {
     final landmark =
         landmarkMarkers.firstWhereOrNull((m) => m.id == landmarkId);
     final name =
-        landmark?.name ?? (landmarkId == 'colosseum' ? 'Colosseum' : landmarkId);
+        landmark?.name ?? FloorDefinition.landmarkNameFor(landmarkId);
+    final initialFloor = FloorDefinition.initialFloorForLandmark(landmarkId);
     if (Get.routeTree.routes.any((route) => route.name == Routes.floorMap)) {
       Get.toNamed(
         Routes.floorMap,
         arguments: {
+          'landmarkId': landmarkId,
           'landmarkName': name,
-          'floorId': 'floor_underground',
-          'floorName': 'Underground (Hypogeum)',
+          'floorId': initialFloor.id,
+          'floorName': initialFloor.displayName,
         },
       );
     }

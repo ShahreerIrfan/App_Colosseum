@@ -98,6 +98,8 @@ class TourConfig {
 class TourNavigationState {
   final String itineraryId;
   final String activeFloorId;
+  final String landmarkName;
+  final String? floorName;
 
   /// The viewpoint/portal currently being guided toward (e.g., 'vp_100', 'vp_101', ..., 'EXIT').
   final String? navigationTargetId;
@@ -161,6 +163,8 @@ class TourNavigationState {
   const TourNavigationState({
     this.itineraryId = 'underground_itinerary',
     this.activeFloorId = 'floor_underground',
+    this.landmarkName = 'Colosseum',
+    this.floorName,
     this.navigationTargetId,
     this.previousTargetId,
     this.armedAutoPlayViewpointId,
@@ -189,6 +193,8 @@ class TourNavigationState {
   TourNavigationState copyWith({
     String? itineraryId,
     String? activeFloorId,
+    String? landmarkName,
+    String? Function()? floorName,
     String? Function()? navigationTargetId,
     String? Function()? previousTargetId,
     String? Function()? armedAutoPlayViewpointId,
@@ -216,6 +222,8 @@ class TourNavigationState {
     return TourNavigationState(
       itineraryId: itineraryId ?? this.itineraryId,
       activeFloorId: activeFloorId ?? this.activeFloorId,
+      landmarkName: landmarkName ?? this.landmarkName,
+      floorName: floorName != null ? floorName() : this.floorName,
       navigationTargetId: navigationTargetId != null
           ? navigationTargetId()
           : this.navigationTargetId,

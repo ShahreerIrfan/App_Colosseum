@@ -37,6 +37,13 @@ class LandmarkMarkersLayer extends StatelessWidget {
     this.style = const LandmarkMarkerStyle(),
   });
 
+  /// Pre-warms Flutter's memory image cache with the transparent landmark badge PNGs.
+  static void prewarm(BuildContext context, Iterable<LandmarkMarkerModel> markers) {
+    for (final marker in markers) {
+      precacheImage(AssetImage(marker.assetPath), context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // 1. Filter markers based on zoom thresholds
@@ -61,17 +68,19 @@ class LandmarkMarkersLayer extends StatelessWidget {
       alignment: Alignment.center,
       markers: visibleMarkers.map((landmark) {
         final isSelected = landmark.id == selectedLandmarkId;
-        final words = landmark.name.trim().split(RegExp(r'\s+'));
-        final isMultiLine = words.length > 3;
-        final markerHeight = isMultiLine
-            ? (isSelected ? 52.0 : 46.0)
-            : (isSelected ? 38.0 : 34.0);
+        final isCompact = currentZoom < 15.8;
+        final markerWidth = isCompact
+            ? (isSelected ? 132.0 : 120.0)
+            : (isSelected ? 164.0 : 148.0);
+        final markerHeight = isCompact
+            ? (isSelected ? 48.0 : 44.0)
+            : (isSelected ? 58.0 : 52.0);
 
         return Marker(
           key: ValueKey('landmark_marker_${landmark.id}'),
           point: landmark.coordinates,
-          width: 170.0,
-          height: markerHeight,
+          width: markerWidth + 20.0,
+          height: markerHeight + 16.0,
           alignment: Alignment.center,
           child: LandmarkMapMarker(
             landmark: landmark,

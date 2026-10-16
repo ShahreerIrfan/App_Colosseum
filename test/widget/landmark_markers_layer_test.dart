@@ -43,7 +43,7 @@ void main() {
     );
   }
 
-  testWidgets('LandmarkMarkersLayer renders all 5 landmark pins and labels at zoom 16.5', (
+  testWidgets('LandmarkMarkersLayer renders all 5 landmark image badges at zoom 16.5', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -54,20 +54,36 @@ void main() {
     );
     await tester.pump();
 
-    // Verify all 5 markers and pins exist
+    // Verify all 5 markers and image badges exist
     expect(find.byType(LandmarkMapMarker), findsNWidgets(5));
+    expect(find.byType(LandmarkImageBadge), findsNWidgets(5));
     expect(find.byKey(const ValueKey('landmark_marker_colosseum')), findsOneWidget);
     expect(find.byKey(const ValueKey('landmark_marker_arch_of_constantine')), findsOneWidget);
     expect(find.byKey(const ValueKey('landmark_marker_ludus_magnus')), findsOneWidget);
     expect(find.byKey(const ValueKey('landmark_marker_roman_forum')), findsOneWidget);
     expect(find.byKey(const ValueKey('landmark_marker_temple_venus_rome')), findsOneWidget);
 
-    // Verify text labels
-    expect(find.text('Colosseum'), findsOneWidget);
-    expect(find.text('Arch of Constantine'), findsOneWidget);
-    expect(find.text('Ludus Magnus'), findsOneWidget);
-    expect(find.text('Roman Forum'), findsOneWidget);
-    expect(find.text('Temple of Venus\nand Rome'), findsOneWidget);
+    // Verify all 5 correspondent images from assets/logo are rendered
+    expect(find.byKey(const ValueKey('landmark_image_colosseum')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_arch_of_constantine')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_ludus_magnus')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_roman_forum')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_temple_venus_rome')), findsOneWidget);
+
+    final colosseumImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_colosseum')));
+    expect((colosseumImg.image as AssetImage).assetName, 'assets/logo/Colosseum.png');
+
+    final archImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_arch_of_constantine')));
+    expect((archImg.image as AssetImage).assetName, 'assets/logo/Arch of Constantine.png');
+
+    final ludusImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_ludus_magnus')));
+    expect((ludusImg.image as AssetImage).assetName, 'assets/logo/Ludus Magnus.png');
+
+    final forumImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_roman_forum')));
+    expect((forumImg.image as AssetImage).assetName, 'assets/logo/Roman Forum.png');
+
+    final templeImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_temple_venus_rome')));
+    expect((templeImg.image as AssetImage).assetName, 'assets/logo/Temple of Venus and Rome.png');
   });
 
   testWidgets('Tapping marker invokes onLandmarkTap with landmark ID', (
@@ -131,10 +147,19 @@ void main() {
 
     // Verify all 5 markers render in compact mode without error
     expect(find.byType(LandmarkMapMarker), findsNWidgets(5));
-    expect(find.text('Colosseum'), findsOneWidget);
-    expect(find.text('Arch of Constantine'), findsOneWidget);
-    expect(find.text('Ludus Magnus'), findsOneWidget);
-    expect(find.text('Roman Forum'), findsOneWidget);
-    expect(find.text('Temple of Venus\nand Rome'), findsOneWidget);
+    expect(find.byType(LandmarkImageBadge), findsNWidgets(5));
+    expect(find.byKey(const ValueKey('landmark_image_colosseum')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_arch_of_constantine')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_ludus_magnus')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_roman_forum')), findsOneWidget);
+    expect(find.byKey(const ValueKey('landmark_image_temple_venus_rome')), findsOneWidget);
+
+    final badge = tester.widget<LandmarkImageBadge>(
+      find.descendant(
+        of: find.byKey(const ValueKey('landmark_marker_colosseum')),
+        matching: find.byType(LandmarkImageBadge),
+      ),
+    );
+    expect(badge.isCompact, isTrue);
   });
 }

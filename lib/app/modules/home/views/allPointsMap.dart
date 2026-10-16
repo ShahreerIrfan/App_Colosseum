@@ -21,6 +21,13 @@ class AllPointsMapView extends GetView<HomeController> {
     final colors = context.colors;
     final textTheme = context.textTheme;
 
+    // Pre-cache landmark logo images for smooth and instant map marker rendering
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        LandmarkMarkersLayer.prewarm(context, controller.landmarkMarkers);
+      }
+    });
+
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
@@ -126,7 +133,7 @@ class AllPointsMapView extends GetView<HomeController> {
                       );
                     }),
 
-                    // Layer 4: Classic Location Pins + Labels for Roman Monuments (All 5 Locations)
+                    // Layer 4: Landmark Logo Image Badges from assets/logo (All 5 Locations)
                     Obx(() {
                       if (!controller.isLandmarksVisible.value) {
                         return const SizedBox.shrink();

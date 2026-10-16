@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
+import '../models/floor_definition.dart';
 import '../models/tour_navigation_state.dart';
 import '../models/user_location_model.dart';
 import '../models/viewpoint_model.dart';
@@ -36,6 +37,8 @@ class TourNavigationEngine {
   void startTour({
     required String floorId,
     required List<ViewpointModel> viewpoints,
+    String? landmarkName,
+    String? floorName,
     Offset? entryLocation,
     Offset? exitLocation,
     bool isVoiceGuidanceEnabled = true,
@@ -66,9 +69,15 @@ class TourNavigationEngine {
             ? _viewpoints.first.id
             : (_exitLocation != null ? 'EXIT' : null));
 
+    final resolvedFloor = FloorDefinition.fromId(floorId);
+    final effectiveLandmarkName = landmarkName ?? resolvedFloor.landmarkName;
+    final effectiveFloorName = floorName ?? resolvedFloor.displayName;
+
     _state = TourNavigationState(
       itineraryId: '${floorId}_tour',
       activeFloorId: floorId,
+      landmarkName: effectiveLandmarkName,
+      floorName: effectiveFloorName,
       navigationTargetId: effectiveFirstTarget,
       previousTargetId: null,
       armedAutoPlayViewpointId: effectiveFirstTarget,
@@ -87,20 +96,36 @@ class TourNavigationEngine {
     if (isVoiceGuidanceEnabled && _viewpoints.isNotEmpty && effectiveFirstTarget != null && effectiveFirstTarget != 'EXIT') {
       final firstVp = _viewpoints.where((vp) => vp.id == effectiveFirstTarget).firstOrNull;
       if (firstVp != null) {
-        _speakThrottled(
-          'Begin the ${_getFloorTourName(floorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
-        );
+        _speakInitialGreeting(firstVp);
       }
     }
   }
 
+  void _speakInitialGreeting(ViewpointModel firstVp) {
+    final landmark = _state.landmarkName;
+    final isColosseum = landmark.toLowerCase() == 'colosseum';
+    if (isColosseum) {
+      _speakThrottled(
+        'Begin the ${_getFloorTourName(_state.activeFloorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
+      );
+    } else {
+      final formattedLandmark = landmark.toLowerCase().startsWith('the ')
+          ? landmark
+          : 'the $landmark';
+      final titleSuffix = firstVp.title.isNotEmpty ? ': ${firstVp.title}' : '';
+      _speakThrottled(
+        'Welcome to $formattedLandmark. Proceed to Viewpoint ${firstVp.order}$titleSuffix.',
+      );
+    }
+  }
+
   String _getFloorTourName(String? floorId) {
-    if (floorId == null) return 'Colosseum';
+    if (floorId == null) return _state.landmarkName;
     if (floorId.contains('underground')) return 'Underground';
     if (floorId.contains('1')) return 'Level 1';
     if (floorId.contains('2')) return 'Level 2';
     if (floorId.contains('3')) return 'Level 3';
-    return 'Colosseum';
+    return _state.floorName ?? _state.landmarkName;
   }
 
   /// Calculates real-world metric physical distance between two normalized floor offsets.
@@ -274,9 +299,17 @@ class TourNavigationEngine {
                 arrivalDwellStartedAt: () => null,
               );
               if (_state.isVoiceGuidanceEnabled) {
-                _speakThrottled(
-                  'You have completed the ${_getFloorTourName(_state.activeFloorId)} itinerary. The exit is here.',
-                );
+                final isColosseum =
+                    _state.landmarkName.toLowerCase() == 'colosseum';
+                if (isColosseum) {
+                  _speakThrottled(
+                    'You have completed the ${_getFloorTourName(_state.activeFloorId)} itinerary. The exit is here.',
+                  );
+                } else {
+                  _speakThrottled(
+                    'You have completed the ${_state.landmarkName} itinerary. The exit is here.',
+                  );
+                }
               }
             }
           }
@@ -462,7 +495,15 @@ class TourNavigationEngine {
     // Speak immediate next navigation direction
     if (_state.isVoiceGuidanceEnabled && !isAudioPlaying) {
       if (nextTargetId == null) {
-        _speakThrottled('You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
+        final isColosseum = _state.landmarkName.toLowerCase() == 'colosseum';
+        if (isColosseum) {
+          _speakThrottled(
+              'You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
+        } else {
+          final floorLabel = _state.floorName ?? _state.activeFloorId;
+          _speakThrottled(
+              'You have completed the ${_state.landmarkName}: $floorLabel tour.');
+        }
       } else if (nextTargetId == 'EXIT') {
         _speakThrottled('Proceed toward the Exit portal.');
       } else {
@@ -647,7 +688,16 @@ class TourNavigationEngine {
         if (_state.isVoiceGuidanceEnabled) {
           final nextTargetId = _state.navigationTargetId;
           if (nextTargetId == null) {
-            _speakThrottled('You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
+            final isColosseum =
+                _state.landmarkName.toLowerCase() == 'colosseum';
+            if (isColosseum) {
+              _speakThrottled(
+                  'You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
+            } else {
+              final floorLabel = _state.floorName ?? _state.activeFloorId;
+              _speakThrottled(
+                  'You have completed the ${_state.landmarkName}: $floorLabel tour.');
+            }
           } else if (nextTargetId == 'EXIT') {
             _speakThrottled('Proceed toward the Exit portal.');
           } else {
@@ -712,9 +762,7 @@ class TourNavigationEngine {
 
     if (_state.isVoiceGuidanceEnabled && _viewpoints.isNotEmpty) {
       final firstVp = _viewpoints.first;
-      _speakThrottled(
-        'Begin the ${_getFloorTourName(_state.activeFloorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
-      );
+      _speakInitialGreeting(firstVp);
     }
   }
 

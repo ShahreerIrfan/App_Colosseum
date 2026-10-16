@@ -3,11 +3,13 @@ import 'package:latlong2/latlong.dart';
 import '../models/itinerary_segment_model.dart';
 import '../models/viewpoint_model.dart';
 import '../providers/colosseum_tour_data.dart';
+import '../providers/landmarks_tour_data.dart';
 
-/// Single source of truth data model representing a Colosseum floor level,
+/// Single source of truth data model representing a monument floor or area level,
 /// its architectural configuration, viewpoints, guided itinerary, and calibration.
 class FloorDefinition {
   final String id;
+  final String landmarkId;
   final String displayName;
   final String shortName;
   final String floorNumberLabel;
@@ -21,6 +23,7 @@ class FloorDefinition {
 
   const FloorDefinition({
     required this.id,
+    this.landmarkId = 'colosseum',
     required this.displayName,
     required this.shortName,
     required this.floorNumberLabel,
@@ -54,8 +57,13 @@ class FloorDefinition {
             ItinerarySegmentModel.fromJson(Map<String, dynamic>.from(i as Map)))
         .toList();
 
+    final parsedLandmarkId = json['landmarkId'] as String? ??
+        json['landmarkCode'] as String? ??
+        'colosseum';
+
     return FloorDefinition(
       id: json['id'] as String? ?? json['floorId'] as String? ?? '',
+      landmarkId: parsedLandmarkId,
       displayName: json['displayName'] as String? ?? '',
       shortName: json['shortName'] as String? ?? '',
       floorNumberLabel: json['floorNumberLabel'] as String? ?? '',
@@ -73,6 +81,8 @@ class FloorDefinition {
   Map<String, dynamic> toJson() => {
         'id': id,
         'floorId': id,
+        'landmarkId': landmarkId,
+        'landmarkCode': landmarkId,
         'displayName': displayName,
         'shortName': shortName,
         'floorNumberLabel': floorNumberLabel,
@@ -90,6 +100,7 @@ class FloorDefinition {
 
   FloorDefinition copyWith({
     String? id,
+    String? landmarkId,
     String? displayName,
     String? shortName,
     String? floorNumberLabel,
@@ -103,6 +114,7 @@ class FloorDefinition {
   }) {
     return FloorDefinition(
       id: id ?? this.id,
+      landmarkId: landmarkId ?? this.landmarkId,
       displayName: displayName ?? this.displayName,
       shortName: shortName ?? this.shortName,
       floorNumberLabel: floorNumberLabel ?? this.floorNumberLabel,
@@ -117,9 +129,33 @@ class FloorDefinition {
     );
   }
 
-  /// Canonical definition for Underground (Hypogeum)
+  String get landmarkName => landmarkNameFor(landmarkId);
+
+  static String landmarkNameFor(String? landmarkId) {
+    if (landmarkId == null) return 'Colosseum';
+    final normalized = landmarkId.toLowerCase().trim();
+    if (normalized.contains('arch')) {
+      return 'Arch of Constantine';
+    }
+    if (normalized.contains('ludus')) {
+      return 'Ludus Magnus';
+    }
+    if (normalized.contains('venus') || normalized.contains('temple')) {
+      return 'Temple of Venus and Rome';
+    }
+    if (normalized.contains('forum')) {
+      return 'Roman Forum';
+    }
+    return 'Colosseum';
+  }
+
+  // ===========================================================================
+  // COLOSSEUM FLOORS (4 LEVELS)
+  // ===========================================================================
+
   static const FloorDefinition underground = FloorDefinition(
     id: 'floor_underground',
+    landmarkId: 'colosseum',
     displayName: 'Underground (Hypogeum)',
     shortName: 'Underground',
     floorNumberLabel: 'Underground',
@@ -129,9 +165,9 @@ class FloorDefinition {
     semanticLabel: 'Underground Hypogeum, current floor',
   );
 
-  /// Canonical definition for Level 1 (Ground / Arena)
   static const FloorDefinition level1 = FloorDefinition(
     id: 'floor_1',
+    landmarkId: 'colosseum',
     displayName: 'Level 1',
     shortName: 'Level 1',
     floorNumberLabel: 'Floor 1',
@@ -141,9 +177,9 @@ class FloorDefinition {
     semanticLabel: 'Level 1, current floor',
   );
 
-  /// Canonical definition for Level 2 (First Level)
   static const FloorDefinition level2 = FloorDefinition(
     id: 'floor_2',
+    landmarkId: 'colosseum',
     displayName: 'Level 2',
     shortName: 'Level 2',
     floorNumberLabel: 'Floor 2',
@@ -153,9 +189,9 @@ class FloorDefinition {
     semanticLabel: 'Level 2, current floor',
   );
 
-  /// Canonical definition for Level 3 (Second Level / Belvedere)
   static const FloorDefinition level3 = FloorDefinition(
     id: 'floor_3',
+    landmarkId: 'colosseum',
     displayName: 'Level 3',
     shortName: 'Level 3',
     floorNumberLabel: 'Floor 3',
@@ -165,20 +201,224 @@ class FloorDefinition {
     semanticLabel: 'Level 3, current floor',
   );
 
-  /// All 4 monumental levels in sequential order.
+  // ===========================================================================
+  // ARCH OF CONSTANTINE FLOORS (2 LEVELS)
+  // ===========================================================================
+
+  static const FloorDefinition archGround = FloorDefinition(
+    id: 'arch_ground',
+    landmarkId: 'arch_of_constantine',
+    displayName: 'Plaza & Constantinian Reliefs',
+    shortName: 'Ground',
+    floorNumberLabel: 'Ground Level',
+    center: LatLng(41.889762, 12.490667),
+    defaultZoom: 19.5,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Arch of Constantine.png',
+    viewpoints: LandmarksTourData.archGroundViewpoints,
+    itinerary: LandmarksTourData.archGroundItinerary,
+    semanticLabel: 'Arch of Constantine Ground Plaza, current floor',
+  );
+
+  static const FloorDefinition archAttic = FloorDefinition(
+    id: 'arch_attic',
+    landmarkId: 'arch_of_constantine',
+    displayName: 'Attic & Upper Terrace',
+    shortName: 'Attic',
+    floorNumberLabel: 'Attic Level',
+    center: LatLng(41.889762, 12.490667),
+    defaultZoom: 19.5,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Arch of Constantine.png',
+    viewpoints: LandmarksTourData.archAtticViewpoints,
+    itinerary: LandmarksTourData.archAtticItinerary,
+    semanticLabel: 'Arch of Constantine Attic Terrace, current floor',
+  );
+
+  // ===========================================================================
+  // LUDUS MAGNUS FLOORS (2 LEVELS)
+  // ===========================================================================
+
+  static const FloorDefinition ludusArena = FloorDefinition(
+    id: 'ludus_arena',
+    landmarkId: 'ludus_magnus',
+    displayName: 'Gladiator Arena & Cavea',
+    shortName: 'Arena',
+    floorNumberLabel: 'Arena Floor',
+    center: LatLng(41.890450, 12.495100),
+    defaultZoom: 19.2,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Ludus Magnus.png',
+    viewpoints: LandmarksTourData.ludusArenaViewpoints,
+    itinerary: LandmarksTourData.ludusArenaItinerary,
+    semanticLabel: 'Ludus Magnus Training Arena, current floor',
+  );
+
+  static const FloorDefinition ludusSubterranean = FloorDefinition(
+    id: 'ludus_tunnel',
+    landmarkId: 'ludus_magnus',
+    displayName: 'Subterranean Tunnel to Colosseum',
+    shortName: 'Tunnel',
+    floorNumberLabel: 'Subterranean',
+    center: LatLng(41.890450, 12.495100),
+    defaultZoom: 19.2,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Ludus Magnus.png',
+    viewpoints: LandmarksTourData.ludusSubterraneanViewpoints,
+    itinerary: LandmarksTourData.ludusSubterraneanItinerary,
+    semanticLabel: 'Ludus Magnus Subterranean Tunnel, current floor',
+  );
+
+  // ===========================================================================
+  // TEMPLE OF VENUS AND ROME FLOORS (2 LEVELS)
+  // ===========================================================================
+
+  static const FloorDefinition templeEast = FloorDefinition(
+    id: 'temple_east',
+    landmarkId: 'temple_venus_rome',
+    displayName: 'Venus Cella & East Terrace',
+    shortName: 'East (Venus)',
+    floorNumberLabel: 'East Terrace',
+    center: LatLng(41.890900, 12.489100),
+    defaultZoom: 18.8,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Temple of Venus and Rome.png',
+    viewpoints: LandmarksTourData.templeEastViewpoints,
+    itinerary: LandmarksTourData.templeEastItinerary,
+    semanticLabel: 'Temple of Venus and Rome East Cella, current floor',
+  );
+
+  static const FloorDefinition templeWest = FloorDefinition(
+    id: 'temple_west',
+    landmarkId: 'temple_venus_rome',
+    displayName: 'Roma Cella & Forum Belvedere',
+    shortName: 'West (Roma)',
+    floorNumberLabel: 'West Terrace',
+    center: LatLng(41.890900, 12.489100),
+    defaultZoom: 18.8,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Temple of Venus and Rome.png',
+    viewpoints: LandmarksTourData.templeWestViewpoints,
+    itinerary: LandmarksTourData.templeWestItinerary,
+    semanticLabel: 'Temple of Venus and Rome West Cella, current floor',
+  );
+
+  // ===========================================================================
+  // ROMAN FORUM FLOORS (2 LEVELS)
+  // ===========================================================================
+
+  static const FloorDefinition forumViaSacra = FloorDefinition(
+    id: 'forum_via_sacra',
+    landmarkId: 'roman_forum',
+    displayName: 'Via Sacra & Triumphal Way',
+    shortName: 'Via Sacra',
+    floorNumberLabel: 'Via Sacra',
+    center: LatLng(41.892050, 12.486600),
+    defaultZoom: 17.5,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Roman Forum.png',
+    viewpoints: LandmarksTourData.forumViaSacraViewpoints,
+    itinerary: LandmarksTourData.forumViaSacraItinerary,
+    semanticLabel: 'Roman Forum Via Sacra, current floor',
+  );
+
+  static const FloorDefinition forumSenateRostra = FloorDefinition(
+    id: 'forum_senate_rostra',
+    landmarkId: 'roman_forum',
+    displayName: 'Senate, Curia & The Rostra',
+    shortName: 'Curia & Rostra',
+    floorNumberLabel: 'Political Core',
+    center: LatLng(41.892050, 12.486600),
+    defaultZoom: 17.5,
+    mapNorthOffsetDegrees: 0.0,
+    mapAsset: 'assets/logo/Roman Forum.png',
+    viewpoints: LandmarksTourData.forumSenateViewpoints,
+    itinerary: LandmarksTourData.forumSenateItinerary,
+    semanticLabel: 'Roman Forum Curia and Rostra, current floor',
+  );
+
+  // ===========================================================================
+  // REGISTRY & LOOKUP HELPERS
+  // ===========================================================================
+
+  /// All monumental levels across all 5 landmarks.
   static const List<FloorDefinition> allFloors = [
     underground,
     level1,
     level2,
     level3,
+    archGround,
+    archAttic,
+    ludusArena,
+    ludusSubterranean,
+    templeEast,
+    templeWest,
+    forumViaSacra,
+    forumSenateRostra,
   ];
 
-  /// Finds matching FloorDefinition by id or name, with robust fallback.
+  /// Returns all available levels/floors for a specific landmark ID.
+  static List<FloorDefinition> floorsForLandmark(String? landmarkId) {
+    if (landmarkId == null) return const [underground, level1, level2, level3];
+    final normalized = landmarkId.toLowerCase().trim();
+    if (normalized.contains('arch')) {
+      return const [archGround, archAttic];
+    }
+    if (normalized.contains('ludus')) {
+      return const [ludusArena, ludusSubterranean];
+    }
+    if (normalized.contains('venus') || normalized.contains('temple')) {
+      return const [templeEast, templeWest];
+    }
+    if (normalized.contains('forum')) {
+      return const [forumViaSacra, forumSenateRostra];
+    }
+    return const [underground, level1, level2, level3];
+  }
+
+  /// Returns the initial entrance floor for a given landmark.
+  static FloorDefinition initialFloorForLandmark(String? landmarkId) {
+    final list = floorsForLandmark(landmarkId);
+    return list.isNotEmpty ? list.first : underground;
+  }
+
+  /// Finds matching FloorDefinition by id or name across all landmarks, with robust fallback.
   static FloorDefinition fromId(String? id) {
     if (id == null) return underground;
     final normalized = id.toLowerCase().trim();
+
+    for (final floor in allFloors) {
+      if (floor.id.toLowerCase() == normalized) {
+        return floor;
+      }
+    }
+
     if (normalized.contains('underground') || normalized == '0') {
       return underground;
+    }
+    if (normalized.contains('arch_attic') || normalized.contains('attic')) {
+      return archAttic;
+    }
+    if (normalized.contains('arch')) {
+      return archGround;
+    }
+    if (normalized.contains('ludus_tunnel') || normalized.contains('tunnel')) {
+      return ludusSubterranean;
+    }
+    if (normalized.contains('ludus')) {
+      return ludusArena;
+    }
+    if (normalized.contains('temple_west') || normalized.contains('roma')) {
+      return templeWest;
+    }
+    if (normalized.contains('temple') || normalized.contains('venus')) {
+      return templeEast;
+    }
+    if (normalized.contains('senate') || normalized.contains('curia') || normalized.contains('rostra')) {
+      return forumSenateRostra;
+    }
+    if (normalized.contains('forum')) {
+      return forumViaSacra;
     }
     if (normalized.contains('1') || normalized == 'level1' || normalized == 'floor_1') {
       return level1;

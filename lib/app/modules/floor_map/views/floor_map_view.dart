@@ -45,16 +45,16 @@ class FloorMapView extends GetView<FloorMapController> {
                 child: FlutterMap(
                   mapController: controller.mapController,
                   options: MapOptions(
-                    initialCenter: FloorMapController.colosseumCenter,
-                    initialZoom: FloorMapController.defaultZoom,
+                    initialCenter: controller.activeCenter,
+                    initialZoom: controller.activeZoom,
                     minZoom: FloorMapController.minZoom,
                     maxZoom: FloorMapController.maxZoom,
                     onPositionChanged: controller.onPositionChanged,
                     cameraConstraint: CameraConstraint.containCenter(
                       bounds: GeodesicUtils.createBoundsFromDimensions(
-                        center: FloorMapController.colosseumCenter,
-                        widthMeters: 360.0,
-                        heightMeters: 360.0,
+                        center: controller.activeCenter,
+                        widthMeters: 450.0,
+                        heightMeters: 450.0,
                       ),
                     ),
                     interactionOptions: const InteractionOptions(
@@ -986,8 +986,7 @@ class FloorMapView extends GetView<FloorMapController> {
                         key: const Key('floor_selection_bottom_button'),
                         icon: Icons.layers_rounded,
                         label: controller.landmarkName.value,
-                        subtitle:
-                            'Level : ${controller.currentFloor.value.displayName}',
+                        subtitle:controller.currentFloor.value.displayName,
                         isSelected: controller.isFloorMenuOpen.value,
                         onTap: controller.toggleFloorMenu,
                         semanticLabel:

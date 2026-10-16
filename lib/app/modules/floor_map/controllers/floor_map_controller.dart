@@ -57,12 +57,17 @@ class FloorMapController extends GetxController {
                 ? Get.find<ITourRepository>()
                 : TourRepositoryImpl());
 
+  final landmarkId = 'colosseum'.obs;
   final landmarkName = 'Colosseum'.obs;
   final floorName = 'Underground (Hypogeum)'.obs;
   final floorId = 'floor_underground'.obs;
 
   /// Single source of truth floor definition
   final currentFloor = FloorDefinition.underground.obs;
+
+  /// Dynamically resolved center coordinates and zoom for current landmark and floor
+  LatLng get activeCenter => currentFloor.value.center;
+  double get activeZoom => currentFloor.value.defaultZoom;
 
   /// List of monumental floors loaded dynamically from repository
   final availableFloors = <FloorDefinition>[...FloorDefinition.allFloors].obs;
@@ -204,14 +209,21 @@ class FloorMapController extends GetxController {
     // Parse navigation arguments if passed
     final args = Get.arguments;
     if (args is Map) {
+      if (args.containsKey('landmarkId') && args['landmarkId'] != null) {
+        landmarkId.value = args['landmarkId'].toString();
+      }
       if (args.containsKey('landmarkName') && args['landmarkName'] != null) {
         landmarkName.value = args['landmarkName'].toString();
+      } else {
+        landmarkName.value = FloorDefinition.landmarkNameFor(landmarkId.value);
       }
       if (args.containsKey('floorId') && args['floorId'] != null) {
         final def = FloorDefinition.fromId(args['floorId'].toString());
         currentFloor.value = def;
         floorId.value = def.id;
         floorName.value = def.displayName;
+        landmarkId.value = def.landmarkId;
+        landmarkName.value = def.landmarkName;
       }
       if (args.containsKey('floorName') && args['floorName'] != null) {
         floorName.value = args['floorName'].toString();
@@ -221,6 +233,8 @@ class FloorMapController extends GetxController {
       currentFloor.value = def;
       floorId.value = def.id;
       floorName.value = def.displayName;
+      landmarkId.value = def.landmarkId;
+      landmarkName.value = def.landmarkName;
     }
 
     // Initialize Text-to-Speech service, Tour Navigation Engine, Device Compass & GPS
@@ -534,23 +548,14 @@ class FloorMapController extends GetxController {
   }
 
   void _loadFloorData() {
-    final fid = floorId.value.toLowerCase();
-    final FloorDefinition def;
-
-    final hasCustomName = (Get.arguments is Map) && (Get.arguments as Map).containsKey('floorName');
-
-    if (fid.contains('underground') || fid == '0') {
-      def = FloorDefinition.underground;
-    } else if (fid.contains('2') || fid == 'floor_2') {
-      def = FloorDefinition.level2;
-    } else if (fid.contains('3') || fid == 'floor_3') {
-      def = FloorDefinition.level3;
-    } else {
-      def = FloorDefinition.level1;
-    }
+    final fid = floorId.value;
+    final FloorDefinition def = FloorDefinition.fromId(fid);
 
     currentFloor.value = def;
     floorId.value = def.id;
+    landmarkId.value = def.landmarkId;
+
+    final hasCustomName = (Get.arguments is Map) && (Get.arguments as Map).containsKey('floorName');
     if (!hasCustomName) {
       floorName.value = def.displayName;
     }
@@ -565,6 +570,8 @@ class FloorMapController extends GetxController {
     viewpoints.assignAll(populatedViewpoints);
     tourEngine.startTour(
       floorId: def.id,
+      landmarkName: landmarkName.value,
+      floorName: def.displayName,
       viewpoints: populatedViewpoints,
       initialVisitedIds: storedVisited,
       isVoiceGuidanceEnabled: tourState.value.isVoiceGuidanceEnabled,
@@ -591,10 +598,17 @@ class FloorMapController extends GetxController {
   }
 
   Future<void> _loadAvailableFloors() async {
+    final staticFloors = FloorDefinition.floorsForLandmark(landmarkId.value);
+    availableFloors.assignAll(staticFloors);
     try {
       final loadedFloors = await tourRepository.getFloors();
       if (loadedFloors.isNotEmpty) {
-        availableFloors.assignAll(loadedFloors);
+        final matching = loadedFloors
+            .where((f) => f.landmarkId == landmarkId.value)
+            .toList();
+        if (matching.isNotEmpty) {
+          availableFloors.assignAll(matching);
+        }
       }
     } catch (_) {}
   }
@@ -951,7 +965,7 @@ class FloorMapController extends GetxController {
       if (isUserInLocation.value && userLocation.value != null) {
         mapController.move(userLocation.value!.latLng, defaultZoom);
       } else {
-        mapController.move(colosseumCenter, defaultZoom);
+        mapController.move(activeCenter, activeZoom);
       }
     } catch (_) {}
 
@@ -1098,6 +1112,8 @@ class FloorMapController extends GetxController {
     currentFloor.value = targetDef;
     floorId.value = targetDef.id;
     floorName.value = targetDef.displayName;
+    landmarkId.value = targetDef.landmarkId;
+    landmarkName.value = targetDef.landmarkName;
     lastViewedFloorId = targetDef.id;
 
     // 7, 8, 9, 10, 11, 13. Load target floor configuration, viewpoints, route, visited progress
@@ -1110,6 +1126,8 @@ class FloorMapController extends GetxController {
 
     tourEngine.startTour(
       floorId: targetDef.id,
+      landmarkName: targetDef.landmarkName,
+      floorName: targetDef.displayName,
       viewpoints: populatedViewpoints,
       initialVisitedIds: storedVisited,
       isVoiceGuidanceEnabled: tourState.value.isVoiceGuidanceEnabled,

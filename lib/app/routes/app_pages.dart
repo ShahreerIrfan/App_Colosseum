@@ -4,8 +4,7 @@ import 'package:get/get.dart';
 
 import '../modules/floor_map/bindings/floor_map_binding.dart';
 import '../modules/floor_map/views/floor_map_view.dart';
-import '../modules/floors/bindings/floors_binding.dart';
-import '../modules/floors/views/floors_view.dart';
+
 import '../modules/home/bindings/home_binding.dart';
 import '../modules/home/views/allPointsMap.dart';
 import '../modules/home/views/home_view.dart';
@@ -42,11 +41,7 @@ class AppPages {
       page: () => const AllPointsMapView(),
       binding: HomeBinding(),
     ),
-    GetPage(
-      name: _Paths.floors,
-      page: () => const FloorsView(),
-      binding: FloorsBinding(),
-    ),
+
     GetPage(
       name: _Paths.floorMap,
       page: () => const FloorMapView(),

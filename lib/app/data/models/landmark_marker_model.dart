@@ -22,6 +22,9 @@ class LandmarkMarkerModel {
   /// Optional icon representing the landmark type.
   final IconData? icon;
 
+  /// Asset path to the correspondent logo / badge image for this landmark.
+  final String? imagePath;
+
   /// Fine-grained label offset for overlap avoidance in dense areas.
   final Offset labelOffset;
 
@@ -41,11 +44,33 @@ class LandmarkMarkerModel {
     required this.color,
     this.category,
     this.icon,
+    this.imagePath,
     this.labelOffset = Offset.zero,
     this.minZoom = 13.0,
     this.maxZoom = 21.0,
     this.onTap,
   });
+
+  /// Resolves the asset path for this landmark's logo badge image from assets/logo.
+  String get assetPath {
+    if (imagePath != null && imagePath!.isNotEmpty) {
+      return imagePath!;
+    }
+    switch (id) {
+      case 'colosseum':
+        return 'assets/logo/Colosseum.png';
+      case 'arch_of_constantine':
+        return 'assets/logo/Arch of Constantine.png';
+      case 'ludus_magnus':
+        return 'assets/logo/Ludus Magnus.png';
+      case 'roman_forum':
+        return 'assets/logo/Roman Forum.png';
+      case 'temple_venus_rome':
+        return 'assets/logo/Temple of Venus and Rome.png';
+      default:
+        return 'assets/logo/$name.png';
+    }
+  }
 
   /// Geographic latitude.
   double get latitude => coordinates.latitude;
@@ -88,6 +113,7 @@ class LandmarkMarkerModel {
       coordinates: coords,
       color: markerColor,
       category: json['category'] as String?,
+      imagePath: json['imagePath'] as String?,
       labelOffset: Offset(
         (json['labelOffsetX'] as num?)?.toDouble() ?? 0.0,
         (json['labelOffsetY'] as num?)?.toDouble() ?? 0.0,
@@ -105,6 +131,7 @@ class LandmarkMarkerModel {
         'longitude': coordinates.longitude,
         'color': color.toARGB32(),
         'category': category,
+        'imagePath': imagePath,
         'labelOffsetX': labelOffset.dx,
         'labelOffsetY': labelOffset.dy,
         'minZoom': minZoom,
@@ -118,6 +145,7 @@ class LandmarkMarkerModel {
     Color? color,
     String? category,
     IconData? icon,
+    String? imagePath,
     Offset? labelOffset,
     double? minZoom,
     double? maxZoom,
@@ -130,6 +158,7 @@ class LandmarkMarkerModel {
       color: color ?? this.color,
       category: category ?? this.category,
       icon: icon ?? this.icon,
+      imagePath: imagePath ?? this.imagePath,
       labelOffset: labelOffset ?? this.labelOffset,
       minZoom: minZoom ?? this.minZoom,
       maxZoom: maxZoom ?? this.maxZoom,
@@ -148,6 +177,7 @@ class LandmarkMarkerModel {
           color == other.color &&
           category == other.category &&
           icon == other.icon &&
+          imagePath == other.imagePath &&
           labelOffset == other.labelOffset &&
           minZoom == other.minZoom &&
           maxZoom == other.maxZoom;
@@ -160,6 +190,7 @@ class LandmarkMarkerModel {
         color,
         category,
         icon,
+        imagePath,
         labelOffset,
         minZoom,
         maxZoom,
