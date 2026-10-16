@@ -52,7 +52,7 @@ class HomeController extends GetxController {
   final isDebugLandmarks = false.obs;
 
   /// Active base map view type (General vs Satellite).
-  final selectedMapView = MapViewType.general.obs;
+  final selectedMapView = MapViewType.satellite.obs;
 
   /// Real-time user geographic location.
   final userLocation = Rxn<LatLng>();

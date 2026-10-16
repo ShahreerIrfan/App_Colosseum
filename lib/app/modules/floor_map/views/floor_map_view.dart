@@ -339,6 +339,33 @@ class FloorMapView extends GetView<FloorMapController> {
                           indent: 6.0,
                           endIndent: 6.0,
                         ),
+                        // Toggle Map View (Satellite vs General) Button
+                        Obx(
+                          () {
+                            final isSatellite =
+                                controller.selectedMapView.value == MapViewType.satellite;
+                            return _ToolbarButton(
+                              key: const Key('toolbar_toggle_map_view_button'),
+                              icon: isSatellite
+                                  ? Icons.map_rounded
+                                  : Icons.satellite_alt_rounded,
+                              tooltip: isSatellite
+                                  ? 'Switch to General View'
+                                  : 'Switch to Satellite View',
+                              onPressed: controller.toggleMapView,
+                              colors: colors,
+                              isActive: isSatellite,
+                              activeColor: colors.primary,
+                            );
+                          },
+                        ),
+                        VerticalDivider(
+                          width: 1.0,
+                          thickness: 1.0,
+                          color: colors.border,
+                          indent: 6.0,
+                          endIndent: 6.0,
+                        ),
                         // Field Test (Playground Mode) Toggle Button
                         Obx(
                           () => _ToolbarButton(
@@ -1106,6 +1133,7 @@ class _ToolbarButton extends StatelessWidget {
   final Color? activeColor;
 
   const _ToolbarButton({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,

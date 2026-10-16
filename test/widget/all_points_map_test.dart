@@ -77,23 +77,27 @@ void main() {
       expect(find.byKey(const Key('home_recenter_button')), findsOneWidget);
       expect(find.byKey(const Key('home_toggle_map_view_button')), findsOneWidget);
 
-      // Switch to Satellite View using the top control button
-      await tester.tap(find.byKey(const Key('home_toggle_map_view_button')));
-      await tester.pump();
-
+      // Initially starts in Satellite View by default
       expect(controller.selectedMapView.value.name, 'satellite');
       expect(find.text('General'), findsOneWidget);
 
-      // All 5 landmark pins and labels remain present in satellite view
-      expect(find.byKey(const ValueKey('landmark_marker_colosseum')), findsOneWidget);
-      expect(find.byKey(const ValueKey('landmark_marker_arch_of_constantine')), findsOneWidget);
-
-      // Switch back to General View
+      // Switch to General View using the top control button
       await tester.tap(find.byKey(const Key('home_toggle_map_view_button')));
       await tester.pump();
 
       expect(controller.selectedMapView.value.name, 'general');
       expect(find.text('Satellite'), findsOneWidget);
+
+      // All 5 landmark pins and labels remain present
+      expect(find.byKey(const ValueKey('landmark_marker_colosseum')), findsOneWidget);
+      expect(find.byKey(const ValueKey('landmark_marker_arch_of_constantine')), findsOneWidget);
+
+      // Switch back to Satellite View
+      await tester.tap(find.byKey(const Key('home_toggle_map_view_button')));
+      await tester.pump();
+
+      expect(controller.selectedMapView.value.name, 'satellite');
+      expect(find.text('General'), findsOneWidget);
 
       // Tap recenter button
       await tester.tap(find.byKey(const Key('home_recenter_button')));

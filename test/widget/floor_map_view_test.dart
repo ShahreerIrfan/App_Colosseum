@@ -431,10 +431,10 @@ void main() {
       expect(floorBtn, findsOneWidget);
       expect(mapViewBtn, findsOneWidget);
       expect(find.text('Map View'), findsOneWidget);
-      expect(find.text('General'), findsOneWidget);
+      expect(find.text('Satellite'), findsOneWidget);
 
       // Initially neither menu is visible
-      expect(find.byKey(const Key('map_view_item_satellite')), findsNothing);
+      expect(find.byKey(const Key('map_view_item_general')), findsNothing);
       expect(find.byKey(const Key('floor_menu_item_floor_1')), findsNothing);
 
       // 2. Tap Map View button to open menu
@@ -446,7 +446,7 @@ void main() {
       expect(find.text('Select map view'), findsOneWidget);
       expect(find.byKey(const Key('map_view_item_general')), findsOneWidget);
       expect(find.byKey(const Key('map_view_item_satellite')), findsOneWidget);
-      // General view is initially active and has checkmark
+      // Satellite view is initially active and has checkmark
       expect(find.byIcon(Icons.check_rounded), findsOneWidget);
 
       // 3. Test mutual menu exclusivity: tapping Floor button while Map View menu is open
@@ -465,24 +465,42 @@ void main() {
 
       expect(controller.isFloorMenuOpen.value, isFalse);
       expect(controller.isMapViewMenuOpen.value, isTrue);
-      expect(find.byKey(const Key('map_view_item_satellite')), findsOneWidget);
+      expect(find.byKey(const Key('map_view_item_general')), findsOneWidget);
 
-      // 4. Tap Satellite View option in menu
-      await tester.tap(find.byKey(const Key('map_view_item_satellite')));
+      // 4. Tap General View option in menu
+      await tester.tap(find.byKey(const Key('map_view_item_general')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 
-      // Menu closes and map view switches to Satellite
+      // Menu closes and map view switches to General
       expect(controller.isMapViewMenuOpen.value, isFalse);
-      expect(controller.selectedMapView.value.name, 'satellite');
-      expect(find.text('Satellite'), findsOneWidget);
+      expect(controller.selectedMapView.value.name, 'general');
+      expect(find.text('General'), findsOneWidget);
 
       // Overlays remain fully intact
       expect(find.byType(TileLayer), findsOneWidget);
       expect(find.byType(PolylineLayer), findsOneWidget);
       expect(find.byType(ViewpointMarker), findsNWidgets(7));
 
-      // 5. Test closing menu via scrim
+      // 5. Test toolbar toggle button alternates between General and Satellite view
+      final toolbarToggleBtn = find.byKey(const Key('toolbar_toggle_map_view_button'));
+      expect(toolbarToggleBtn, findsOneWidget);
+
+      await tester.tap(toolbarToggleBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Toggled to Satellite View
+      expect(controller.selectedMapView.value.name, 'satellite');
+
+      await tester.tap(toolbarToggleBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Toggled back to General View
+      expect(controller.selectedMapView.value.name, 'general');
+
+      // 6. Test closing menu via scrim
       await tester.tap(mapViewBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
@@ -567,13 +585,13 @@ void main() {
       // Level 1 has 9 viewpoints, none visited -> Completed: 0/9 (No leakage from Underground)
       expect(find.text('Completed: 0/9'), findsOneWidget);
 
-      // 7. Switch Map View to Satellite -> Level 1 progress remains Completed: 0/9
+      // 7. Switch Map View to General -> Level 1 progress remains Completed: 0/9
       final mapViewBtn = find.byKey(const Key('map_view_bottom_button'));
       await tester.tap(mapViewBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 
-      await tester.tap(find.byKey(const Key('map_view_item_satellite')));
+      await tester.tap(find.byKey(const Key('map_view_item_general')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 

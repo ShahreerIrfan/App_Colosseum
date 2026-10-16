@@ -43,7 +43,7 @@ void main() {
       expect(controller.landmarkOverlays.length, 5);
       expect(controller.isLandmarksVisible.value, isTrue);
       expect(controller.isDebugLandmarks.value, isFalse);
-      expect(controller.selectedMapView.value, MapViewType.general);
+      expect(controller.selectedMapView.value, MapViewType.satellite);
     });
 
     test('toggles landmark visibility and debug mode', () {
@@ -58,14 +58,16 @@ void main() {
     });
 
     test('switches and toggles map view type between general and satellite', () {
-      controller.toggleMapView();
       expect(controller.selectedMapView.value, MapViewType.satellite);
 
       controller.toggleMapView();
       expect(controller.selectedMapView.value, MapViewType.general);
 
-      controller.switchMapView(MapViewType.satellite);
+      controller.toggleMapView();
       expect(controller.selectedMapView.value, MapViewType.satellite);
+
+      controller.switchMapView(MapViewType.general);
+      expect(controller.selectedMapView.value, MapViewType.general);
     });
 
     test('initializes with 5 landmark markers and colosseum selected by default', () {

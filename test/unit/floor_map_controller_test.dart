@@ -550,11 +550,19 @@ void main() {
       expect(controller.viewpoints[0].isVisited, isTrue);
     });
 
-    test('initializes with default MapViewType.general', () {
-      expect(controller.selectedMapView.value, equals(MapViewType.general));
-      expect(controller.currentMapViewDisplayName, equals('General View'));
-      expect(controller.currentMapViewShortName, equals('General'));
+    test('initializes with default MapViewType.satellite', () {
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
+      expect(controller.currentMapViewDisplayName, equals('Satellite View'));
+      expect(controller.currentMapViewShortName, equals('Satellite'));
       expect(controller.isMapViewMenuOpen.value, isFalse);
+    });
+
+    test('toggleMapView directly alternates between satellite and general view', () {
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
+      controller.toggleMapView();
+      expect(controller.selectedMapView.value, equals(MapViewType.general));
+      controller.toggleMapView();
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
     });
 
     test('toggleMapViewMenu, openMapViewMenu, closeMapViewMenu, and closeAllBottomMenus', () {
@@ -609,12 +617,12 @@ void main() {
       controller.openMapViewMenu();
       expect(controller.isMapViewMenuOpen.value, isTrue);
 
-      // Switch to Satellite View
-      controller.switchMapView(MapViewType.satellite);
+      // Switch to General View
+      controller.switchMapView(MapViewType.general);
 
       // Selected map view updated and menu closed
-      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
-      expect(controller.currentMapViewShortName, equals('Satellite'));
+      expect(controller.selectedMapView.value, equals(MapViewType.general));
+      expect(controller.currentMapViewShortName, equals('General'));
       expect(controller.isMapViewMenuOpen.value, isFalse);
 
       // Floor context strictly unchanged
@@ -627,13 +635,13 @@ void main() {
     });
 
     test('switchMapView to same active view only closes menu without reload', () {
-      expect(controller.selectedMapView.value, equals(MapViewType.general));
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
       controller.openMapViewMenu();
       expect(controller.isMapViewMenuOpen.value, isTrue);
 
-      controller.switchMapView(MapViewType.general);
+      controller.switchMapView(MapViewType.satellite);
       expect(controller.isMapViewMenuOpen.value, isFalse);
-      expect(controller.selectedMapView.value, equals(MapViewType.general));
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
     });
 
     test('switchFloor preserves the currently selected map view mode', () async {

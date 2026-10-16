@@ -68,7 +68,7 @@ class FloorMapController extends GetxController {
   final availableFloors = <FloorDefinition>[...FloorDefinition.allFloors].obs;
 
   /// Single source of truth for the base map view presentation (General vs Satellite).
-  final selectedMapView = MapViewType.general.obs;
+  final selectedMapView = MapViewType.satellite.obs;
 
   /// Whether the floating floor selection menu is open
   final isFloorMenuOpen = false.obs;
@@ -1024,6 +1024,14 @@ class FloorMapController extends GetxController {
     closeMapViewMenu();
     selectedMapView.value = type;
     lastViewedMapView = type;
+  }
+
+  /// Directly toggles base map view between Satellite and General.
+  void toggleMapView() {
+    final nextView = selectedMapView.value == MapViewType.satellite
+        ? MapViewType.general
+        : MapViewType.satellite;
+    switchMapView(nextView);
   }
 
   /// Non-blocking callback when satellite tiles encounter fetch failure.
