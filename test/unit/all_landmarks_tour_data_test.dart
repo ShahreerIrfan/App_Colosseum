@@ -161,5 +161,31 @@ void main() {
         'Begin the Underground tour. Proceed toward Viewpoint 100.',
       );
     });
+
+    test('verifies all surrounding landmark viewpoints have authentic GPS coordinates in their monument bounds', () {
+      // Temple of Venus and Rome
+      for (final vp in LandmarksTourData.templeEastViewpoints) {
+        expect(vp.latLng.latitude, inInclusiveRange(41.890, 41.892));
+        expect(vp.latLng.longitude, inInclusiveRange(12.488, 12.491));
+      }
+
+      // Arch of Constantine
+      for (final vp in LandmarksTourData.archGroundViewpoints) {
+        expect(vp.latLng.latitude, inInclusiveRange(41.889, 41.891));
+        expect(vp.latLng.longitude, inInclusiveRange(12.490, 12.492));
+      }
+
+      // Ludus Magnus
+      for (final vp in LandmarksTourData.ludusArenaViewpoints) {
+        expect(vp.latLng.latitude, inInclusiveRange(41.889, 41.892));
+        expect(vp.latLng.longitude, inInclusiveRange(12.494, 12.496));
+      }
+
+      // Roman Forum
+      for (final vp in LandmarksTourData.forumViaSacraViewpoints) {
+        expect(vp.latLng.latitude, inInclusiveRange(41.890, 41.894));
+        expect(vp.latLng.longitude, inInclusiveRange(12.484, 12.490));
+      }
+    });
   });
 }

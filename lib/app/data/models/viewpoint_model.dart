@@ -18,7 +18,12 @@ class ViewpointModel {
   final String? imageAsset;
 
   /// Gets the real geographic coordinate [LatLng] on the map.
-  LatLng get latLng => GeodesicUtils.canvasOffsetToLatLng(Offset(normalizedX, normalizedY));
+  LatLng get latLng {
+    if (latitude != null && longitude != null && !floorId.startsWith('floor_')) {
+      return LatLng(latitude!, longitude!);
+    }
+    return GeodesicUtils.canvasOffsetToLatLng(Offset(normalizedX, normalizedY));
+  }
 
   const ViewpointModel({
     required this.id,

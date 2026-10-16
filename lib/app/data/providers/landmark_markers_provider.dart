@@ -51,7 +51,7 @@ abstract class LandmarkMarkersProvider {
   static const ludusMagnus = LandmarkMarkerModel(
     id: 'ludus_magnus',
     name: 'Ludus Magnus',
-    coordinates: LatLng(41.890450, 12.495100),
+    coordinates: LatLng(41.889950, 12.495050),
     color: Color(0xFF1E88E5), // Mediterranean Blue
     category: 'Gladiator School',
     icon: Icons.fitness_center_rounded,
@@ -82,7 +82,7 @@ abstract class LandmarkMarkersProvider {
   static const templeOfVenusAndRome = LandmarkMarkerModel(
     id: 'temple_venus_rome',
     name: 'Temple of Venus and Rome',
-    coordinates: LatLng(41.890900, 12.489100),
+    coordinates: LatLng(41.890830, 12.489720),
     color: Color(0xFF8E24AA), // Royal Imperial Purple
     category: 'Ancient Temple',
     icon: Icons.temple_buddhist_rounded,

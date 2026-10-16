@@ -50,7 +50,7 @@ void main() {
       expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
       expect(find.text('Exit'), findsOneWidget);
       expect(find.text('Colosseum'), findsOneWidget);
-      expect(find.text('Level : Underground (Hypogeum)'), findsOneWidget);
+      expect(find.text('Underground (Hypogeum)'), findsOneWidget);
 
       // 2. Out-of-Location Badge is shown initially and UserLocationPuck is hidden
       expect(find.byType(FlutterMap), findsOneWidget);
@@ -356,7 +356,7 @@ void main() {
       final floorSelectionButton = find.byKey(const Key('floor_selection_bottom_button'));
       expect(floorSelectionButton, findsOneWidget);
       expect(find.text('Colosseum'), findsOneWidget);
-      expect(find.text('Level : Underground (Hypogeum)'), findsAtLeastNWidgets(1));
+      expect(find.text('Underground (Hypogeum)'), findsAtLeastNWidgets(1));
 
       // Initially, floor selection menu is NOT visible
       expect(find.byKey(const Key('floor_menu_item_floor_2')), findsNothing);
@@ -385,8 +385,8 @@ void main() {
       expect(controller.isFloorMenuOpen.value, isFalse);
       expect(find.byKey(const Key('floor_menu_item_floor_2')), findsNothing);
 
-      // Bottom floor button updates to Level : Level 2
-      expect(find.text('Level : Level 2'), findsAtLeastNWidgets(1));
+      // Bottom floor button updates to Level 2
+      expect(find.text('Level 2'), findsAtLeastNWidgets(1));
       expect(controller.currentFloor.value.id, 'floor_2');
 
       // Markers are updated: Level 2 has 7 viewpoints (300-306)
@@ -431,7 +431,7 @@ void main() {
       final floorBtn = find.byKey(const Key('floor_selection_bottom_button'));
       expect(floorBtn, findsOneWidget);
       expect(find.text('Colosseum'), findsOneWidget);
-      expect(find.text('Level : Underground (Hypogeum)'), findsAtLeastNWidgets(1));
+      expect(find.text('Underground (Hypogeum)'), findsAtLeastNWidgets(1));
 
       // Map View bottom button is removed from bottom bar
       expect(find.byKey(const Key('map_view_bottom_button')), findsNothing);

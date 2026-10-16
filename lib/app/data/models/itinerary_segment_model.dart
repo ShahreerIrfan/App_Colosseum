@@ -12,7 +12,12 @@ class ItinerarySegmentModel {
 
   /// Gets geographic [LatLng] points along this walking path segment.
   List<LatLng> get latLngPoints {
-    return points.map((p) => GeodesicUtils.canvasOffsetToLatLng(p)).toList();
+    return points.map((p) {
+      if (p.dx > 1.0 && p.dy > 1.0) {
+        return LatLng(p.dx, p.dy);
+      }
+      return GeodesicUtils.canvasOffsetToLatLng(p);
+    }).toList();
   }
 
   const ItinerarySegmentModel({

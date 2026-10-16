@@ -883,16 +883,32 @@ class FloorMapController extends GetxController {
       final rawPoints = segment.points;
       if (rawPoints.isEmpty) continue;
 
+      final fromVp = viewpoints.firstWhereOrNull((v) => v.id == segment.fromId);
+      final toVp = viewpoints.firstWhereOrNull((v) => v.id == segment.toId);
       final latLngs = <LatLng>[];
       for (int i = 0; i < rawPoints.length; i++) {
-        if (i == 0) {
-          final vp = viewpoints.firstWhereOrNull((v) => v.id == segment.fromId);
-          latLngs.add(vp?.latLng ?? GeodesicUtils.canvasOffsetToLatLng(rawPoints[i]));
-        } else if (i == rawPoints.length - 1) {
-          final vp = viewpoints.firstWhereOrNull((v) => v.id == segment.toId);
-          latLngs.add(vp?.latLng ?? GeodesicUtils.canvasOffsetToLatLng(rawPoints[i]));
+        final pt = rawPoints[i];
+        if (i == 0 && fromVp != null) {
+          latLngs.add(fromVp.latLng);
+        } else if (i == rawPoints.length - 1 && toVp != null) {
+          latLngs.add(toVp.latLng);
+        } else if (pt.dx > 1.0 && pt.dy > 1.0) {
+          // Explicit GPS waypoint along authentic historical route
+          latLngs.add(LatLng(pt.dx, pt.dy));
+        } else if (fromVp != null && toVp != null && rawPoints.length > 2) {
+          // Interpolate between the actual landmark viewpoints
+          final fraction = i / (rawPoints.length - 1);
+          final lat = fromVp.latLng.latitude +
+              (toVp.latLng.latitude - fromVp.latLng.latitude) * fraction;
+          final lng = fromVp.latLng.longitude +
+              (toVp.latLng.longitude - fromVp.latLng.longitude) * fraction;
+          latLngs.add(LatLng(lat, lng));
         } else {
-          latLngs.add(GeodesicUtils.canvasOffsetToLatLng(rawPoints[i]));
+          latLngs.add(GeodesicUtils.canvasOffsetToLatLng(
+            rawPoints[i],
+            centerLat: currentFloor.value.center.latitude,
+            centerLng: currentFloor.value.center.longitude,
+          ));
         }
       }
 

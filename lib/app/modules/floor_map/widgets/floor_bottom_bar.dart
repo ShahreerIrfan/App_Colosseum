@@ -123,27 +123,33 @@ class FloorBottomBar extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.foreground,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13.5,
-                        letterSpacing: -0.2,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        item.label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: colors.foreground,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                     if (item.subtitle != null) ...[
                       const SizedBox(height: 1.0),
-                      Text(
-                        item.subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11.0,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          item.subtitle!,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: colors.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11.0,
+                          ),
                         ),
                       ),
                     ],
@@ -288,27 +294,33 @@ class FloorBottomBar extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.foreground,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12.5,
-                        letterSpacing: -0.2,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        item.label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: colors.foreground,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                     if (item.subtitle != null) ...[
                       const SizedBox(height: 1.0),
-                      Text(
-                        item.subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11.5,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          item.subtitle!,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: colors.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11.5,
+                          ),
                         ),
                       ),
                     ],
