@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
+import 'package:colosseum_client/app/data/models/map_view_type.dart';
 import 'package:colosseum_client/app/modules/floor_map/controllers/floor_map_controller.dart';
 import 'package:colosseum_client/app/modules/floor_map/views/floor_map_view.dart';
 import 'package:colosseum_client/app/modules/floor_map/widgets/user_location_puck.dart';
@@ -45,9 +46,9 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 1. Top bar verification
+      // 1. Top bar and bottom bar floor name verification
       expect(find.text('Colosseum'), findsOneWidget);
-      expect(find.text('Underground (Hypogeum)'), findsOneWidget);
+      expect(find.text('Underground (Hypogeum)'), findsNWidgets(2));
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
 
       // 2. Out-of-Location Badge is shown initially and UserLocationPuck is hidden
@@ -409,7 +410,7 @@ void main() {
   );
 
   testWidgets(
-    'FloorMapView renders Map View button, opens MapViewSelectionMenu, switches to Satellite View, and handles mutual menu exclusivity',
+    'FloorMapView renders Floor Selection button with full floor name, removes bottom Map View button, and toggles map view via toolbar button',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
@@ -425,64 +426,22 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 1. Both bottom buttons are rendered
+      // 1. Floor Selection bottom button is rendered with full floor name
       final floorBtn = find.byKey(const Key('floor_selection_bottom_button'));
-      final mapViewBtn = find.byKey(const Key('map_view_bottom_button'));
       expect(floorBtn, findsOneWidget);
-      expect(mapViewBtn, findsOneWidget);
-      expect(find.text('Map View'), findsOneWidget);
-      expect(find.text('Satellite'), findsOneWidget);
+      expect(find.text('Floor Selection'), findsOneWidget);
+      expect(find.text('Underground (Hypogeum)'), findsAtLeastNWidgets(1));
 
-      // Initially neither menu is visible
-      expect(find.byKey(const Key('map_view_item_general')), findsNothing);
+      // Map View bottom button is removed from bottom bar
+      expect(find.byKey(const Key('map_view_bottom_button')), findsNothing);
+
+      // Initially floor selection menu is NOT visible
       expect(find.byKey(const Key('floor_menu_item_floor_1')), findsNothing);
 
-      // 2. Tap Map View button to open menu
-      await tester.tap(mapViewBtn);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      // 2. Map view defaults to satellite
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
 
-      expect(controller.isMapViewMenuOpen.value, isTrue);
-      expect(find.text('Select map view'), findsOneWidget);
-      expect(find.byKey(const Key('map_view_item_general')), findsOneWidget);
-      expect(find.byKey(const Key('map_view_item_satellite')), findsOneWidget);
-      // Satellite view is initially active and has checkmark
-      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
-
-      // 3. Test mutual menu exclusivity: tapping Floor button while Map View menu is open
-      await tester.tap(floorBtn);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-
-      expect(controller.isMapViewMenuOpen.value, isFalse);
-      expect(controller.isFloorMenuOpen.value, isTrue);
-      expect(find.byKey(const Key('floor_menu_item_floor_1')), findsOneWidget);
-
-      // Tap Map View button again -> Floor menu closes and Map View menu opens
-      await tester.tap(mapViewBtn);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-
-      expect(controller.isFloorMenuOpen.value, isFalse);
-      expect(controller.isMapViewMenuOpen.value, isTrue);
-      expect(find.byKey(const Key('map_view_item_general')), findsOneWidget);
-
-      // 4. Tap General View option in menu
-      await tester.tap(find.byKey(const Key('map_view_item_general')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-
-      // Menu closes and map view switches to General
-      expect(controller.isMapViewMenuOpen.value, isFalse);
-      expect(controller.selectedMapView.value.name, 'general');
-      expect(find.text('General'), findsOneWidget);
-
-      // Overlays remain fully intact
-      expect(find.byType(TileLayer), findsOneWidget);
-      expect(find.byType(PolylineLayer), findsOneWidget);
-      expect(find.byType(ViewpointMarker), findsNWidgets(7));
-
-      // 5. Test toolbar toggle button alternates between General and Satellite view
+      // 3. Test toolbar toggle button alternates between General and Satellite view
       final toolbarToggleBtn = find.byKey(const Key('toolbar_toggle_map_view_button'));
       expect(toolbarToggleBtn, findsOneWidget);
 
@@ -490,28 +449,36 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 
-      // Toggled to Satellite View
-      expect(controller.selectedMapView.value.name, 'satellite');
+      // Toggled to General View
+      expect(controller.selectedMapView.value, equals(MapViewType.general));
+
+      // Overlays remain fully intact
+      expect(find.byType(TileLayer), findsOneWidget);
+      expect(find.byType(PolylineLayer), findsOneWidget);
+      expect(find.byType(ViewpointMarker), findsNWidgets(7));
 
       await tester.tap(toolbarToggleBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 
-      // Toggled back to General View
-      expect(controller.selectedMapView.value.name, 'general');
+      // Toggled back to Satellite View
+      expect(controller.selectedMapView.value, equals(MapViewType.satellite));
 
-      // 6. Test closing menu via scrim
-      await tester.tap(mapViewBtn);
+      // 4. Tap Floor Selection button to open floor menu
+      await tester.tap(floorBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
-      expect(controller.isMapViewMenuOpen.value, isTrue);
 
+      expect(controller.isFloorMenuOpen.value, isTrue);
+      expect(find.byKey(const Key('floor_menu_item_floor_1')), findsOneWidget);
+
+      // 5. Test closing menu via scrim
       final scrim = find.byKey(const Key('floor_menu_scrim'));
       await tester.tap(scrim);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 
-      expect(controller.isMapViewMenuOpen.value, isFalse);
+      expect(controller.isFloorMenuOpen.value, isFalse);
     },
   );
 
@@ -586,12 +553,8 @@ void main() {
       expect(find.text('Completed: 0/9'), findsOneWidget);
 
       // 7. Switch Map View to General -> Level 1 progress remains Completed: 0/9
-      final mapViewBtn = find.byKey(const Key('map_view_bottom_button'));
-      await tester.tap(mapViewBtn);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-
-      await tester.tap(find.byKey(const Key('map_view_item_general')));
+      final toolbarToggleBtn = find.byKey(const Key('toolbar_toggle_map_view_button'));
+      await tester.tap(toolbarToggleBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 

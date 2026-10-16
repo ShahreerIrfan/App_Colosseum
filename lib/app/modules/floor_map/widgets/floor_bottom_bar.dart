@@ -65,13 +65,15 @@ class FloorBottomBar extends StatelessWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        child: trailing != null && items.length == 2
-            ? _buildDualItemsWithTrailing(context, items[0], items[1], trailing!)
-            : items.length == 1
-                ? _buildSingleItem(context, items.first)
-                : items.length == 2
-                    ? _buildDualItems(context, items[0], items[1])
-                    : _buildMultipleItems(context, items),
+        child: trailing != null && items.length == 1
+            ? _buildSingleItemWithTrailing(context, items.first, trailing!)
+            : trailing != null && items.length == 2
+                ? _buildDualItemsWithTrailing(context, items[0], items[1], trailing!)
+                : items.length == 1
+                    ? _buildSingleItem(context, items.first)
+                    : items.length == 2
+                        ? _buildDualItems(context, items[0], items[1])
+                        : _buildMultipleItems(context, items),
       ),
     );
   }
@@ -197,6 +199,146 @@ class FloorBottomBar extends StatelessWidget {
           child: _buildSegmentButton(context, rightItem, isRight: true),
         ),
       ],
+    );
+  }
+
+  /// Segmented layout with [Floor Selection] taking maximum space and [Trailing Progress Indicator]
+  Widget _buildSingleItemWithTrailing(
+    BuildContext context,
+    BottomNavItem item,
+    Widget trailing,
+  ) {
+    final colors = context.colors;
+
+    return Row(
+      children: [
+        // Left action button (Floor Selection) expanded to fill all available horizontal space
+        Expanded(
+          child: _buildFloorSelectionSegment(context, item),
+        ),
+        Container(
+          width: 1.0,
+          height: 28.0,
+          color: colors.border.withValues(alpha: 0.65),
+        ),
+
+        // Compact trailing progress indicator pill
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+          child: Center(child: trailing),
+        ),
+      ],
+    );
+  }
+
+  /// Segment button specifically tuned for Floor Selection when occupying the primary bar space,
+  /// ensuring maximum room for the full floor display name.
+  Widget _buildFloorSelectionSegment(BuildContext context, BottomNavItem item) {
+    final colors = context.colors;
+
+    return Semantics(
+      label: item.semanticLabel ?? item.label,
+      button: true,
+      selected: item.isSelected,
+      child: InkWell(
+        key: item.key ?? const Key('floor_selection_bottom_button'),
+        onTap: item.onTap,
+        borderRadius: BorderRadius.horizontal(
+          left: Radius.circular(AppRadius.xl),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0),
+          decoration: BoxDecoration(
+            color: item.isSelected
+                ? colors.primary.withValues(alpha: 0.08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.horizontal(
+              left: Radius.circular(AppRadius.xl),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Icon badge
+              Container(
+                width: 34.0,
+                height: 34.0,
+                decoration: BoxDecoration(
+                  color: item.isSelected
+                      ? colors.primary.withValues(alpha: 0.16)
+                      : colors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(
+                    color: item.isSelected
+                        ? colors.primary.withValues(alpha: 0.40)
+                        : colors.primary.withValues(alpha: 0.18),
+                    width: 1.0,
+                  ),
+                ),
+                child: Icon(
+                  item.icon,
+                  size: 18.0,
+                  color: colors.primary,
+                ),
+              ),
+              const SizedBox(width: 8.0),
+
+              // Title and full floor name subtitle
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.foreground,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.5,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    if (item.subtitle != null) ...[
+                      const SizedBox(height: 1.0),
+                      Text(
+                        item.subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Animated chevron indicator showing upward expansion
+              Container(
+                padding: const EdgeInsets.all(4.0),
+                decoration: BoxDecoration(
+                  color: item.isSelected
+                      ? colors.primary.withValues(alpha: 0.12)
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  item.isSelected
+                      ? Icons.keyboard_arrow_down_rounded
+                      : Icons.keyboard_arrow_up_rounded,
+                  size: 20.0,
+                  color: item.isSelected
+                      ? colors.primary
+                      : colors.foreground.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

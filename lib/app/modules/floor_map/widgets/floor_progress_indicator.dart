@@ -34,12 +34,12 @@ class FloorProgressIndicator extends StatelessWidget {
       readOnly: true,
       child: Container(
         key: const Key('floor_progress_indicator'),
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+        padding: const EdgeInsets.symmetric(horizontal: 7.0, vertical: 4.5),
         decoration: BoxDecoration(
           color: isCompleted
               ? successColor.withValues(alpha: 0.10)
               : colors.primary.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10.0),
+          borderRadius: BorderRadius.circular(8.0),
           border: Border.all(
             color: isCompleted
                 ? successColor.withValues(alpha: 0.35)
@@ -61,10 +61,10 @@ class FloorProgressIndicator extends StatelessWidget {
                   isCompleted
                       ? Icons.check_circle_rounded
                       : Icons.task_alt_rounded,
-                  size: 13.0,
+                  size: 12.0,
                   color: effectiveAccentColor,
                 ),
-                const SizedBox(width: 4.0),
+                const SizedBox(width: 3.5),
                 Flexible(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
@@ -81,7 +81,7 @@ class FloorProgressIndicator extends StatelessWidget {
                             ? successColor
                             : colors.foreground,
                         fontWeight: FontWeight.w800,
-                        fontSize: 11.5,
+                        fontSize: 10.5,
                         letterSpacing: -0.2,
                       ),
                     ),
@@ -89,14 +89,14 @@ class FloorProgressIndicator extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 3.5),
+            const SizedBox(height: 2.5),
 
             // Micro progress track bar
             ClipRRect(
               borderRadius: BorderRadius.circular(2.0),
               child: SizedBox(
-                width: 64.0,
-                height: 3.0,
+                width: 48.0,
+                height: 2.5,
                 child: TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeOutCubic,
@@ -106,6 +106,7 @@ class FloorProgressIndicator extends StatelessWidget {
                       value: value,
                       backgroundColor: colors.border.withValues(alpha: 0.45),
                       valueColor: AlwaysStoppedAnimation<Color>(effectiveAccentColor),
+                      minHeight: 2.5,
                     );
                   },
                 ),

@@ -167,7 +167,7 @@ void main() {
       expect(find.byType(FloorMapView), findsOneWidget);
       expect(find.byType(FloorsView), findsNothing);
       expect(find.text('Colosseum'), findsWidgets);
-      expect(find.text('Underground (Hypogeum)'), findsOneWidget);
+      expect(find.text('Underground (Hypogeum)'), findsWidgets);
     },
   );
 
