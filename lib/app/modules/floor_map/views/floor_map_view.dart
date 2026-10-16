@@ -189,21 +189,16 @@ class FloorMapView extends GetView<FloorMapController> {
                       borderRadius: BorderRadius.circular(22.0),
                       child: Container(
                         height: 44.0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14.0,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14.0),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(22.0),
-                          border: Border.all(
-                            color: colors.border,
-                            width: 1.0,
-                          ),
+                          border: Border.all(color: colors.border, width: 1.0),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.close_rounded,
+                              Icons.exit_to_app_rounded,
                               color: colors.destructive,
                               size: 18.0,
                             ),
