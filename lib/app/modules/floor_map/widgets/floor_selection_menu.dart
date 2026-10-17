@@ -187,30 +187,6 @@ class _FloorMenuRow extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // Viewpoints count tag
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7.0,
-                      vertical: 2.5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colors.primary.withValues(alpha: 0.15)
-                          : colors.foreground.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                    child: Text(
-                      '${floor.viewpoints.length} stops',
-                      style: TextStyle(
-                        color: isSelected
-                            ? colors.primary
-                            : colors.foreground.withValues(alpha: 0.65),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
