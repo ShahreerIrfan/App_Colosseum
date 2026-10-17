@@ -619,15 +619,9 @@ class FloorMapController extends GetxController {
     try {
       final loadedFloors = await tourRepository.getFloors();
       if (loadedFloors.isNotEmpty) {
-        final currentNorm = FloorDefinition.normalizeLandmarkId(landmarkId.value);
-        final matching = loadedFloors
-            .where((f) => FloorDefinition.normalizeLandmarkId(f.landmarkId) == currentNorm)
-            .toList();
+        final matching = FloorDefinition.floorsForLandmark(landmarkId.value, loadedFloors);
         if (matching.isNotEmpty) {
           availableFloors.assignAll(matching);
-          _syncAvailableFloorsWithCurrent();
-        } else if (availableFloors.isEmpty) {
-          availableFloors.assignAll(loadedFloors);
           _syncAvailableFloorsWithCurrent();
         }
       }

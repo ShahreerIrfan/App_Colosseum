@@ -132,5 +132,54 @@ void main() {
       expect(senate.viewpoints.length, 1);
       expect(senate.stopsCount, 1);
     });
+
+    test('overrides corrupted landmarkId (e.g. colosseum) when floor ID prefix clearly belongs to another monument', () {
+      final corruptedArch = FloorDefinition.fromJson({
+        'id': 'arch_ground',
+        'landmarkId': 'colosseum',
+        'displayName': 'Plaza & Constantinian Reliefs',
+      });
+      expect(corruptedArch.landmarkId, 'arch_of_constantine');
+
+      final corruptedLudus = FloorDefinition.fromJson({
+        'id': 'ludus_arena',
+        'landmarkId': 'colosseum',
+        'displayName': 'Gladiator Arena & Cavea',
+      });
+      expect(corruptedLudus.landmarkId, 'ludus_magnus');
+
+      final corruptedTemple = FloorDefinition.fromJson({
+        'id': 'temple_east',
+        'landmarkId': 'colosseum',
+        'displayName': 'Venus Cella & East Terrace',
+      });
+      expect(corruptedTemple.landmarkId, 'temple_venus_rome');
+
+      final corruptedForum = FloorDefinition.fromJson({
+        'id': 'forum_via_sacra',
+        'landmarkId': 'colosseum',
+        'displayName': 'Via Sacra & Triumphal Way',
+      });
+      expect(corruptedForum.landmarkId, 'roman_forum');
+
+      final legitimateColosseum = FloorDefinition.fromJson({
+        'id': 'floor_underground',
+        'landmarkId': 'colosseum',
+        'displayName': 'Underground (Hypogeum)',
+      });
+      expect(legitimateColosseum.landmarkId, 'colosseum');
+
+      // Test that floorsForLandmark('colosseum') filters out all corrupted floors
+      final allWithCorrupted = [
+        corruptedArch,
+        corruptedLudus,
+        corruptedTemple,
+        corruptedForum,
+        legitimateColosseum,
+      ];
+      final colosseumOnly = FloorDefinition.floorsForLandmark('colosseum', allWithCorrupted);
+      expect(colosseumOnly.length, 1);
+      expect(colosseumOnly.first.id, 'floor_underground');
+    });
   });
 }

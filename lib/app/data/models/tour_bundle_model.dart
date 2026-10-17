@@ -2,6 +2,7 @@ import 'package:latlong2/latlong.dart';
 
 import 'floor_definition.dart';
 import 'itinerary_segment_model.dart';
+import 'landmark_marker_model.dart';
 import 'landmark_overlay_model.dart';
 import 'sync_manifest_model.dart';
 import 'viewpoint_model.dart';
@@ -11,12 +12,16 @@ import 'viewpoint_model.dart';
 class TourBundleModel {
   final TourSyncManifestModel manifest;
   final List<MapLandmarkOverlay> landmarks;
+  final List<LandmarkMarkerModel> landmarkMarkers;
   final List<FloorDefinition> floors;
+  final List<List<LatLng>> pedestrianStreetSegments;
 
   const TourBundleModel({
     required this.manifest,
     required this.landmarks,
+    this.landmarkMarkers = const [],
     required this.floors,
+    this.pedestrianStreetSegments = const [],
   });
 
   factory TourBundleModel.fromJson(Map<String, dynamic> json) {
@@ -29,16 +34,36 @@ class TourBundleModel {
             MapLandmarkOverlay.fromJson(Map<String, dynamic>.from(lm as Map)))
         .toList();
 
-    final rawFloors = json['floors'] as List<dynamic>? ?? [];
-    final floors = rawFloors
-        .map((fl) =>
-            FloorDefinition.fromJson(Map<String, dynamic>.from(fl as Map)))
+    final landmarkMarkers = rawLandmarks
+        .map((lm) =>
+            LandmarkMarkerModel.fromJson(Map<String, dynamic>.from(lm as Map)))
         .toList();
+
+    final floors = FloorDefinition.parseFloorsFromBundleJson(json);
+
+    final rawRoutes = json['pedestrianRoutes'] as List<dynamic>? ?? [];
+    final List<List<LatLng>> streetSegments = [];
+    for (final r in rawRoutes) {
+      if (r is Map && r['waypoints'] is List) {
+        final pts = (r['waypoints'] as List).map<LatLng>((w) {
+          final wm = w as Map;
+          return LatLng(
+            (wm['latitude'] as num).toDouble(),
+            (wm['longitude'] as num).toDouble(),
+          );
+        }).toList();
+        if (pts.length >= 2) {
+          streetSegments.add(pts);
+        }
+      }
+    }
 
     return TourBundleModel(
       manifest: manifest,
       landmarks: landmarks,
+      landmarkMarkers: landmarkMarkers,
       floors: floors,
+      pedestrianStreetSegments: streetSegments,
     );
   }
 
@@ -49,8 +74,8 @@ class TourBundleModel {
         : const TourSyncManifestModel(
             version: '1.0.0',
             dataHash: 'colosseum_v1_seed',
-            totalFloors: 4,
-            totalViewpoints: 28,
+            totalFloors: 12,
+            totalViewpoints: 51,
             totalLandmarks: 5,
             languages: ['en', 'it', 'fr', 'de', 'es', 'pt', 'ja', 'ko'],
           );
@@ -59,6 +84,11 @@ class TourBundleModel {
     final landmarks = rawLandmarks
         .map((lm) =>
             MapLandmarkOverlay.fromJson(Map<String, dynamic>.from(lm as Map)))
+        .toList();
+
+    final landmarkMarkers = rawLandmarks
+        .map((lm) =>
+            LandmarkMarkerModel.fromJson(Map<String, dynamic>.from(lm as Map)))
         .toList();
 
     final allViewpoints = (json['viewpoints'] as List<dynamic>? ?? [])
@@ -88,6 +118,10 @@ class TourBundleModel {
 
       return FloorDefinition(
         id: floorId,
+        landmarkId: FloorDefinition.landmarkIdForFloorId(
+          floorId,
+          fMap['landmarkCode'] as String? ?? fMap['landmarkId'] as String?,
+        ),
         displayName: fMap['displayName'] as String? ?? '',
         shortName: fMap['shortName'] as String? ?? '',
         floorNumberLabel: fMap['floorNumberLabel'] as String? ?? '',
@@ -107,16 +141,46 @@ class TourBundleModel {
       );
     }).toList();
 
+    final rawRoutes = json['pedestrianRoutes'] as List<dynamic>? ?? [];
+    final List<List<LatLng>> streetSegments = [];
+    for (final r in rawRoutes) {
+      if (r is Map && r['waypoints'] is List) {
+        final pts = (r['waypoints'] as List).map<LatLng>((w) {
+          final wm = w as Map;
+          return LatLng(
+            (wm['latitude'] as num).toDouble(),
+            (wm['longitude'] as num).toDouble(),
+          );
+        }).toList();
+        if (pts.length >= 2) {
+          streetSegments.add(pts);
+        }
+      }
+    }
+
     return TourBundleModel(
       manifest: manifest,
       landmarks: landmarks,
+      landmarkMarkers: landmarkMarkers,
       floors: floors,
+      pedestrianStreetSegments: streetSegments,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'manifest': manifest.toJson(),
         'landmarks': landmarks.map((l) => l.toJson()).toList(),
+        'landmarkMarkers': landmarkMarkers.map((m) => m.toJson()).toList(),
         'floors': floors.map((f) => f.toJson()).toList(),
+        'pedestrianRoutes': pedestrianStreetSegments
+            .map((seg) => {
+                  'waypoints': seg
+                      .map((p) => {
+                            'latitude': p.latitude,
+                            'longitude': p.longitude,
+                          })
+                      .toList()
+                })
+            .toList(),
       };
 }

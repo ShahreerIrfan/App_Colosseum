@@ -67,9 +67,10 @@ class FloorDefinition {
         .toList();
 
     final rawFloorId = json['id'] as String? ?? json['floorId'] as String? ?? '';
-    final parsedLandmarkId = json['landmarkId'] as String? ??
-        json['landmarkCode'] as String? ??
-        landmarkIdForFloorId(rawFloorId);
+    final parsedLandmarkId = landmarkIdForFloorId(
+      rawFloorId,
+      json['landmarkId'] as String? ?? json['landmarkCode'] as String?,
+    );
 
     final calibObj = json['calibration'] is Map ? (json['calibration'] as Map) : null;
     final mapAssetObj = json['mapAsset'] is Map ? (json['mapAsset'] as Map) : null;
@@ -411,21 +412,29 @@ class FloorDefinition {
     return 'colosseum';
   }
 
-  /// Infers the canonical landmark ID from a floor ID (e.g. 'arch_ground' -> 'arch_of_constantine')
-  static String landmarkIdForFloorId(String? floorId) {
-    if (floorId == null) return 'colosseum';
-    final lower = floorId.toLowerCase().trim();
-    if (lower.startsWith('arch_') || lower.contains('arch')) {
-      return 'arch_of_constantine';
+  /// Infers the canonical landmark ID from a floor ID with strict prefix enforcement,
+  /// overriding any corrupted or legacy landmark ID (e.g. 'arch_ground' with 'colosseum').
+  static String landmarkIdForFloorId(String? floorId, [String? fallbackLandmarkId]) {
+    if (floorId != null) {
+      final lower = floorId.toLowerCase().trim();
+      if (lower.startsWith('arch_') || lower.contains('arch')) {
+        return 'arch_of_constantine';
+      }
+      if (lower.startsWith('ludus_') || lower.contains('ludus')) {
+        return 'ludus_magnus';
+      }
+      if (lower.startsWith('temple_') || lower.contains('temple') || lower.contains('venus')) {
+        return 'temple_venus_rome';
+      }
+      if (lower.startsWith('forum_') || lower.contains('forum') || lower.contains('rostra') || lower.contains('sacra')) {
+        return 'roman_forum';
+      }
+      if (lower.startsWith('floor_') || lower.contains('hypogeum')) {
+        return 'colosseum';
+      }
     }
-    if (lower.startsWith('ludus_') || lower.contains('ludus')) {
-      return 'ludus_magnus';
-    }
-    if (lower.startsWith('temple_') || lower.contains('temple') || lower.contains('venus')) {
-      return 'temple_venus_rome';
-    }
-    if (lower.startsWith('forum_') || lower.contains('forum') || lower.contains('rostra') || lower.contains('sacra')) {
-      return 'roman_forum';
+    if (fallbackLandmarkId != null && fallbackLandmarkId.trim().isNotEmpty) {
+      return normalizeLandmarkId(fallbackLandmarkId);
     }
     return 'colosseum';
   }
@@ -493,9 +502,10 @@ class FloorDefinition {
             .toList();
       }
 
-      final floorLandmarkId = fMap['landmarkId'] as String? ??
-          fMap['landmarkCode'] as String? ??
-          landmarkIdForFloorId(floorId);
+      final floorLandmarkId = landmarkIdForFloorId(
+        floorId,
+        fMap['landmarkId'] as String? ?? fMap['landmarkCode'] as String?,
+      );
 
       return FloorDefinition.fromJson({
         ...fMap,
@@ -595,13 +605,13 @@ class FloorDefinition {
     final normalizedLandmarkId = normalizeLandmarkId(landmarkId);
     if (loadedFloors != null && loadedFloors.isNotEmpty) {
       final list = loadedFloors
-          .where((f) => normalizeLandmarkId(f.landmarkId) == normalizedLandmarkId)
+          .where((f) => normalizeLandmarkId(landmarkIdForFloorId(f.id, f.landmarkId)) == normalizedLandmarkId)
           .toList();
       if (list.isNotEmpty) return list;
     }
     ensureInitialized();
     final list = _cachedFloors.values
-        .where((f) => normalizeLandmarkId(f.landmarkId) == normalizedLandmarkId)
+        .where((f) => normalizeLandmarkId(landmarkIdForFloorId(f.id, f.landmarkId)) == normalizedLandmarkId)
         .toList();
     if (list.isNotEmpty) return list;
     return [defaultFloorForLandmark(normalizedLandmarkId)];
