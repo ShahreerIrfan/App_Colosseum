@@ -70,7 +70,7 @@ class FloorMapController extends GetxController {
   double get activeZoom => currentFloor.value.defaultZoom;
 
   /// List of monumental floors loaded dynamically from repository
-  final availableFloors = <FloorDefinition>[...FloorDefinition.allFloors].obs;
+  final availableFloors = <FloorDefinition>[...FloorDefinition.floorsForLandmark('colosseum')].obs;
 
   /// Single source of truth for the base map view presentation (General vs Satellite).
   final selectedMapView = MapViewType.satellite.obs;
@@ -210,7 +210,7 @@ class FloorMapController extends GetxController {
     final args = Get.arguments;
     if (args is Map) {
       if (args.containsKey('landmarkId') && args['landmarkId'] != null) {
-        landmarkId.value = args['landmarkId'].toString();
+        landmarkId.value = FloorDefinition.normalizeLandmarkId(args['landmarkId'].toString());
       }
       if (args.containsKey('landmarkName') && args['landmarkName'] != null) {
         landmarkName.value = args['landmarkName'].toString();
@@ -222,8 +222,10 @@ class FloorMapController extends GetxController {
         currentFloor.value = def;
         floorId.value = def.id;
         floorName.value = def.displayName;
-        landmarkId.value = def.landmarkId;
-        landmarkName.value = def.landmarkName;
+        if (landmarkId.value.isEmpty || (landmarkId.value == 'colosseum' && def.landmarkId != 'colosseum')) {
+          landmarkId.value = def.landmarkId;
+          landmarkName.value = def.landmarkName;
+        }
       }
       if (args.containsKey('floorName') && args['floorName'] != null) {
         floorName.value = args['floorName'].toString();
@@ -418,6 +420,9 @@ class FloorMapController extends GetxController {
     isDisplacementPaused.value = gpsService.isDisplacementPaused;
     isUserInLocation.value = gpsService.currentResult.isInLocation;
     userLocation.value = gpsService.currentResult.userLocation;
+    if (isUserInLocation.value && userLocation.value != null) {
+      tourEngine.updateLocation(userLocation.value!, isSimulated: true);
+    }
   }
 
   /// Toggles pause/resume of physical ground walking displacement in field test mode.
@@ -553,7 +558,9 @@ class FloorMapController extends GetxController {
 
     currentFloor.value = def;
     floorId.value = def.id;
-    landmarkId.value = def.landmarkId;
+    if (landmarkId.value.isEmpty || (landmarkId.value == 'colosseum' && def.landmarkId != 'colosseum')) {
+      landmarkId.value = def.landmarkId;
+    }
 
     final hasCustomName = (Get.arguments is Map) && (Get.arguments as Map).containsKey('floorName');
     if (!hasCustomName) {
@@ -593,24 +600,45 @@ class FloorMapController extends GetxController {
         }).toList();
         viewpoints.assignAll(populatedViewpoints);
         _refreshItinerarySegments();
+
+        // Synchronize availableFloors with the fully populated floor
+        final idx = availableFloors.indexWhere((f) => f.id == repoFloor.id);
+        if (idx != -1) {
+          availableFloors[idx] = repoFloor;
+        }
       }
     } catch (_) {}
   }
 
   Future<void> _loadAvailableFloors() async {
-    final staticFloors = FloorDefinition.floorsForLandmark(landmarkId.value);
-    availableFloors.assignAll(staticFloors);
+    final cached = FloorDefinition.floorsForLandmark(landmarkId.value);
+    if (cached.isNotEmpty) {
+      availableFloors.assignAll(cached);
+      _syncAvailableFloorsWithCurrent();
+    }
     try {
       final loadedFloors = await tourRepository.getFloors();
       if (loadedFloors.isNotEmpty) {
+        final currentNorm = FloorDefinition.normalizeLandmarkId(landmarkId.value);
         final matching = loadedFloors
-            .where((f) => f.landmarkId == landmarkId.value)
+            .where((f) => FloorDefinition.normalizeLandmarkId(f.landmarkId) == currentNorm)
             .toList();
         if (matching.isNotEmpty) {
           availableFloors.assignAll(matching);
+          _syncAvailableFloorsWithCurrent();
+        } else if (availableFloors.isEmpty) {
+          availableFloors.assignAll(loadedFloors);
+          _syncAvailableFloorsWithCurrent();
         }
       }
     } catch (_) {}
+  }
+
+  void _syncAvailableFloorsWithCurrent() {
+    final idx = availableFloors.indexWhere((f) => f.id == currentFloor.value.id);
+    if (idx != -1 && currentFloor.value.viewpoints.isNotEmpty) {
+      availableFloors[idx] = currentFloor.value;
+    }
   }
 
   /// Returns the architectural walking itinerary for the currently active floor.

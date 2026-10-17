@@ -117,7 +117,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
       expect(gpsService.currentResult.userLocation!.normalizedX, lessThan(0.92));
-      expect(results.length, equals(2));
+      expect(results.length, equals(3));
 
       await sub.cancel();
     });
@@ -146,7 +146,7 @@ void main() {
       await sub.cancel();
     });
 
-    test('7. Dynamic accuracy filter allows moderate fixes (<= 30m) and discards severe outliers (> 30m)', () async {
+    test('7. Dynamic accuracy filter allows moderate fixes (<= 65m) and discards severe outliers (> 65m)', () async {
       final results = <GpsLocationResult>[];
       final sub = gpsService.locationStream.listen(results.add);
 
@@ -155,8 +155,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(results.length, equals(1));
 
-      // Severe outlier (accuracy = 35m) -> discarded
-      gpsService.setMockPosition(latitude: 41.890250, longitude: 12.492820, accuracy: 35.0);
+      // Severe outlier (accuracy = 75m) -> discarded
+      gpsService.setMockPosition(latitude: 41.890250, longitude: 12.492820, accuracy: 75.0);
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(results.length, equals(1)); // Remained 1!
 

@@ -50,6 +50,11 @@ class FloorMapView extends GetView<FloorMapController> {
                     minZoom: FloorMapController.minZoom,
                     maxZoom: FloorMapController.maxZoom,
                     onPositionChanged: controller.onPositionChanged,
+                    onTap: (tapPosition, latLng) {
+                      if (controller.isPlaygroundMode.value) {
+                        controller.setSimulatedLocation(latLng);
+                      }
+                    },
                     cameraConstraint: CameraConstraint.containCenter(
                       bounds: GeodesicUtils.createBoundsFromDimensions(
                         center: controller.activeCenter,

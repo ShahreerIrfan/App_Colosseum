@@ -20,7 +20,7 @@ enum GpsTrackingMode {
 class GpsLocationService {
   static const double colosseumCenterLat = 41.890210;
   static const double colosseumCenterLng = 12.492231;
-  static const double geofenceRadiusMeters = 120.0;
+  static const double geofenceRadiusMeters = 200.0;
 
   static const double arenaWidthMeters = 86.0;
   static const double arenaHeightMeters = 54.0;
@@ -97,6 +97,25 @@ class GpsLocationService {
       // Clear origin so the next incoming GPS fix becomes the new reference anchor
       _playgroundOriginLat = null;
       _playgroundOriginLng = null;
+      final latLng = GeodesicUtils.canvasOffsetToLatLng(defaultCanvasEntry);
+      final initialUserLoc = UserLocationModel(
+        floorId: floorId,
+        normalizedX: defaultCanvasEntry.dx,
+        normalizedY: defaultCanvasEntry.dy,
+        latitude: latLng.latitude,
+        longitude: latLng.longitude,
+        accuracyMeters: 2.0,
+        timestamp: DateTime.now(),
+      );
+      _safeAddResult(
+        GpsLocationResult(
+          isInLocation: true,
+          userLocation: initialUserLoc,
+          distanceToCenterMeters: 0.0,
+          isPlaygroundMode: true,
+          isDisplacementPaused: false,
+        ),
+      );
     }
   }
 
@@ -315,7 +334,7 @@ class GpsLocationService {
         accuracy: LocationAccuracy.bestForNavigation,
         intervalDuration: const Duration(milliseconds: 1000),
         distanceFilter: 0,
-        forceLocationManager: false,
+        forceLocationManager: true,
       );
     } else if (defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS) {
@@ -362,6 +381,22 @@ class GpsLocationService {
 
     final locationSettings = _buildLocationSettings();
 
+    // 1. Immediately query last known position for zero-latency initial UI rendering
+    Geolocator.getLastKnownPosition().then((pos) {
+      if (pos != null &&
+          !_locationResultController.isClosed &&
+          _currentResult.userLocation == null) {
+        _handlePositionUpdate(pos, floorId: floorId);
+      }
+    }).catchError((_) {});
+
+    // 2. Request fresh instant position fix
+    Geolocator.getCurrentPosition(locationSettings: locationSettings).then((pos) {
+      if (!_locationResultController.isClosed) {
+        _handlePositionUpdate(pos, floorId: floorId);
+      }
+    }).catchError((_) {});
+
     try {
       _positionSubscription = Geolocator.getPositionStream(
         locationSettings: locationSettings,
@@ -393,14 +428,16 @@ class GpsLocationService {
     Position position, {
     String floorId = 'floor_underground',
   }) {
-    // 1. Dynamic Accuracy Filter: Discard severe GPS outliers (> 30m)
-    if (position.accuracy > 30.0) {
+    // 1. Dynamic Accuracy Filter: Discard severe GPS outliers (> 65m unless mock location)
+    final maxAccuracy = position.isMocked ? 100.0 : 65.0;
+    if (position.accuracy > maxAccuracy) {
       return;
     }
 
     // 2. Stationary GPS Deadband Gate:
     // If movement < 1.5m and velocity is stationary (< 0.4 m/s), suppress GPS jitter
-    if (_lastAnchorPosition != null) {
+    // ONLY if user is already established in location (never block transitioning from outside to inside).
+    if (_lastAnchorPosition != null && _currentResult.isInLocation) {
       final distanceMoved = Geolocator.distanceBetween(
         _lastAnchorPosition!.latitude,
         _lastAnchorPosition!.longitude,
