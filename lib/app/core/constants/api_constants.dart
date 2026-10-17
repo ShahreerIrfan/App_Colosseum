@@ -5,7 +5,7 @@ abstract class ApiConstants {
 
   /// Centralized base URL for backend API.
   /// To update endpoint after deployment, modify only this string.
-  static const String baseUrl = 'http://192.168.0.116:3000';
+  static const String baseUrl = 'http://187.126.3.18:3000';
 
   /// API version path prefix
   static const String apiV1 = '$baseUrl/api/v1';
@@ -17,6 +17,8 @@ abstract class ApiConstants {
   static const String landmarks = '$apiV1/landmarks';
   static const String languages = '$apiV1/languages';
   static const String validateTicket = '$apiV1/tickets/validate';
+  static const String pedestrianRoutes = '$apiV1/routes/pedestrian';
+  static const String parkConfig = '$apiV1/park/config';
 
   /// Helper to get tour bundle URL with language parameter
   static String tourBundleUrl({String lang = 'en'}) =>
