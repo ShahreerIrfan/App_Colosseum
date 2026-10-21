@@ -1,12 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:hive/hive.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../models/floor_definition.dart';
+import '../../models/landmark_marker_model.dart';
 import '../../models/landmark_overlay_model.dart';
 import '../../models/sync_manifest_model.dart';
 import '../../models/tour_bundle_model.dart';
-import '../../providers/colosseum_landmark_overlays.dart';
 
 /// Contract for local caching of tour assets and manifests.
 abstract class ITourLocalDataSource {
@@ -15,6 +17,8 @@ abstract class ITourLocalDataSource {
   Future<List<FloorDefinition>> getCachedFloors({String lang = 'en'});
   Future<FloorDefinition?> getCachedFloorById(String floorId, {String lang = 'en'});
   Future<List<MapLandmarkOverlay>> getCachedLandmarkOverlays();
+  Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers();
+  Future<List<List<LatLng>>> getCachedPedestrianStreetSegments();
   Future<void> clearCache();
 }
 
@@ -47,7 +51,6 @@ class TourLocalDataSource implements ITourLocalDataSource {
       }
       return await Hive.openBox(boxName);
     } catch (_) {
-      // If Hive is uninitialized (e.g. unit tests), fallback to memory cache
       return null;
     }
   }
@@ -59,8 +62,23 @@ class TourLocalDataSource implements ITourLocalDataSource {
           await rootBundle.loadString('assets/data/colosseum_seed.json');
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
       _cachedSeedBundle = TourBundleModel.fromSeedJson(json);
+      FloorDefinition.cacheFloors(_cachedSeedBundle!.floors);
+      LandmarkMarkerModel.cacheMarkers(_cachedSeedBundle!.landmarkMarkers);
+      MapLandmarkOverlay.cacheOverlays(_cachedSeedBundle!.landmarks);
       return _cachedSeedBundle;
     } catch (_) {
+      try {
+        final file = File('assets/data/colosseum_seed.json');
+        if (file.existsSync()) {
+          final jsonStr = file.readAsStringSync();
+          final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+          _cachedSeedBundle = TourBundleModel.fromSeedJson(json);
+          FloorDefinition.cacheFloors(_cachedSeedBundle!.floors);
+          LandmarkMarkerModel.cacheMarkers(_cachedSeedBundle!.landmarkMarkers);
+          MapLandmarkOverlay.cacheOverlays(_cachedSeedBundle!.landmarks);
+          return _cachedSeedBundle;
+        }
+      } catch (_) {}
       return null;
     }
   }
@@ -68,6 +86,9 @@ class TourLocalDataSource implements ITourLocalDataSource {
   @override
   Future<void> saveTourBundle(TourBundleModel bundle,
       {String lang = 'en'}) async {
+    FloorDefinition.cacheFloors(bundle.floors);
+    LandmarkMarkerModel.cacheMarkers(bundle.landmarkMarkers);
+    MapLandmarkOverlay.cacheOverlays(bundle.landmarks);
     final box = await _getBox();
     final bundleJson = jsonEncode(bundle.toJson());
 
@@ -109,35 +130,30 @@ class TourLocalDataSource implements ITourLocalDataSource {
     if (raw != null) {
       try {
         final json = jsonDecode(raw) as Map<String, dynamic>;
-        final rawFloors = json['floors'] as List<dynamic>? ?? [];
-        if (rawFloors.isNotEmpty) {
-          return rawFloors
-              .map((f) =>
-                  FloorDefinition.fromJson(Map<String, dynamic>.from(f as Map)))
-              .toList();
+        final floors = FloorDefinition.parseFloorsFromBundleJson(json);
+        if (floors.isNotEmpty) {
+          FloorDefinition.cacheFloors(floors);
+          return floors;
         }
       } catch (_) {}
     }
 
-    // Dynamic asset seed fallback
     final seed = await _loadAssetSeed();
     if (seed != null && seed.floors.isNotEmpty) {
       await saveTourBundle(seed, lang: lang);
       return seed.floors;
     }
 
-    // Default offline fallback
-    return FloorDefinition.allFloors;
+    return const [];
   }
 
   @override
   Future<FloorDefinition?> getCachedFloorById(String floorId,
       {String lang = 'en'}) async {
     final floors = await getCachedFloors(lang: lang);
-    return floors.cast<FloorDefinition?>().firstWhere(
-          (f) => f?.id == floorId,
-          orElse: () => FloorDefinition.fromId(floorId),
-        );
+    final match = floors.where((f) => f.id == floorId).toList();
+    if (match.isNotEmpty) return match.first;
+    return null;
   }
 
   @override
@@ -165,8 +181,79 @@ class TourLocalDataSource implements ITourLocalDataSource {
       return seed.landmarks;
     }
 
-    // Default offline fallback
-    return ColosseumLandmarkOverlays.all;
+    return const [];
+  }
+
+  @override
+  Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers() async {
+    final box = await _getBox();
+    final raw = box != null
+        ? box.get('bundle_en') as String?
+        : _memoryCache['bundle_en'] as String?;
+
+    if (raw != null) {
+      try {
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        final floors = FloorDefinition.parseFloorsFromBundleJson(json);
+        if (floors.isNotEmpty) {
+          FloorDefinition.cacheFloors(floors);
+        }
+        final rawLandmarks = json['landmarks'] as List<dynamic>? ?? [];
+        if (rawLandmarks.isNotEmpty) {
+          return rawLandmarks
+              .map((l) => LandmarkMarkerModel.fromJson(
+                  Map<String, dynamic>.from(l as Map)))
+              .toList();
+        }
+      } catch (_) {}
+    }
+
+    final seed = await _loadAssetSeed();
+    if (seed != null && seed.landmarkMarkers.isNotEmpty) {
+      return seed.landmarkMarkers;
+    }
+
+    return const [];
+  }
+
+  @override
+  Future<List<List<LatLng>>> getCachedPedestrianStreetSegments() async {
+    final box = await _getBox();
+    final raw = box != null
+        ? box.get('bundle_en') as String?
+        : _memoryCache['bundle_en'] as String?;
+
+    if (raw != null) {
+      try {
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        final rawRoutes = json['pedestrianRoutes'] as List<dynamic>? ?? [];
+        final List<List<LatLng>> segments = [];
+        for (final r in rawRoutes) {
+          if (r is Map && r['waypoints'] is List) {
+            final pts = (r['waypoints'] as List).map<LatLng>((w) {
+              final wm = w as Map;
+              return LatLng(
+                (wm['latitude'] as num).toDouble(),
+                (wm['longitude'] as num).toDouble(),
+              );
+            }).toList();
+            if (pts.length >= 2) {
+              segments.add(pts);
+            }
+          }
+        }
+        if (segments.isNotEmpty) {
+          return segments;
+        }
+      } catch (_) {}
+    }
+
+    final seed = await _loadAssetSeed();
+    if (seed != null && seed.pedestrianStreetSegments.isNotEmpty) {
+      return seed.pedestrianStreetSegments;
+    }
+
+    return const [];
   }
 
   @override

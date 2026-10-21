@@ -33,7 +33,7 @@ class FakeRemoteDataSource implements ITourRemoteDataSource {
     return TourBundleModel(
       manifest: manifestToReturn,
       landmarks: const [],
-      floors: const [FloorDefinition.underground],
+      floors: [FloorDefinition.underground],
     );
   }
 
@@ -46,7 +46,7 @@ class FakeRemoteDataSource implements ITourRemoteDataSource {
   @override
   Future<List<FloorDefinition>> getFloors({String lang = 'en'}) async {
     if (shouldThrow) throw Exception('Network timeout');
-    return const [FloorDefinition.underground];
+    return [FloorDefinition.underground];
   }
 
   @override
@@ -58,6 +58,8 @@ class FakeRemoteDataSource implements ITourRemoteDataSource {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Tour Repository & Data Source Unit Tests', () {
     late FakeRemoteDataSource remoteDataSource;
     late TourLocalDataSource localDataSource;

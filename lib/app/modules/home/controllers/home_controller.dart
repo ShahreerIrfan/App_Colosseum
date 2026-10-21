@@ -10,8 +10,6 @@ import '../../../data/models/landmark_marker_model.dart';
 import '../../../data/models/landmark_overlay_model.dart';
 import '../../../data/models/map_view_type.dart';
 import '../../../data/models/user_orientation_state.dart';
-import '../../../data/providers/colosseum_landmark_overlays.dart';
-import '../../../data/providers/landmark_markers_provider.dart';
 import '../../../data/repositories/i_tour_repository.dart';
 import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../data/services/compass_service.dart';
@@ -38,13 +36,13 @@ class HomeController extends GetxController {
   final currentZoom = defaultZoom.obs;
 
   /// Single source of truth for the 5 classic landmark pin markers.
-  final landmarkMarkers = <LandmarkMarkerModel>[].obs;
+  final landmarkMarkers = <LandmarkMarkerModel>[...LandmarkMarkerModel.all].obs;
 
   /// Currently selected landmark id (defaults to 'colosseum').
   final selectedLandmarkId = RxnString('colosseum');
 
   /// Single source of truth for the 5 calibrated landmark overlays (legacy / offline sync).
-  final landmarkOverlays = <MapLandmarkOverlay>[].obs;
+  final landmarkOverlays = <MapLandmarkOverlay>[...MapLandmarkOverlay.all].obs;
 
   /// Global toggle for landmark marker rendering.
   final isLandmarksVisible = true.obs;
@@ -257,16 +255,48 @@ class HomeController extends GetxController {
     mapController = MapController();
     _initLandmarkMarkers();
     _initLandmarkOverlays();
+    _initPedestrianRoutes();
+    _initFloors();
     _initLocationTracking();
   }
 
+  void _initFloors() {
+    _loadRepositoryFloors();
+  }
+
+  Future<void> _loadRepositoryFloors() async {
+    try {
+      final floors = await tourRepository.getFloors();
+      if (floors.isNotEmpty) {
+        FloorDefinition.cacheFloors(floors);
+      }
+    } catch (_) {}
+  }
+
   void _initLandmarkMarkers() {
-    landmarkMarkers.assignAll(LandmarkMarkersProvider.all);
+    _loadRepositoryMarkers();
+  }
+
+  Future<void> _loadRepositoryMarkers() async {
+    try {
+      final markers = await tourRepository.getLandmarkMarkers();
+      if (markers.isNotEmpty) {
+        landmarkMarkers.assignAll(markers);
+      }
+    } catch (_) {}
   }
 
   void _initLandmarkOverlays() {
-    _applyOverlays(ColosseumLandmarkOverlays.all);
     _loadRepositoryOverlays();
+  }
+
+  Future<void> _initPedestrianRoutes() async {
+    try {
+      final segments = await tourRepository.getPedestrianStreetSegments();
+      if (segments.isNotEmpty) {
+        PedestrianStreetRouter.instance.initializeGraph(segments);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadRepositoryOverlays() async {
@@ -302,17 +332,15 @@ class HomeController extends GetxController {
   /// Navigates directly to the landmark's detailed view (FloorMapView),
   /// bypassing the intermediary levels selection view.
   void navigateToLandmarkDetails(String landmarkId) {
-    selectedLandmarkId.value = landmarkId;
-    final landmark =
-        landmarkMarkers.firstWhereOrNull((m) => m.id == landmarkId);
-    final name =
-        landmark?.name ?? FloorDefinition.landmarkNameFor(landmarkId);
-    final initialFloor = FloorDefinition.initialFloorForLandmark(landmarkId);
+    final normalizedId = FloorDefinition.normalizeLandmarkId(landmarkId);
+    selectedLandmarkId.value = normalizedId;
+    final name = FloorDefinition.landmarkNameFor(normalizedId);
+    final initialFloor = FloorDefinition.initialFloorForLandmark(normalizedId);
     if (Get.routeTree.routes.any((route) => route.name == Routes.floorMap)) {
       Get.toNamed(
         Routes.floorMap,
         arguments: {
-          'landmarkId': landmarkId,
+          'landmarkId': normalizedId,
           'landmarkName': name,
           'floorId': initialFloor.id,
           'floorName': initialFloor.displayName,

@@ -1,9 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:colosseum_client/app/data/models/floor_definition.dart';
-import 'package:colosseum_client/app/data/providers/landmarks_tour_data.dart';
 import 'package:colosseum_client/app/data/services/tour_navigation_engine.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('All Landmarks Tour Data Dataset Verification Tests', () {
     test('verifies each of the 5 landmarks has authentic floors and initial floors', () {
       final colosseumFloors = FloorDefinition.floorsForLandmark('colosseum');
@@ -28,51 +29,59 @@ void main() {
     });
 
     test('verifies Arch of Constantine viewpoints and itineraries', () {
-      final groundVps = LandmarksTourData.archGroundViewpoints;
+      final archGround = FloorDefinition.fromId('arch_ground');
+      final groundVps = archGround.viewpoints;
       expect(groundVps.length, 4);
       expect(groundVps.every((v) => v.floorId == 'arch_ground'), isTrue);
-      expect(LandmarksTourData.archGroundItinerary.length, 3);
+      expect(archGround.itinerary.length, 3);
 
-      final atticVps = LandmarksTourData.archAtticViewpoints;
+      final archAttic = FloorDefinition.fromId('arch_attic');
+      final atticVps = archAttic.viewpoints;
       expect(atticVps.length, 2);
       expect(atticVps.every((v) => v.floorId == 'arch_attic'), isTrue);
-      expect(LandmarksTourData.archAtticItinerary.length, 1);
+      expect(archAttic.itinerary.length, 1);
     });
 
     test('verifies Ludus Magnus viewpoints and itineraries', () {
-      final arenaVps = LandmarksTourData.ludusArenaViewpoints;
+      final ludusArena = FloorDefinition.fromId('ludus_arena');
+      final arenaVps = ludusArena.viewpoints;
       expect(arenaVps.length, 3);
       expect(arenaVps.every((v) => v.floorId == 'ludus_arena'), isTrue);
-      expect(LandmarksTourData.ludusArenaItinerary.length, 2);
+      expect(ludusArena.itinerary.length, 2);
 
-      final tunnelVps = LandmarksTourData.ludusSubterraneanViewpoints;
+      final ludusTunnel = FloorDefinition.fromId('ludus_tunnel');
+      final tunnelVps = ludusTunnel.viewpoints;
       expect(tunnelVps.length, 2);
       expect(tunnelVps.every((v) => v.floorId == 'ludus_tunnel'), isTrue);
-      expect(LandmarksTourData.ludusSubterraneanItinerary.length, 1);
+      expect(ludusTunnel.itinerary.length, 1);
     });
 
     test('verifies Temple of Venus and Rome viewpoints and itineraries', () {
-      final eastVps = LandmarksTourData.templeEastViewpoints;
+      final templeEast = FloorDefinition.fromId('temple_east');
+      final eastVps = templeEast.viewpoints;
       expect(eastVps.length, 3);
       expect(eastVps.every((v) => v.floorId == 'temple_east'), isTrue);
-      expect(LandmarksTourData.templeEastItinerary.length, 2);
+      expect(templeEast.itinerary.length, 2);
 
-      final westVps = LandmarksTourData.templeWestViewpoints;
+      final templeWest = FloorDefinition.fromId('temple_west');
+      final westVps = templeWest.viewpoints;
       expect(westVps.length, 2);
       expect(westVps.every((v) => v.floorId == 'temple_west'), isTrue);
-      expect(LandmarksTourData.templeWestItinerary.length, 1);
+      expect(templeWest.itinerary.length, 1);
     });
 
     test('verifies Roman Forum viewpoints and itineraries', () {
-      final viaSacraVps = LandmarksTourData.forumViaSacraViewpoints;
+      final forumViaSacra = FloorDefinition.fromId('forum_via_sacra');
+      final viaSacraVps = forumViaSacra.viewpoints;
       expect(viaSacraVps.length, 4);
       expect(viaSacraVps.every((v) => v.floorId == 'forum_via_sacra'), isTrue);
-      expect(LandmarksTourData.forumViaSacraItinerary.length, 3);
+      expect(forumViaSacra.itinerary.length, 3);
 
-      final senateVps = LandmarksTourData.forumSenateViewpoints;
+      final forumSenate = FloorDefinition.fromId('forum_senate_rostra');
+      final senateVps = forumSenate.viewpoints;
       expect(senateVps.length, 3);
       expect(senateVps.every((v) => v.floorId == 'forum_senate_rostra'), isTrue);
-      expect(LandmarksTourData.forumSenateItinerary.length, 2);
+      expect(forumSenate.itinerary.length, 2);
     });
 
     test('verifies FloorDefinition.fromId resolves correctly for every floor across all 5 monuments', () {
@@ -164,25 +173,25 @@ void main() {
 
     test('verifies all surrounding landmark viewpoints have authentic GPS coordinates in their monument bounds', () {
       // Temple of Venus and Rome
-      for (final vp in LandmarksTourData.templeEastViewpoints) {
+      for (final vp in FloorDefinition.fromId('temple_east').viewpoints) {
         expect(vp.latLng.latitude, inInclusiveRange(41.890, 41.892));
         expect(vp.latLng.longitude, inInclusiveRange(12.488, 12.491));
       }
 
       // Arch of Constantine
-      for (final vp in LandmarksTourData.archGroundViewpoints) {
+      for (final vp in FloorDefinition.fromId('arch_ground').viewpoints) {
         expect(vp.latLng.latitude, inInclusiveRange(41.889, 41.891));
         expect(vp.latLng.longitude, inInclusiveRange(12.490, 12.492));
       }
 
       // Ludus Magnus
-      for (final vp in LandmarksTourData.ludusArenaViewpoints) {
+      for (final vp in FloorDefinition.fromId('ludus_arena').viewpoints) {
         expect(vp.latLng.latitude, inInclusiveRange(41.889, 41.892));
         expect(vp.latLng.longitude, inInclusiveRange(12.494, 12.496));
       }
 
       // Roman Forum
-      for (final vp in LandmarksTourData.forumViaSacraViewpoints) {
+      for (final vp in FloorDefinition.fromId('forum_via_sacra').viewpoints) {
         expect(vp.latLng.latitude, inInclusiveRange(41.890, 41.894));
         expect(vp.latLng.longitude, inInclusiveRange(12.484, 12.490));
       }

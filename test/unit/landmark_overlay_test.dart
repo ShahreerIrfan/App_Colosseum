@@ -1,10 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:colosseum_client/app/core/utils/geodesic_utils.dart';
-import 'package:colosseum_client/app/data/providers/colosseum_landmark_overlays.dart';
+import 'package:colosseum_client/app/data/datasources/local/tour_local_data_source.dart';
+import 'package:colosseum_client/app/data/models/landmark_overlay_model.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('MapLandmarkOverlay and Geodesic Anchoring Tests', () {
+    late TourLocalDataSource localDataSource;
+
+    setUp(() {
+      localDataSource = TourLocalDataSource();
+    });
+
     test('Calculates rotated corners correctly from metric dimensions and orientation', () {
       const center = LatLng(41.890320, 12.492180);
       final corners = GeodesicUtils.calculateRotatedCorners(
@@ -25,8 +34,8 @@ void main() {
       expect(bounds.west, lessThan(center.longitude));
     });
 
-    test('All 5 ColosseumLandmarkOverlays have valid calibrated configurations', () {
-      final all = ColosseumLandmarkOverlays.all;
+    test('All 5 MapLandmarkOverlays loaded from seed have valid calibrated configurations', () async {
+      final all = await localDataSource.getCachedLandmarkOverlays();
       expect(all.length, 5);
 
       final ids = all.map((o) => o.id).toSet();
@@ -40,7 +49,6 @@ void main() {
 
       for (final overlay in all) {
         expect(overlay.name.isNotEmpty, isTrue);
-        expect(overlay.assetPath.endsWith('.png'), isTrue);
         expect(overlay.center.latitude, closeTo(41.89, 0.01));
         expect(overlay.center.longitude, closeTo(12.49, 0.01));
         expect(overlay.widthMeters, greaterThan(0));
@@ -59,21 +67,26 @@ void main() {
         expect(bounds.east, greaterThan(bounds.west));
       }
 
-      // Proportional sizing check: Arch of Constantine must be smaller than Colosseum
-      expect(
-        ColosseumLandmarkOverlays.archOfConstantine.widthMeters,
-        lessThan(ColosseumLandmarkOverlays.colosseum.widthMeters),
-      );
+      final colosseum = all.firstWhere((o) => o.id == 'colosseum');
+      final arch = all.firstWhere((o) => o.id == 'arch_of_constantine');
+      final romanForum = all.firstWhere((o) => o.id == 'roman_forum');
 
-      // Roman Forum Temple (Antoninus & Faustina) is a specific monument smaller than the Colosseum
-      expect(
-        ColosseumLandmarkOverlays.romanForum.widthMeters,
-        lessThan(ColosseumLandmarkOverlays.colosseum.widthMeters),
-      );
+      // Proportional sizing check: Arch of Constantine must be smaller than Colosseum
+      expect(arch.widthMeters, lessThan(colosseum.widthMeters));
+
+      // Roman Forum archaeological complex is larger than the Colosseum
+      expect(colosseum.widthMeters, lessThan(romanForum.widthMeters));
     });
 
     test('MapLandmarkOverlay copyWith works as expected', () {
-      final original = ColosseumLandmarkOverlays.colosseum;
+      const original = MapLandmarkOverlay(
+        id: 'colosseum',
+        name: 'Colosseum',
+        assetPath: 'assets/floor_map/floor_level_1.svg',
+        center: LatLng(41.89021, 12.492231),
+        widthMeters: 190.0,
+        heightMeters: 155.0,
+      );
       final copied = original.copyWith(isVisible: false, opacity: 0.5);
 
       expect(copied.id, original.id);

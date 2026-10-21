@@ -723,5 +723,75 @@ void main() {
       expect(controller.currentFloorProgressText, equals('Completed: 0/5'));
       expect(controller.isCurrentFloorComplete, isFalse);
     });
+
+    test('initializes with Temple of Venus and Rome arguments without reverting to Colosseum', () {
+      Get.reset();
+      Get.routing.args = {
+        'landmarkId': 'temple_venus_rome',
+        'landmarkName': 'Temple of Venus and Rome',
+        'floorId': 'temple_east',
+        'floorName': 'Venus Cella & East Terrace',
+      };
+      final customController = FloorMapController();
+      customController.onInit();
+
+      expect(customController.landmarkId.value, 'temple_venus_rome');
+      expect(customController.landmarkName.value, 'Temple of Venus and Rome');
+      expect(customController.floorId.value, 'temple_east');
+      expect(customController.floorName.value, 'Venus Cella & East Terrace');
+      expect(customController.currentFloor.value.landmarkId, 'temple_venus_rome');
+      customController.onClose();
+    });
+  });
+
+  group('FloorMapController Multi-Monument Navigation Tests', () {
+    tearDown(() {
+      Get.reset();
+    });
+
+    test('correctly configures controller for Arch of Constantine entrance floor', () {
+      final controller = FloorMapController();
+      controller.floorId.value = 'arch_ground';
+      controller.landmarkId.value = 'arch_of_constantine';
+      controller.landmarkName.value = 'Arch of Constantine';
+      controller.onInit();
+
+      expect(controller.landmarkId.value, 'arch_of_constantine');
+      expect(controller.landmarkName.value, 'Arch of Constantine');
+      expect(controller.floorId.value, 'arch_ground');
+      expect(controller.currentFloor.value.landmarkId, 'arch_of_constantine');
+      expect(controller.currentFloor.value.displayName, 'Plaza & Constantinian Reliefs');
+      controller.onClose();
+    });
+
+    test('correctly configures controller for Temple of Venus and Rome entrance floor', () {
+      final controller = FloorMapController();
+      controller.floorId.value = 'temple_east';
+      controller.landmarkId.value = 'temple_venus_rome';
+      controller.landmarkName.value = 'Temple of Venus and Rome';
+      controller.onInit();
+
+      expect(controller.landmarkId.value, 'temple_venus_rome');
+      expect(controller.landmarkName.value, 'Temple of Venus and Rome');
+      expect(controller.floorId.value, 'temple_east');
+      expect(controller.currentFloor.value.landmarkId, 'temple_venus_rome');
+      expect(controller.currentFloor.value.displayName, 'Venus Cella & East Terrace');
+      controller.onClose();
+    });
+
+    test('correctly configures controller for Ludus Magnus entrance floor', () {
+      final controller = FloorMapController();
+      controller.floorId.value = 'ludus_arena';
+      controller.landmarkId.value = 'ludus_magnus';
+      controller.landmarkName.value = 'Ludus Magnus';
+      controller.onInit();
+
+      expect(controller.landmarkId.value, 'ludus_magnus');
+      expect(controller.landmarkName.value, 'Ludus Magnus');
+      expect(controller.floorId.value, 'ludus_arena');
+      expect(controller.currentFloor.value.landmarkId, 'ludus_magnus');
+      expect(controller.currentFloor.value.displayName, 'Gladiator Arena & Cavea');
+      controller.onClose();
+    });
   });
 }

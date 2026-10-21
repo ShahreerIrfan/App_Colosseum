@@ -1,4 +1,7 @@
+import 'package:latlong2/latlong.dart';
+
 import '../models/floor_definition.dart';
+import '../models/landmark_marker_model.dart';
 import '../models/landmark_overlay_model.dart';
 import '../models/sync_manifest_model.dart';
 
@@ -17,6 +20,14 @@ abstract class ITourRepository {
 
   /// Retrieves ground landmark overlays for monument and surrounding landmarks.
   Future<List<MapLandmarkOverlay>> getLandmarkOverlays(
+      {bool forceRefresh = false});
+
+  /// Retrieves landmark pin markers with color coding and coordinates.
+  Future<List<LandmarkMarkerModel>> getLandmarkMarkers(
+      {bool forceRefresh = false});
+
+  /// Retrieves pedestrian street routing segments connecting all landmarks.
+  Future<List<List<LatLng>>> getPedestrianStreetSegments(
       {bool forceRefresh = false});
 
   /// Retrieves the current cached tour manifest.

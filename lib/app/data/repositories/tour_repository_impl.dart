@@ -1,6 +1,9 @@
+import 'package:latlong2/latlong.dart';
+
 import '../datasources/local/tour_local_data_source.dart';
 import '../datasources/remote/tour_remote_data_source.dart';
 import '../models/floor_definition.dart';
+import '../models/landmark_marker_model.dart';
 import '../models/landmark_overlay_model.dart';
 import '../models/sync_manifest_model.dart';
 import 'i_tour_repository.dart';
@@ -63,6 +66,26 @@ class TourRepositoryImpl implements ITourRepository {
       await syncTourBundle();
     }
     return localDataSource.getCachedLandmarkOverlays();
+  }
+
+  @override
+  Future<List<LandmarkMarkerModel>> getLandmarkMarkers({
+    bool forceRefresh = false,
+  }) async {
+    if (forceRefresh) {
+      await syncTourBundle();
+    }
+    return localDataSource.getCachedLandmarkMarkers();
+  }
+
+  @override
+  Future<List<List<LatLng>>> getPedestrianStreetSegments({
+    bool forceRefresh = false,
+  }) async {
+    if (forceRefresh) {
+      await syncTourBundle();
+    }
+    return localDataSource.getCachedPedestrianStreetSegments();
   }
 
   @override

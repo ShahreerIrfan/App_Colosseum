@@ -5,7 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
-import 'package:colosseum_client/app/data/providers/landmark_markers_provider.dart';
+import 'package:colosseum_client/app/data/models/landmark_marker_model.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_markers_layer.dart';
 
@@ -16,8 +16,51 @@ void main() {
     HttpOverrides.global = MockHttpOverrides();
   });
 
+  const testMarkers = [
+    LandmarkMarkerModel(
+      id: 'colosseum',
+      name: 'Colosseum',
+      coordinates: LatLng(41.890210, 12.492231),
+      color: Color(0xFFDD1110),
+      category: 'Amphitheatre',
+      imagePath: 'assets/logo/Colosseum.png',
+    ),
+    LandmarkMarkerModel(
+      id: 'arch_of_constantine',
+      name: 'Arch of Constantine',
+      coordinates: LatLng(41.889762, 12.490667),
+      color: Color(0xFFFF8F00),
+      category: 'Triumphal Arch',
+      imagePath: 'assets/logo/Arch of Constantine.png',
+    ),
+    LandmarkMarkerModel(
+      id: 'ludus_magnus',
+      name: 'Ludus Magnus',
+      coordinates: LatLng(41.889950, 12.495050),
+      color: Color(0xFF1E88E5),
+      category: 'Gladiator School',
+      imagePath: 'assets/logo/Ludus Magnus.png',
+    ),
+    LandmarkMarkerModel(
+      id: 'roman_forum',
+      name: 'Roman Forum',
+      coordinates: LatLng(41.892050, 12.486600),
+      color: Color(0xFF2E7D32),
+      category: 'Forum & Valley',
+      imagePath: 'assets/logo/Roman Forum.png',
+    ),
+    LandmarkMarkerModel(
+      id: 'temple_venus_rome',
+      name: 'Temple of Venus and Rome',
+      coordinates: LatLng(41.890880, 12.489700),
+      color: Color(0xFF8E24AA),
+      category: 'Double Temple',
+      imagePath: 'assets/logo/Temple of Venus and Rome.png',
+    ),
+  ];
+
   Widget buildTestMap({
-    required List markers,
+    required List<LandmarkMarkerModel> markers,
     String? selectedLandmarkId,
     double zoom = 16.5,
     ValueChanged<String>? onLandmarkTap,
@@ -32,7 +75,7 @@ void main() {
           ),
           children: [
             LandmarkMarkersLayer(
-              markers: LandmarkMarkersProvider.all,
+              markers: markers,
               selectedLandmarkId: selectedLandmarkId,
               currentZoom: zoom,
               onLandmarkTap: onLandmarkTap,
@@ -48,7 +91,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       buildTestMap(
-        markers: LandmarkMarkersProvider.all,
+        markers: testMarkers,
         zoom: 16.5,
       ),
     );
@@ -93,7 +136,7 @@ void main() {
 
     await tester.pumpWidget(
       buildTestMap(
-        markers: LandmarkMarkersProvider.all,
+        markers: testMarkers,
         zoom: 16.5,
         onLandmarkTap: (id) => tappedId = id,
       ),
@@ -114,7 +157,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       buildTestMap(
-        markers: LandmarkMarkersProvider.all,
+        markers: testMarkers,
         selectedLandmarkId: 'colosseum',
         zoom: 16.5,
       ),
@@ -139,7 +182,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       buildTestMap(
-        markers: LandmarkMarkersProvider.all,
+        markers: testMarkers,
         zoom: 15.0,
       ),
     );

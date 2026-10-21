@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -80,7 +82,13 @@ class LandmarkMarkerModel {
 
   factory LandmarkMarkerModel.fromJson(Map<String, dynamic> json) {
     LatLng coords = const LatLng(41.89021, 12.492231);
-    if (json['centerCoordinates'] is Map) {
+    if (json['center'] is Map) {
+      final c = json['center'] as Map;
+      coords = LatLng(
+        (c['latitude'] as num?)?.toDouble() ?? 41.89021,
+        (c['longitude'] as num?)?.toDouble() ?? 12.492231,
+      );
+    } else if (json['centerCoordinates'] is Map) {
       final c = json['centerCoordinates'] as Map;
       coords = LatLng(
         (c['latitude'] as num?)?.toDouble() ?? 41.89021,
@@ -99,27 +107,40 @@ class LandmarkMarkerModel {
       );
     }
 
+    final markerObj = json['marker'] is Map ? (json['marker'] as Map) : null;
     Color markerColor = const Color(0xFFDD1110);
-    if (json['color'] is int) {
-      markerColor = Color(json['color'] as int);
-    } else if (json['colorHex'] is String) {
-      final hex = (json['colorHex'] as String).replaceAll('#', '');
+    final colorHex = (markerObj?['colorHex'] ?? json['colorHex']) as String?;
+    if (colorHex != null) {
+      final hex = colorHex.replaceAll('#', '');
       markerColor = Color(int.parse(hex.length == 6 ? 'FF$hex' : hex, radix: 16));
+    } else if (json['color'] is int) {
+      markerColor = Color(json['color'] as int);
     }
 
+    final category = (markerObj?['category'] ?? json['category']) as String?;
+    final labelOffsetY = (markerObj?['labelOffsetY'] ?? json['labelOffsetY'] ?? 0.0) as num;
+    final labelOffsetX = (json['labelOffsetX'] ?? 0.0) as num;
+    final disp = json['display'] is Map ? (json['display'] as Map) : null;
+    final minZ = (json['minZoom'] as num?)?.toDouble() ??
+        (disp?['minZoom'] as num?)?.toDouble() ??
+        13.0;
+    final maxZ = (json['maxZoom'] as num?)?.toDouble() ??
+        (disp?['maxZoom'] as num?)?.toDouble() ??
+        21.0;
+
     return LandmarkMarkerModel(
-      id: json['id'] as String? ?? json['landmarkId'] as String? ?? '',
+      id: json['code'] as String? ??
+          json['id'] as String? ??
+          json['landmarkId'] as String? ??
+          '',
       name: json['name'] as String? ?? '',
       coordinates: coords,
       color: markerColor,
-      category: json['category'] as String?,
+      category: category,
       imagePath: json['imagePath'] as String?,
-      labelOffset: Offset(
-        (json['labelOffsetX'] as num?)?.toDouble() ?? 0.0,
-        (json['labelOffsetY'] as num?)?.toDouble() ?? 0.0,
-      ),
-      minZoom: (json['minZoom'] as num?)?.toDouble() ?? 13.0,
-      maxZoom: (json['maxZoom'] as num?)?.toDouble() ?? 21.0,
+      labelOffset: Offset(labelOffsetX.toDouble(), labelOffsetY.toDouble()),
+      minZoom: minZ,
+      maxZoom: maxZ,
     );
   }
 
@@ -195,4 +216,34 @@ class LandmarkMarkerModel {
         minZoom,
         maxZoom,
       );
+
+  static final List<LandmarkMarkerModel> _cached = [];
+
+  /// Caches loaded landmark markers in memory
+  static void cacheMarkers(Iterable<LandmarkMarkerModel> markers) {
+    _cached.clear();
+    _cached.addAll(markers);
+  }
+
+  /// Initializes landmark markers from seed bundle if not already loaded
+  static void ensureInitialized() {
+    if (_cached.isNotEmpty) return;
+    try {
+      final file = File('assets/data/colosseum_seed.json');
+      if (file.existsSync()) {
+        final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        final raw = json['landmarks'] as List<dynamic>? ?? [];
+        final list = raw
+            .map((lm) => LandmarkMarkerModel.fromJson(Map<String, dynamic>.from(lm as Map)))
+            .toList();
+        cacheMarkers(list);
+      }
+    } catch (_) {}
+  }
+
+  /// Returns all cached landmark markers
+  static List<LandmarkMarkerModel> get all {
+    ensureInitialized();
+    return List.unmodifiable(_cached);
+  }
 }

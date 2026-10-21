@@ -186,6 +186,34 @@ void main() {
   );
 
   testWidgets(
+    'Tapping Temple of Venus and Rome marker navigates directly to FloorMapView with Temple floor',
+    (WidgetTester tester) async {
+      Get.put(HomeController());
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          theme: AppTheme.lightTheme,
+          initialRoute: Routes.allPointsMap,
+          getPages: AppPages.routes,
+        ),
+      );
+      await tester.pump();
+
+      final templeTapFinder = find.byKey(const ValueKey('landmark_tap_temple_venus_rome'));
+      expect(templeTapFinder, findsOneWidget);
+
+      await tester.tap(templeTapFinder);
+      await tester.pumpAndSettle();
+
+      // Verify navigated directly to FloorMapView displaying Temple of Venus and Rome
+      expect(find.byType(FloorMapView), findsOneWidget);
+      expect(find.text('Temple of Venus and Rome'), findsWidgets);
+      expect(find.textContaining('Venus Cella & East Terrace'), findsWidgets);
+      expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'Displays "you are not in the zone" banner and reddish circle when user is outside zone',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1000, 2000);

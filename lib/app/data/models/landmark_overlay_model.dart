@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -86,19 +88,48 @@ class MapLandmarkOverlay {
       );
     }
 
+    final dim = json['dimensions'] is Map ? (json['dimensions'] as Map) : null;
+    final calib = json['calibration'] is Map ? (json['calibration'] as Map) : null;
+    final disp = json['display'] is Map ? (json['display'] as Map) : null;
+
+    final width = (json['widthMeters'] as num?)?.toDouble() ??
+        (dim?['widthMeters'] as num?)?.toDouble() ??
+        0.0;
+    final height = (json['heightMeters'] as num?)?.toDouble() ??
+        (dim?['heightMeters'] as num?)?.toDouble() ??
+        0.0;
+    final rot = (json['rotationDegrees'] as num?)?.toDouble() ??
+        (calib?['rotationDegrees'] as num?)?.toDouble() ??
+        0.0;
+    final aX = (json['anchorX'] as num?)?.toDouble() ??
+        (calib?['anchorX'] as num?)?.toDouble() ??
+        0.5;
+    final aY = (json['anchorY'] as num?)?.toDouble() ??
+        (calib?['anchorY'] as num?)?.toDouble() ??
+        0.5;
+    final zIdx = (json['zIndex'] as num?)?.toInt() ??
+        (disp?['zIndex'] as num?)?.toInt() ??
+        0;
+    final minZ = (json['minZoom'] as num?)?.toDouble() ??
+        (disp?['minZoom'] as num?)?.toDouble() ??
+        13.0;
+    final maxZ = (json['maxZoom'] as num?)?.toDouble() ??
+        (disp?['maxZoom'] as num?)?.toDouble() ??
+        21.0;
+
     return MapLandmarkOverlay(
-      id: json['landmarkId'] as String? ?? json['id'] as String? ?? '',
+      id: json['code'] as String? ?? json['landmarkId'] as String? ?? json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       assetPath: json['assetPath'] as String? ?? '',
       center: center,
-      widthMeters: (json['widthMeters'] as num?)?.toDouble() ?? 0.0,
-      heightMeters: (json['heightMeters'] as num?)?.toDouble() ?? 0.0,
-      rotationDegrees: (json['rotationDegrees'] as num?)?.toDouble() ?? 0.0,
-      anchorX: (json['anchorX'] as num?)?.toDouble() ?? 0.5,
-      anchorY: (json['anchorY'] as num?)?.toDouble() ?? 0.5,
-      zIndex: (json['zIndex'] as num?)?.toInt() ?? 0,
-      minZoom: (json['minZoom'] as num?)?.toDouble() ?? 13.0,
-      maxZoom: (json['maxZoom'] as num?)?.toDouble() ?? 21.0,
+      widthMeters: width,
+      heightMeters: height,
+      rotationDegrees: rot,
+      anchorX: aX,
+      anchorY: aY,
+      zIndex: zIdx,
+      minZoom: minZ,
+      maxZoom: maxZ,
       isVisible: json['isVisible'] as bool? ?? true,
       opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
     );
@@ -215,4 +246,34 @@ class MapLandmarkOverlay {
   @override
   String toString() =>
       'MapLandmarkOverlay(id: $id, name: $name, center: $center, ${widthMeters}m x ${heightMeters}m, rot: $rotationDegrees°, anchor: ($anchorX, $anchorY))';
+
+  static final List<MapLandmarkOverlay> _cached = [];
+
+  /// Caches loaded landmark overlays in memory
+  static void cacheOverlays(Iterable<MapLandmarkOverlay> overlays) {
+    _cached.clear();
+    _cached.addAll(overlays);
+  }
+
+  /// Initializes landmark overlays from seed bundle if not already loaded
+  static void ensureInitialized() {
+    if (_cached.isNotEmpty) return;
+    try {
+      final file = File('assets/data/colosseum_seed.json');
+      if (file.existsSync()) {
+        final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        final raw = json['landmarks'] as List<dynamic>? ?? [];
+        final list = raw
+            .map((lm) => MapLandmarkOverlay.fromJson(Map<String, dynamic>.from(lm as Map)))
+            .toList();
+        cacheOverlays(list);
+      }
+    } catch (_) {}
+  }
+
+  /// Returns all cached landmark overlays
+  static List<MapLandmarkOverlay> get all {
+    ensureInitialized();
+    return List.unmodifiable(_cached);
+  }
 }

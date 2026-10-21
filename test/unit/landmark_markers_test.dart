@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:colosseum_client/app/data/datasources/local/tour_local_data_source.dart';
 import 'package:colosseum_client/app/data/models/landmark_marker_model.dart';
-import 'package:colosseum_client/app/data/providers/landmark_markers_provider.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.dart';
 
 void main() {
-  group('LandmarkMarkerModel and LandmarkMarkersProvider Tests', () {
-    test('LandmarkMarkersProvider configures all 5 archaeological landmarks with distinct colors', () {
-      final all = LandmarkMarkersProvider.all;
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('LandmarkMarkerModel and Local Landmark Markers Tests', () {
+    late TourLocalDataSource localDataSource;
+
+    setUp(() {
+      localDataSource = TourLocalDataSource();
+    });
+
+    test('LocalDataSource loads all 5 archaeological landmarks with distinct colors from seed', () async {
+      final all = await localDataSource.getCachedLandmarkMarkers();
       expect(all.length, 5);
 
       final ids = all.map((m) => m.id).toSet();
@@ -33,31 +41,6 @@ void main() {
         expect(landmark.longitude, lessThan(12.50));
         expect(landmark.minZoom, lessThan(landmark.maxZoom));
         expect(landmark.category, isNotNull);
-      }
-    });
-
-    test('LandmarkMarkersProvider.asMap and getById return correct landmark', () {
-      final colosseum = LandmarkMarkersProvider.getById('colosseum');
-      expect(colosseum, isNotNull);
-      expect(colosseum?.name, 'Colosseum');
-      expect(colosseum?.color, const Color(0xFFDD1110));
-
-      final arch = LandmarkMarkersProvider.getById('arch_of_constantine');
-      expect(arch, isNotNull);
-      expect(arch?.name, 'Arch of Constantine');
-
-      final unknown = LandmarkMarkersProvider.getById('non_existent');
-      expect(unknown, isNull);
-    });
-
-    test('LandmarkMarkersProvider legend entries are structured properly', () {
-      final legend = LandmarkMarkersProvider.legendEntries;
-      expect(legend.length, 5);
-      for (final entry in legend) {
-        expect(entry.containsKey('id'), isTrue);
-        expect(entry.containsKey('name'), isTrue);
-        expect(entry.containsKey('color'), isTrue);
-        expect(entry.containsKey('category'), isTrue);
       }
     });
 
@@ -89,7 +72,13 @@ void main() {
     });
 
     test('LandmarkMarkerModel copyWith updates fields cleanly', () {
-      final original = LandmarkMarkersProvider.colosseum;
+      const original = LandmarkMarkerModel(
+        id: 'colosseum',
+        name: 'Colosseum',
+        coordinates: LatLng(41.89021, 12.492231),
+        color: Color(0xFFDD1110),
+        category: 'Amphitheatre',
+      );
       final copied = original.copyWith(name: 'Flavian Colosseum', color: Colors.amber);
 
       expect(copied.id, original.id);
