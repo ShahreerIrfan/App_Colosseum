@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
@@ -18,7 +20,7 @@ import '../../../data/services/pedestrian_street_router.dart';
 import '../../../routes/app_pages.dart';
 import '../views/allPointsMap.dart';
 
-class HomeController extends GetxController {
+class HomeController extends GetxController with WidgetsBindingObserver {
   late final MapController mapController;
   final ITourRepository tourRepository;
   final GpsLocationService gpsLocationService;
@@ -26,6 +28,10 @@ class HomeController extends GetxController {
 
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<UserOrientationState>? _compassSubscription;
+  Timer? _periodicSyncTimer;
+
+  /// Periodic background sync interval for live landmark updates (5 minutes).
+  static const Duration periodicSyncInterval = Duration(minutes: 5);
 
   static const LatLng colosseumCoordinates = LatLng(41.890210, 12.492231);
   static const double defaultZoom = 16.5;
@@ -238,10 +244,23 @@ class HomeController extends GetxController {
     return d <= zoneBoundaryRadiusMeters;
   }
 
+  final bool? enablePeriodicSync;
+
+  bool get isPeriodicSyncEnabled {
+    if (enablePeriodicSync != null) return enablePeriodicSync!;
+    try {
+      if (Platform.environment.containsKey('FLUTTER_TEST')) {
+        return false;
+      }
+    } catch (_) {}
+    return true;
+  }
+
   HomeController({
     ITourRepository? tourRepository,
     GpsLocationService? gpsLocationService,
     CompassService? compassService,
+    this.enablePeriodicSync,
   })  : tourRepository = tourRepository ??
             (Get.isRegistered<ITourRepository>()
                 ? Get.find<ITourRepository>()
@@ -252,12 +271,30 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     mapController = MapController();
     _initLandmarkMarkers();
     _initLandmarkOverlays();
     _initPedestrianRoutes();
     _initFloors();
     _initLocationTracking();
+    _startPeriodicSync();
+  }
+
+  /// Automatically synchronizes landmark markers and overlays periodically.
+  void _startPeriodicSync() {
+    if (!isPeriodicSyncEnabled) return;
+    _periodicSyncTimer?.cancel();
+    _periodicSyncTimer = Timer.periodic(periodicSyncInterval, (_) {
+      refreshLandmarks();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      refreshLandmarks();
+    }
   }
 
   void _initFloors() {
@@ -283,6 +320,10 @@ class HomeController extends GetxController {
       if (markers.isNotEmpty) {
         landmarkMarkers.assignAll(markers);
       }
+      final liveMarkers = await tourRepository.getLandmarkMarkers(forceRefresh: true);
+      if (liveMarkers.isNotEmpty) {
+        landmarkMarkers.assignAll(liveMarkers);
+      }
     } catch (_) {}
   }
 
@@ -304,6 +345,10 @@ class HomeController extends GetxController {
       final overlays = await tourRepository.getLandmarkOverlays();
       if (overlays.isNotEmpty) {
         _applyOverlays(overlays);
+      }
+      final liveOverlays = await tourRepository.getLandmarkOverlays(forceRefresh: true);
+      if (liveOverlays.isNotEmpty) {
+        _applyOverlays(liveOverlays);
       }
     } catch (_) {}
   }
@@ -373,6 +418,17 @@ class HomeController extends GetxController {
     currentZoom.value = camera.zoom;
   }
 
+  /// Manually or automatically re-fetches live landmark markers and overlays from the remote database
+  /// and updates local Hive storage.
+  Future<void> refreshLandmarks() async {
+    try {
+      final liveMarkers = await tourRepository.getLandmarkMarkers(forceRefresh: true);
+      landmarkMarkers.assignAll(liveMarkers);
+      final liveOverlays = await tourRepository.getLandmarkOverlays(forceRefresh: true);
+      _applyOverlays(liveOverlays);
+    } catch (_) {}
+  }
+
   void centerOnColosseum() {
     selectedLandmarkId.value = 'colosseum';
     try {
@@ -380,6 +436,7 @@ class HomeController extends GetxController {
     } catch (_) {
       // MapController is only attached when FlutterMap is rendered
     }
+    refreshLandmarks();
   }
 
   /// Toggles visibility of all landmark ground overlays.
@@ -462,6 +519,8 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _periodicSyncTimer?.cancel();
     _positionSubscription?.cancel();
     _compassSubscription?.cancel();
     compassService.stopListening();

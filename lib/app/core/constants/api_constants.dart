@@ -7,6 +7,23 @@ abstract class ApiConstants {
   /// To update endpoint after deployment, modify only this string.
   static const String baseUrl = 'http://187.126.3.18:3000';
 
+  /// Local development server (active with adb reverse tcp:3000 tcp:3000).
+  static const String localBaseUrl = 'http://localhost:3000';
+
+  /// Fallback LAN address when running on local Wi-Fi without adb reverse.
+  static const String lanBaseUrl = 'http://192.168.0.116:3000';
+
+  /// Remote live production VPS server.
+  static const String vpsBaseUrl = baseUrl;
+
+  /// Priority list of candidate backend hosts for resilient connectivity.
+  /// Local candidates are prioritized so edits in http://localhost:5173 sync immediately.
+  static const List<String> candidateBaseUrls = [
+    localBaseUrl,
+    lanBaseUrl,
+    baseUrl,
+  ];
+
   /// API version path prefix
   static const String apiV1 = '$baseUrl/api/v1';
 

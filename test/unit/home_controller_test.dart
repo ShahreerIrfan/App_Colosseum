@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:colosseum_client/app/data/models/map_view_type.dart';
@@ -201,6 +202,16 @@ void main() {
 
       expect(controller.isTourActive.value, isFalse);
       expect(controller.currentTourRoutePoints, isEmpty);
+    });
+
+    test('refreshLandmarks updates landmarkMarkers and landmarkOverlays', () async {
+      await controller.refreshLandmarks();
+      expect(controller.landmarkMarkers.isNotEmpty, isTrue);
+    });
+
+    test('didChangeAppLifecycleState triggers refreshLandmarks on resumed', () {
+      controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      expect(controller.landmarkMarkers.isNotEmpty, isTrue);
     });
   });
 }

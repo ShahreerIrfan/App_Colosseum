@@ -36,7 +36,11 @@ class LandmarkOverlayLayer extends StatelessWidget {
   /// Pre-warms Flutter's memory image cache with the transparent landmark PNGs.
   static void prewarm(BuildContext context, Iterable<MapLandmarkOverlay> overlays) {
     for (final overlay in overlays) {
-      precacheImage(AssetImage(overlay.assetPath), context);
+      if (overlay.isNetworkImage) {
+        precacheImage(NetworkImage(overlay.assetPath), context).catchError((_) {});
+      } else {
+        precacheImage(AssetImage(overlay.assetPath), context).catchError((_) {});
+      }
     }
   }
 
@@ -137,12 +141,17 @@ class GeoLandmarkOverlayImageWidget extends StatelessWidget {
     final tx = offset.dx;
     final ty = offset.dy;
 
+    final ImageProvider imgProvider = overlay.isNetworkImage
+        ? NetworkImage(overlay.assetPath)
+        : AssetImage(overlay.assetPath) as ImageProvider;
+
     Widget imageWidget = Image(
-      image: AssetImage(overlay.assetPath),
+      image: imgProvider,
       fit: BoxFit.fill,
       opacity: AlwaysStoppedAnimation(overlay.opacity),
       gaplessPlayback: true,
       filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
     );
 
     if (overlay.onTap != null) {

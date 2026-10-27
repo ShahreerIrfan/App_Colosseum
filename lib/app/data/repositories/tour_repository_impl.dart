@@ -63,7 +63,13 @@ class TourRepositoryImpl implements ITourRepository {
     bool forceRefresh = false,
   }) async {
     if (forceRefresh) {
-      await syncTourBundle();
+      try {
+        final remote = await remoteDataSource.getLandmarks();
+        await localDataSource.saveLandmarkOverlays(remote);
+        return remote;
+      } catch (_) {
+        await syncTourBundle();
+      }
     }
     return localDataSource.getCachedLandmarkOverlays();
   }
@@ -73,7 +79,13 @@ class TourRepositoryImpl implements ITourRepository {
     bool forceRefresh = false,
   }) async {
     if (forceRefresh) {
-      await syncTourBundle();
+      try {
+        final remote = await remoteDataSource.getLandmarkMarkers();
+        await localDataSource.saveLandmarkMarkers(remote);
+        return remote;
+      } catch (_) {
+        await syncTourBundle();
+      }
     }
     return localDataSource.getCachedLandmarkMarkers();
   }

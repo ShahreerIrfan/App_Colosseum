@@ -1,7 +1,10 @@
+import 'dart:ui' show Color;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:colosseum_client/app/data/datasources/local/tour_local_data_source.dart';
 import 'package:colosseum_client/app/data/datasources/remote/tour_remote_data_source.dart';
 import 'package:colosseum_client/app/data/models/floor_definition.dart';
+import 'package:colosseum_client/app/data/models/landmark_marker_model.dart';
 import 'package:colosseum_client/app/data/models/landmark_overlay_model.dart';
 import 'package:colosseum_client/app/data/models/sync_manifest_model.dart';
 import 'package:colosseum_client/app/data/models/tour_bundle_model.dart';
@@ -19,6 +22,7 @@ class FakeRemoteDataSource implements ITourRemoteDataSource {
 
   bool shouldThrow = false;
   int bundleCallCount = 0;
+  List<LandmarkMarkerModel> markersToReturn = [];
 
   @override
   Future<TourSyncManifestModel> getSyncManifest() async {
@@ -41,6 +45,12 @@ class FakeRemoteDataSource implements ITourRemoteDataSource {
   Future<List<MapLandmarkOverlay>> getLandmarks() async {
     if (shouldThrow) throw Exception('Network timeout');
     return const [];
+  }
+
+  @override
+  Future<List<LandmarkMarkerModel>> getLandmarkMarkers() async {
+    if (shouldThrow) throw Exception('Network timeout');
+    return markersToReturn;
   }
 
   @override
@@ -146,6 +156,59 @@ void main() {
       final floor = await repository.getFloorById('floor_underground');
       expect(floor, isNotNull);
       expect(floor!.displayName, contains('Underground'));
+    });
+
+    test('getLandmarkMarkers forceRefresh saves created, edited, and deleted landmarks to local storage',
+        () async {
+      // 1. Initially return 1 landmark
+      final initial = const LandmarkMarkerModel(
+        id: 'monument_1',
+        name: 'Monument 1',
+        coordinates: LatLng(41.890, 12.492),
+        color: Color(0xFFC68642),
+      );
+      remoteDataSource.markersToReturn = [initial];
+
+      final res1 = await repository.getLandmarkMarkers(forceRefresh: true);
+      expect(res1.length, equals(1));
+      expect(res1.first.id, equals('monument_1'));
+
+      // Check local storage has saved it
+      final cached1 = await localDataSource.getCachedLandmarkMarkers();
+      expect(cached1.length, equals(1));
+      expect(cached1.first.id, equals('monument_1'));
+
+      // 2. Add (create) a second landmark
+      final created = const LandmarkMarkerModel(
+        id: 'monument_2',
+        name: 'Monument 2',
+        coordinates: LatLng(41.895, 12.493),
+        color: Color(0xFF2E7D32),
+      );
+      remoteDataSource.markersToReturn = [initial, created];
+
+      final res2 = await repository.getLandmarkMarkers(forceRefresh: true);
+      expect(res2.length, equals(2));
+      final cached2 = await localDataSource.getCachedLandmarkMarkers();
+      expect(cached2.length, equals(2));
+
+      // 3. Edit landmark 1 (name change)
+      final edited = initial.copyWith(name: 'Monument 1 Edited');
+      remoteDataSource.markersToReturn = [edited, created];
+
+      final res3 = await repository.getLandmarkMarkers(forceRefresh: true);
+      expect(res3.first.name, equals('Monument 1 Edited'));
+      final cached3 = await localDataSource.getCachedLandmarkMarkers();
+      expect(cached3.first.name, equals('Monument 1 Edited'));
+
+      // 4. Delete landmark 2
+      remoteDataSource.markersToReturn = [edited];
+
+      final res4 = await repository.getLandmarkMarkers(forceRefresh: true);
+      expect(res4.length, equals(1));
+      final cached4 = await localDataSource.getCachedLandmarkMarkers();
+      expect(cached4.length, equals(1));
+      expect(cached4.any((m) => m.id == 'monument_2'), isFalse);
     });
   });
 }

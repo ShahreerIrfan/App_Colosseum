@@ -13,6 +13,8 @@ import '../../models/tour_bundle_model.dart';
 /// Contract for local caching of tour assets and manifests.
 abstract class ITourLocalDataSource {
   Future<void> saveTourBundle(TourBundleModel bundle, {String lang = 'en'});
+  Future<void> saveLandmarkMarkers(List<LandmarkMarkerModel> markers);
+  Future<void> saveLandmarkOverlays(List<MapLandmarkOverlay> overlays);
   Future<TourSyncManifestModel?> getCachedManifest();
   Future<List<FloorDefinition>> getCachedFloors({String lang = 'en'});
   Future<FloorDefinition?> getCachedFloorById(String floorId, {String lang = 'en'});
@@ -157,8 +159,52 @@ class TourLocalDataSource implements ITourLocalDataSource {
   }
 
   @override
+  Future<void> saveLandmarkMarkers(List<LandmarkMarkerModel> markers) async {
+    LandmarkMarkerModel.cacheMarkers(markers);
+    final box = await _getBox();
+    final jsonList = markers.map((m) => m.toJson()).toList();
+    final encoded = jsonEncode(jsonList);
+    if (box != null) {
+      await box.put('landmark_markers', encoded);
+    } else {
+      _memoryCache['landmark_markers'] = encoded;
+    }
+  }
+
+  @override
+  Future<void> saveLandmarkOverlays(List<MapLandmarkOverlay> overlays) async {
+    MapLandmarkOverlay.cacheOverlays(overlays);
+    final box = await _getBox();
+    final jsonList = overlays.map((o) => o.toJson()).toList();
+    final encoded = jsonEncode(jsonList);
+    if (box != null) {
+      await box.put('landmark_overlays', encoded);
+    } else {
+      _memoryCache['landmark_overlays'] = encoded;
+    }
+  }
+
+  @override
   Future<List<MapLandmarkOverlay>> getCachedLandmarkOverlays() async {
     final box = await _getBox();
+    final rawDirect = box != null
+        ? box.get('landmark_overlays') as String?
+        : _memoryCache['landmark_overlays'] as String?;
+
+    if (rawDirect != null) {
+      try {
+        final list = jsonDecode(rawDirect) as List<dynamic>;
+        if (list.isNotEmpty) {
+          final overlays = list
+              .map((l) => MapLandmarkOverlay.fromJson(
+                  Map<String, dynamic>.from(l as Map)))
+              .toList();
+          MapLandmarkOverlay.cacheOverlays(overlays);
+          return overlays;
+        }
+      } catch (_) {}
+    }
+
     final raw = box != null
         ? box.get('bundle_en') as String?
         : _memoryCache['bundle_en'] as String?;
@@ -168,10 +214,12 @@ class TourLocalDataSource implements ITourLocalDataSource {
         final json = jsonDecode(raw) as Map<String, dynamic>;
         final rawOverlays = json['landmarks'] as List<dynamic>? ?? [];
         if (rawOverlays.isNotEmpty) {
-          return rawOverlays
+          final overlays = rawOverlays
               .map((l) => MapLandmarkOverlay.fromJson(
                   Map<String, dynamic>.from(l as Map)))
               .toList();
+          MapLandmarkOverlay.cacheOverlays(overlays);
+          return overlays;
         }
       } catch (_) {}
     }
@@ -187,6 +235,24 @@ class TourLocalDataSource implements ITourLocalDataSource {
   @override
   Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers() async {
     final box = await _getBox();
+    final rawDirect = box != null
+        ? box.get('landmark_markers') as String?
+        : _memoryCache['landmark_markers'] as String?;
+
+    if (rawDirect != null) {
+      try {
+        final list = jsonDecode(rawDirect) as List<dynamic>;
+        if (list.isNotEmpty) {
+          final markers = list
+              .map((l) => LandmarkMarkerModel.fromJson(
+                  Map<String, dynamic>.from(l as Map)))
+              .toList();
+          LandmarkMarkerModel.cacheMarkers(markers);
+          return markers;
+        }
+      } catch (_) {}
+    }
+
     final raw = box != null
         ? box.get('bundle_en') as String?
         : _memoryCache['bundle_en'] as String?;
@@ -200,10 +266,12 @@ class TourLocalDataSource implements ITourLocalDataSource {
         }
         final rawLandmarks = json['landmarks'] as List<dynamic>? ?? [];
         if (rawLandmarks.isNotEmpty) {
-          return rawLandmarks
+          final markers = rawLandmarks
               .map((l) => LandmarkMarkerModel.fromJson(
                   Map<String, dynamic>.from(l as Map)))
               .toList();
+          LandmarkMarkerModel.cacheMarkers(markers);
+          return markers;
         }
       } catch (_) {}
     }

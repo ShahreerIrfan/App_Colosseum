@@ -15,8 +15,11 @@ class MapLandmarkOverlay {
   /// Human-readable landmark name (e.g. 'Colosseum').
   final String name;
 
-  /// Flutter asset bundle path to the transparent PNG.
+  /// Flutter asset bundle path or Cloudinary URL to the transparent PNG.
   final String assetPath;
+
+  /// Optional thumbnail or card image URL / asset path for this landmark.
+  final String? thumbnailUrl;
 
   /// Real-world geographic center coordinate.
   final LatLng center;
@@ -58,6 +61,7 @@ class MapLandmarkOverlay {
     required this.id,
     required this.name,
     required this.assetPath,
+    this.thumbnailUrl,
     required this.center,
     required this.widthMeters,
     required this.heightMeters,
@@ -71,6 +75,10 @@ class MapLandmarkOverlay {
     this.opacity = 1.0,
     this.onTap,
   });
+
+  /// Whether the overlay image is hosted on a remote network (e.g. Cloudinary).
+  bool get isNetworkImage =>
+      assetPath.startsWith('http://') || assetPath.startsWith('https://');
 
   factory MapLandmarkOverlay.fromJson(Map<String, dynamic> json) {
     LatLng center = const LatLng(41.89021, 12.492231);
@@ -86,6 +94,14 @@ class MapLandmarkOverlay {
         (c['latitude'] as num?)?.toDouble() ?? 41.89021,
         (c['longitude'] as num?)?.toDouble() ?? 12.492231,
       );
+    } else if (json['location'] is Map && (json['location'] as Map)['coordinates'] is List) {
+      final list = (json['location'] as Map)['coordinates'] as List;
+      if (list.length >= 2) {
+        center = LatLng(
+          (list[1] as num).toDouble(),
+          (list[0] as num).toDouble(),
+        );
+      }
     }
 
     final dim = json['dimensions'] is Map ? (json['dimensions'] as Map) : null;
@@ -121,6 +137,7 @@ class MapLandmarkOverlay {
       id: json['code'] as String? ?? json['landmarkId'] as String? ?? json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       assetPath: json['assetPath'] as String? ?? '',
+      thumbnailUrl: json['thumbnailUrl'] as String? ?? json['cardUrl'] as String?,
       center: center,
       widthMeters: width,
       heightMeters: height,
@@ -140,6 +157,7 @@ class MapLandmarkOverlay {
         'landmarkId': id,
         'name': name,
         'assetPath': assetPath,
+        'thumbnailUrl': thumbnailUrl,
         'centerCoordinates': {
           'latitude': center.latitude,
           'longitude': center.longitude,
@@ -173,6 +191,7 @@ class MapLandmarkOverlay {
     String? id,
     String? name,
     String? assetPath,
+    String? thumbnailUrl,
     LatLng? center,
     double? widthMeters,
     double? heightMeters,
@@ -190,6 +209,7 @@ class MapLandmarkOverlay {
       id: id ?? this.id,
       name: name ?? this.name,
       assetPath: assetPath ?? this.assetPath,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       center: center ?? this.center,
       widthMeters: widthMeters ?? this.widthMeters,
       heightMeters: heightMeters ?? this.heightMeters,
@@ -213,6 +233,7 @@ class MapLandmarkOverlay {
           id == other.id &&
           name == other.name &&
           assetPath == other.assetPath &&
+          thumbnailUrl == other.thumbnailUrl &&
           center == other.center &&
           widthMeters == other.widthMeters &&
           heightMeters == other.heightMeters &&
@@ -230,6 +251,7 @@ class MapLandmarkOverlay {
         id,
         name,
         assetPath,
+        thumbnailUrl,
         center,
         widthMeters,
         heightMeters,

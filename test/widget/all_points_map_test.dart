@@ -70,19 +70,34 @@ void main() {
       expect(find.byKey(const ValueKey('landmark_image_temple_venus_rome')), findsOneWidget);
 
       final colosseumImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_colosseum')));
-      expect((colosseumImg.image as AssetImage).assetName, 'assets/logo/Colosseum.png');
+      final colosseumSrc = colosseumImg.image is NetworkImage
+          ? (colosseumImg.image as NetworkImage).url
+          : (colosseumImg.image as AssetImage).assetName;
+      expect(colosseumSrc.toLowerCase(), contains('colosseum'));
 
       final archImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_arch_of_constantine')));
-      expect((archImg.image as AssetImage).assetName, 'assets/logo/Arch of Constantine.png');
+      final archSrc = archImg.image is NetworkImage
+          ? (archImg.image as NetworkImage).url
+          : (archImg.image as AssetImage).assetName;
+      expect(archSrc.toLowerCase(), contains('constantine'));
 
       final ludusImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_ludus_magnus')));
-      expect((ludusImg.image as AssetImage).assetName, 'assets/logo/Ludus Magnus.png');
+      final ludusSrc = ludusImg.image is NetworkImage
+          ? (ludusImg.image as NetworkImage).url
+          : (ludusImg.image as AssetImage).assetName;
+      expect(ludusSrc.toLowerCase(), contains('ludus'));
 
       final forumImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_roman_forum')));
-      expect((forumImg.image as AssetImage).assetName, 'assets/logo/Roman Forum.png');
+      final forumSrc = forumImg.image is NetworkImage
+          ? (forumImg.image as NetworkImage).url
+          : (forumImg.image as AssetImage).assetName;
+      expect(forumSrc.toLowerCase(), contains('forum'));
 
       final templeImg = tester.widget<Image>(find.byKey(const ValueKey('landmark_image_temple_venus_rome')));
-      expect((templeImg.image as AssetImage).assetName, 'assets/logo/Temple of Venus and Rome.png');
+      final templeSrc = templeImg.image is NetworkImage
+          ? (templeImg.image as NetworkImage).url
+          : (templeImg.image as AssetImage).assetName;
+      expect(templeSrc.toLowerCase(), contains('venus'));
 
       // Verify Colosseum recenter button text is present
       expect(find.text('Colosseum'), findsOneWidget);

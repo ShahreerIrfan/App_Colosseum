@@ -37,10 +37,14 @@ class LandmarkMarkersLayer extends StatelessWidget {
     this.style = const LandmarkMarkerStyle(),
   });
 
-  /// Pre-warms Flutter's memory image cache with the transparent landmark badge PNGs.
+  /// Pre-warms Flutter's memory image cache with the landmark badge images.
   static void prewarm(BuildContext context, Iterable<LandmarkMarkerModel> markers) {
     for (final marker in markers) {
-      precacheImage(AssetImage(marker.assetPath), context);
+      if (marker.isNetworkImage) {
+        precacheImage(NetworkImage(marker.assetPath), context).catchError((_) {});
+      } else {
+        precacheImage(AssetImage(marker.assetPath), context).catchError((_) {});
+      }
     }
   }
 

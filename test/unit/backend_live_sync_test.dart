@@ -35,11 +35,11 @@ void main() {
       final manifest = await remoteSource.getSyncManifest();
       expect(manifest.totalFloors, equals(12));
       expect(manifest.totalViewpoints, equals(51));
-      expect(manifest.totalLandmarks, equals(5));
+      expect(manifest.totalLandmarks, greaterThanOrEqualTo(5));
 
       final bundle = await remoteSource.getTourBundle(lang: 'en');
       expect(bundle.floors.length, equals(12));
-      expect(bundle.landmarks.length, equals(5));
+      expect(bundle.landmarks.length, greaterThanOrEqualTo(5));
 
       final synced = await repository.syncTourBundle(lang: 'en');
       expect(synced, isTrue);

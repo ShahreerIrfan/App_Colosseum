@@ -149,14 +149,14 @@ class LandmarkLabelBubble extends StatelessWidget {
   }
 }
 
-/// A styled image badge marker displayed for the landmark using its correspondent
-/// graphic image from assets/logo.
+/// A styled image badge marker displayed for the landmark using either its
+/// live Cloudinary database image or bundled offline fallback asset.
 ///
 /// Features:
-/// - Exact 3:1 aspect ratio matching the asset dimensions (2172 x 724)
+/// - Exact 3:1 aspect ratio matching the logo badge dimensions (2172 x 724)
 /// - Proportional compact scaling when zooming out to eliminate clutter
 /// - Smooth animated scale and distinct selection indicator badge when selected
-/// - Graceful fallback to text bubble if image fails to load
+/// - Graceful fallback: Network Cloudinary -> Bundled Asset -> Text Bubble
 class LandmarkImageBadge extends StatelessWidget {
   final LandmarkMarkerModel landmark;
   final bool isSelected;
@@ -173,8 +173,61 @@ class LandmarkImageBadge extends StatelessWidget {
     this.isCompact = false,
   });
 
+  Widget _buildFallbackAsset(BuildContext context) {
+    return Image.asset(
+      landmark.fallbackAssetPath,
+      key: ValueKey('landmark_image_fallback_${landmark.id}'),
+      width: width,
+      height: height,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) {
+        return LandmarkLabelBubble(
+          landmark: landmark,
+          isSelected: isSelected,
+          currentZoom: isCompact ? 15.0 : 16.5,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final imageWidget = landmark.isNetworkImage
+        ? Image.network(
+            landmark.assetPath,
+            key: ValueKey('landmark_image_${landmark.id}'),
+            width: width,
+            height: height,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return SizedBox(width: width, height: height);
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return _buildFallbackAsset(context);
+            },
+          )
+        : Image.asset(
+            landmark.assetPath,
+            key: ValueKey('landmark_image_${landmark.id}'),
+            width: width,
+            height: height,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return LandmarkLabelBubble(
+                landmark: landmark,
+                isSelected: isSelected,
+                currentZoom: isCompact ? 15.0 : 16.5,
+              );
+            },
+          );
+
     return AnimatedScale(
       scale: isSelected ? 1.05 : 1.0,
       duration: const Duration(milliseconds: 200),
@@ -186,23 +239,7 @@ class LandmarkImageBadge extends StatelessWidget {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            // The correspondent landmark logo image from assets/logo
-            Image.asset(
-              landmark.assetPath,
-              key: ValueKey('landmark_image_${landmark.id}'),
-              width: width,
-              height: height,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.medium,
-              gaplessPlayback: true,
-              errorBuilder: (context, error, stackTrace) {
-                return LandmarkLabelBubble(
-                  landmark: landmark,
-                  isSelected: isSelected,
-                  currentZoom: isCompact ? 15.0 : 16.5,
-                );
-              },
-            ),
+            imageWidget,
 
             // Selection indicator badge
             if (isSelected)

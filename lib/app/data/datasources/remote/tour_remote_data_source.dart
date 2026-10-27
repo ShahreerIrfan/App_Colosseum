@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
 import '../../models/floor_definition.dart';
+import '../../models/landmark_marker_model.dart';
 import '../../models/landmark_overlay_model.dart';
 import '../../models/sync_manifest_model.dart';
 import '../../models/tour_bundle_model.dart';
@@ -12,6 +13,7 @@ abstract class ITourRemoteDataSource {
   Future<TourSyncManifestModel> getSyncManifest();
   Future<TourBundleModel> getTourBundle({String lang = 'en'});
   Future<List<MapLandmarkOverlay>> getLandmarks();
+  Future<List<LandmarkMarkerModel>> getLandmarkMarkers();
   Future<List<FloorDefinition>> getFloors({String lang = 'en'});
   Future<FloorDefinition?> getFloorDetail(String floorId, {String lang = 'en'});
 }
@@ -23,13 +25,30 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
 
   TourRemoteDataSource({
     http.Client? client,
-    this.timeout = const Duration(seconds: 6),
+    this.timeout = const Duration(seconds: 15),
   }) : _client = client ?? http.Client();
+
+  Future<http.Response> _get(String url) async {
+    // 1. Check candidate backend hosts in priority order
+    for (final base in ApiConstants.candidateBaseUrls) {
+      final targetUrl = url.replaceFirst(RegExp(r'^https?://[^/]+'), base);
+      try {
+        final targetUri = Uri.parse(targetUrl);
+        final response =
+            await _client.get(targetUri).timeout(const Duration(seconds: 3));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return response;
+        }
+      } catch (_) {}
+    }
+
+    final fallbackUri = Uri.parse(url);
+    return await _client.get(fallbackUri).timeout(timeout);
+  }
 
   @override
   Future<TourSyncManifestModel> getSyncManifest() async {
-    final uri = Uri.parse(ApiConstants.syncManifest);
-    final response = await _client.get(uri).timeout(timeout);
+    final response = await _get(ApiConstants.syncManifest);
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -43,8 +62,7 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
 
   @override
   Future<TourBundleModel> getTourBundle({String lang = 'en'}) async {
-    final uri = Uri.parse(ApiConstants.tourBundleUrl(lang: lang));
-    final response = await _client.get(uri).timeout(timeout);
+    final response = await _get(ApiConstants.tourBundleUrl(lang: lang));
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -58,12 +76,13 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
 
   @override
   Future<List<MapLandmarkOverlay>> getLandmarks() async {
-    final uri = Uri.parse(ApiConstants.landmarks);
-    final response = await _client.get(uri).timeout(timeout);
+    final response = await _get(ApiConstants.landmarks);
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final list = (json['data'] as List<dynamic>?) ?? [];
+      final list = (json['data'] as List<dynamic>?) ??
+          (json['payload'] as List<dynamic>?) ??
+          [];
       return list
           .map((item) =>
               MapLandmarkOverlay.fromJson(Map<String, dynamic>.from(item as Map)))
@@ -75,9 +94,27 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
   }
 
   @override
+  Future<List<LandmarkMarkerModel>> getLandmarkMarkers() async {
+    final response = await _get(ApiConstants.landmarks);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = (json['data'] as List<dynamic>?) ??
+          (json['payload'] as List<dynamic>?) ??
+          [];
+      return list
+          .map((item) =>
+              LandmarkMarkerModel.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList();
+    } else {
+      throw Exception(
+          'Failed to load landmark markers: ${response.statusCode} ${response.reasonPhrase}');
+    }
+  }
+
+  @override
   Future<List<FloorDefinition>> getFloors({String lang = 'en'}) async {
-    final uri = Uri.parse(ApiConstants.floors);
-    final response = await _client.get(uri).timeout(timeout);
+    final response = await _get(ApiConstants.floors);
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -95,8 +132,7 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
   @override
   Future<FloorDefinition?> getFloorDetail(String floorId,
       {String lang = 'en'}) async {
-    final uri = Uri.parse(ApiConstants.floorDetail(floorId, lang: lang));
-    final response = await _client.get(uri).timeout(timeout);
+    final response = await _get(ApiConstants.floorDetail(floorId, lang: lang));
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;

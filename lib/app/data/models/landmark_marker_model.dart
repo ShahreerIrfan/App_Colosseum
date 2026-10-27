@@ -24,8 +24,11 @@ class LandmarkMarkerModel {
   /// Optional icon representing the landmark type.
   final IconData? icon;
 
-  /// Asset path to the correspondent logo / badge image for this landmark.
+  /// Asset path or Cloudinary URL to the correspondent logo / badge image for this landmark.
   final String? imagePath;
+
+  /// Optional thumbnail or card image URL / asset path for this landmark.
+  final String? thumbnailUrl;
 
   /// Fine-grained label offset for overlap avoidance in dense areas.
   final Offset labelOffset;
@@ -47,17 +50,32 @@ class LandmarkMarkerModel {
     this.category,
     this.icon,
     this.imagePath,
+    this.thumbnailUrl,
     this.labelOffset = Offset.zero,
     this.minZoom = 13.0,
     this.maxZoom = 21.0,
     this.onTap,
   });
 
-  /// Resolves the asset path for this landmark's logo badge image from assets/logo.
+  /// Whether the primary badge image is hosted on a remote network (e.g. Cloudinary).
+  bool get isNetworkImage =>
+      assetPath.startsWith('http://') || assetPath.startsWith('https://');
+
+  /// Whether the card thumbnail image is hosted on a remote network (e.g. Cloudinary).
+  bool get isThumbnailNetworkImage =>
+      thumbnailUrl != null &&
+      (thumbnailUrl!.startsWith('http://') || thumbnailUrl!.startsWith('https://'));
+
+  /// Resolves the primary image URL or asset path for this landmark's logo badge image.
   String get assetPath {
     if (imagePath != null && imagePath!.isNotEmpty) {
       return imagePath!;
     }
+    return fallbackAssetPath;
+  }
+
+  /// Bundled fallback asset path from assets/logo for resilient offline execution.
+  String get fallbackAssetPath {
     switch (id) {
       case 'colosseum':
         return 'assets/logo/Colosseum.png';
@@ -105,6 +123,14 @@ class LandmarkMarkerModel {
         (json['latitude'] as num).toDouble(),
         (json['longitude'] as num).toDouble(),
       );
+    } else if (json['location'] is Map && (json['location'] as Map)['coordinates'] is List) {
+      final list = (json['location'] as Map)['coordinates'] as List;
+      if (list.length >= 2) {
+        coords = LatLng(
+          (list[1] as num).toDouble(),
+          (list[0] as num).toDouble(),
+        );
+      }
     }
 
     final markerObj = json['marker'] is Map ? (json['marker'] as Map) : null;
@@ -128,6 +154,12 @@ class LandmarkMarkerModel {
         (disp?['maxZoom'] as num?)?.toDouble() ??
         21.0;
 
+    final rawAsset = json['assetPath'] as String? ??
+        json['imagePath'] as String? ??
+        json['logoUrl'] as String?;
+    final thumb = json['thumbnailUrl'] as String? ??
+        json['cardUrl'] as String?;
+
     return LandmarkMarkerModel(
       id: json['code'] as String? ??
           json['id'] as String? ??
@@ -137,7 +169,8 @@ class LandmarkMarkerModel {
       coordinates: coords,
       color: markerColor,
       category: category,
-      imagePath: json['imagePath'] as String?,
+      imagePath: rawAsset,
+      thumbnailUrl: thumb,
       labelOffset: Offset(labelOffsetX.toDouble(), labelOffsetY.toDouble()),
       minZoom: minZ,
       maxZoom: maxZ,
@@ -147,12 +180,15 @@ class LandmarkMarkerModel {
   Map<String, dynamic> toJson() => {
         'id': id,
         'landmarkId': id,
+        'code': id,
         'name': name,
         'latitude': coordinates.latitude,
         'longitude': coordinates.longitude,
         'color': color.toARGB32(),
         'category': category,
         'imagePath': imagePath,
+        'assetPath': assetPath,
+        'thumbnailUrl': thumbnailUrl,
         'labelOffsetX': labelOffset.dx,
         'labelOffsetY': labelOffset.dy,
         'minZoom': minZoom,
@@ -167,6 +203,7 @@ class LandmarkMarkerModel {
     String? category,
     IconData? icon,
     String? imagePath,
+    String? thumbnailUrl,
     Offset? labelOffset,
     double? minZoom,
     double? maxZoom,
@@ -180,6 +217,7 @@ class LandmarkMarkerModel {
       category: category ?? this.category,
       icon: icon ?? this.icon,
       imagePath: imagePath ?? this.imagePath,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       labelOffset: labelOffset ?? this.labelOffset,
       minZoom: minZoom ?? this.minZoom,
       maxZoom: maxZoom ?? this.maxZoom,
@@ -199,6 +237,7 @@ class LandmarkMarkerModel {
           category == other.category &&
           icon == other.icon &&
           imagePath == other.imagePath &&
+          thumbnailUrl == other.thumbnailUrl &&
           labelOffset == other.labelOffset &&
           minZoom == other.minZoom &&
           maxZoom == other.maxZoom;
@@ -212,6 +251,7 @@ class LandmarkMarkerModel {
         category,
         icon,
         imagePath,
+        thumbnailUrl,
         labelOffset,
         minZoom,
         maxZoom,
