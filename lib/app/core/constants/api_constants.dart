@@ -17,10 +17,10 @@ abstract class ApiConstants {
   static const String vpsBaseUrl = baseUrl;
 
   /// Priority list of candidate backend hosts for resilient connectivity.
-  /// Local candidates are prioritized so edits in http://localhost:5173 sync immediately.
+  /// Local LAN IP is prioritized so physical device over Wi-Fi connects instantly (<10ms).
   static const List<String> candidateBaseUrls = [
-    localBaseUrl,
     lanBaseUrl,
+    localBaseUrl,
     baseUrl,
   ];
 

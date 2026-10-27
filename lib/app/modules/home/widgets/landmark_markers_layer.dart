@@ -66,7 +66,52 @@ class LandmarkMarkersLayer extends StatelessWidget {
       return 0;
     });
 
-    // 3. Build MarkerLayer with geographic anchoring centered on coordinate
+    // 3. Calculate collision offsets for markers at nearly identical coordinates (<0.0004 deg / ~35m)
+    final collisionOffsets = <String, Offset>{};
+    final collisionGroups = <List<LandmarkMarkerModel>>[];
+
+    for (final marker in visibleMarkers) {
+      bool placed = false;
+      for (final group in collisionGroups) {
+        if ((group.first.latitude - marker.latitude).abs() < 0.0004 &&
+            (group.first.longitude - marker.longitude).abs() < 0.0004) {
+          group.add(marker);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        collisionGroups.add([marker]);
+      }
+    }
+
+    for (final group in collisionGroups) {
+      if (group.length <= 1) continue;
+      // Sort so built-in landmarks come first (stay anchored closest to center)
+      group.sort((a, b) {
+        if (a.isBuiltIn && !b.isBuiltIn) return -1;
+        if (!a.isBuiltIn && b.isBuiltIn) return 1;
+        return a.id.compareTo(b.id);
+      });
+
+      for (int index = 0; index < group.length; index++) {
+        final item = group[index];
+        if (index == 0 && item.isBuiltIn) {
+          // Primary built-in stays at natural anchor
+          collisionOffsets[item.id] = Offset.zero;
+        } else {
+          // Spread other overlapping markers upward / downward alternating
+          final step = (index + 1) ~/ 2;
+          final direction = (index % 2 == 1) ? -1.0 : 1.0;
+          collisionOffsets[item.id] = Offset(
+            (index % 2 == 1 ? -12.0 : 12.0) * step,
+            direction * 50.0 * step,
+          );
+        }
+      }
+    }
+
+    // 4. Build MarkerLayer with geographic anchoring centered on coordinate
     return MarkerLayer(
       key: const Key('landmark_markers_layer'),
       alignment: Alignment.center,
@@ -79,24 +124,28 @@ class LandmarkMarkersLayer extends StatelessWidget {
         final markerHeight = isCompact
             ? (isSelected ? 48.0 : 44.0)
             : (isSelected ? 58.0 : 52.0);
+        final extraOffset = collisionOffsets[landmark.id] ?? Offset.zero;
 
         return Marker(
           key: ValueKey('landmark_marker_${landmark.id}'),
           point: landmark.coordinates,
-          width: markerWidth + 20.0,
-          height: markerHeight + 16.0,
+          width: markerWidth + 30.0,
+          height: markerHeight + 30.0,
           alignment: Alignment.center,
-          child: LandmarkMapMarker(
-            landmark: landmark,
-            isSelected: isSelected,
-            currentZoom: currentZoom,
-            style: style,
-            onTap: () {
-              if (onLandmarkTap != null) {
-                onLandmarkTap!(landmark.id);
-              }
-              landmark.onTap?.call();
-            },
+          child: Transform.translate(
+            offset: extraOffset,
+            child: LandmarkMapMarker(
+              landmark: landmark,
+              isSelected: isSelected,
+              currentZoom: currentZoom,
+              style: style,
+              onTap: () {
+                if (onLandmarkTap != null) {
+                  onLandmarkTap!(landmark.id);
+                }
+                landmark.onTap?.call();
+              },
+            ),
           ),
         );
       }).toList(),

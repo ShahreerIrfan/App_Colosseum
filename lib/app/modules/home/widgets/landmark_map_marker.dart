@@ -192,8 +192,124 @@ class LandmarkImageBadge extends StatelessWidget {
     );
   }
 
+  Widget _buildCustomPillBadge(BuildContext context) {
+    final backgroundColor = isSelected ? landmark.color : Colors.white;
+    final textColor = isSelected ? Colors.white : const Color(0xFF1E293B);
+    final borderColor = isSelected
+        ? Colors.white.withValues(alpha: 0.95)
+        : landmark.color.withValues(alpha: 0.7);
+
+    final avatarSize = isCompact ? 26.0 : 32.0;
+
+    Widget avatarImage;
+    if (landmark.isNetworkImage) {
+      avatarImage = Image.network(
+        landmark.assetPath,
+        width: avatarSize,
+        height: avatarSize,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: avatarSize,
+          height: avatarSize,
+          color: landmark.color.withValues(alpha: 0.15),
+          child: Icon(
+            Icons.location_on_rounded,
+            size: avatarSize * 0.6,
+            color: landmark.color,
+          ),
+        ),
+      );
+    } else {
+      avatarImage = Image.asset(
+        landmark.assetPath,
+        width: avatarSize,
+        height: avatarSize,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: avatarSize,
+          height: avatarSize,
+          color: landmark.color.withValues(alpha: 0.15),
+          child: Icon(
+            Icons.location_on_rounded,
+            size: avatarSize * 0.6,
+            color: landmark.color,
+          ),
+        ),
+      );
+    }
+
+    return AnimatedScale(
+      scale: isSelected ? 1.05 : 1.0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: width,
+          minHeight: isCompact ? 34.0 : 40.0,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 6.0 : 8.0,
+          vertical: isCompact ? 3.0 : 4.0,
+        ),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(20.0),
+          border: Border.all(
+            color: borderColor,
+            width: isSelected ? 2.0 : 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? landmark.color.withValues(alpha: 0.45)
+                  : Colors.black.withValues(alpha: 0.22),
+              blurRadius: isSelected ? 8.0 : 5.0,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(avatarSize / 2),
+              child: avatarImage,
+            ),
+            const SizedBox(width: 6.0),
+            Flexible(
+              child: Text(
+                landmark.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: isCompact ? 10.5 : 11.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  letterSpacing: 0.2,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 4.0),
+              Icon(
+                Icons.check_circle_rounded,
+                size: isCompact ? 12.0 : 14.0,
+                color: Colors.white,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!landmark.isBuiltIn) {
+      return _buildCustomPillBadge(context);
+    }
     final imageWidget = landmark.isNetworkImage
         ? Image.network(
             landmark.assetPath,

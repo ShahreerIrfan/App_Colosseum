@@ -57,6 +57,18 @@ class LandmarkMarkerModel {
     this.onTap,
   });
 
+  /// Canonical set of pre-bundled built-in landmark IDs.
+  static const Set<String> builtInIds = {
+    'colosseum',
+    'arch_of_constantine',
+    'ludus_magnus',
+    'roman_forum',
+    'temple_venus_rome',
+  };
+
+  /// Whether this landmark is one of the 5 built-in classical monuments.
+  bool get isBuiltIn => builtInIds.contains(id);
+
   /// Whether the primary badge image is hosted on a remote network (e.g. Cloudinary).
   bool get isNetworkImage =>
       assetPath.startsWith('http://') || assetPath.startsWith('https://');
