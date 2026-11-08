@@ -418,7 +418,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     currentZoom.value = camera.zoom;
   }
 
-  /// Manually or automatically re-fetches live landmark markers and overlays from the remote database
+  /// Manually or automatically re-fetches live landmark markers, overlays, and floors from the remote database
   /// and updates local Hive storage.
   Future<void> refreshLandmarks() async {
     try {
@@ -426,6 +426,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       landmarkMarkers.assignAll(liveMarkers);
       final liveOverlays = await tourRepository.getLandmarkOverlays(forceRefresh: true);
       _applyOverlays(liveOverlays);
+      final liveFloors = await tourRepository.getFloors(forceRefresh: true);
+      for (final floor in liveFloors) {
+        tourRepository.getViewpointsByFloor(floor.id, forceRefresh: true);
+      }
     } catch (_) {}
   }
 

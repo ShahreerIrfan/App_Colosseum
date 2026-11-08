@@ -9,15 +9,19 @@ import '../../models/landmark_marker_model.dart';
 import '../../models/landmark_overlay_model.dart';
 import '../../models/sync_manifest_model.dart';
 import '../../models/tour_bundle_model.dart';
+import '../../models/viewpoint_model.dart';
 
 /// Contract for local caching of tour assets and manifests.
 abstract class ITourLocalDataSource {
   Future<void> saveTourBundle(TourBundleModel bundle, {String lang = 'en'});
+  Future<void> saveFloors(List<FloorDefinition> floors, {String lang = 'en'});
+  Future<void> saveViewpointsForFloor(String floorId, List<ViewpointModel> viewpoints);
   Future<void> saveLandmarkMarkers(List<LandmarkMarkerModel> markers);
   Future<void> saveLandmarkOverlays(List<MapLandmarkOverlay> overlays);
   Future<TourSyncManifestModel?> getCachedManifest();
   Future<List<FloorDefinition>> getCachedFloors({String lang = 'en'});
   Future<FloorDefinition?> getCachedFloorById(String floorId, {String lang = 'en'});
+  Future<List<ViewpointModel>> getCachedViewpointsByFloor(String floorId);
   Future<List<MapLandmarkOverlay>> getCachedLandmarkOverlays();
   Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers();
   Future<List<List<LatLng>>> getCachedPedestrianStreetSegments();
@@ -123,8 +127,41 @@ class TourLocalDataSource implements ITourLocalDataSource {
   }
 
   @override
+  Future<void> saveFloors(List<FloorDefinition> floors, {String lang = 'en'}) async {
+    FloorDefinition.cacheFloors(floors, replaceAll: true);
+    final box = await _getBox();
+    final jsonList = floors.map((f) => f.toJson()).toList();
+    final encoded = jsonEncode(jsonList);
+    if (box != null) {
+      await box.put('cached_floors_$lang', encoded);
+    } else {
+      _memoryCache['cached_floors_$lang'] = encoded;
+    }
+  }
+
+  @override
   Future<List<FloorDefinition>> getCachedFloors({String lang = 'en'}) async {
     final box = await _getBox();
+
+    // 1. Direct cached floors list if saved via live sync
+    final rawFloors = box != null
+        ? box.get('cached_floors_$lang') as String?
+        : _memoryCache['cached_floors_$lang'] as String?;
+
+    if (rawFloors != null) {
+      try {
+        final list = jsonDecode(rawFloors) as List<dynamic>;
+        if (list.isNotEmpty) {
+          final floors = list
+              .map((item) =>
+                  FloorDefinition.fromJson(Map<String, dynamic>.from(item as Map)))
+              .toList();
+          FloorDefinition.cacheFloors(floors, replaceAll: true);
+          return floors;
+        }
+      } catch (_) {}
+    }
+
     final raw = box != null
         ? box.get('bundle_$lang') as String?
         : _memoryCache['bundle_$lang'] as String?;
@@ -150,12 +187,76 @@ class TourLocalDataSource implements ITourLocalDataSource {
   }
 
   @override
+  Future<void> saveViewpointsForFloor(
+      String floorId, List<ViewpointModel> viewpoints) async {
+    FloorDefinition.updateFloorViewpoints(floorId, viewpoints);
+    final box = await _getBox();
+    final jsonList = viewpoints.map((vp) => vp.toJson()).toList();
+    final encoded = jsonEncode(jsonList);
+    if (box != null) {
+      await box.put('viewpoints_$floorId', encoded);
+    } else {
+      _memoryCache['viewpoints_$floorId'] = encoded;
+    }
+  }
+
+  @override
+  Future<List<ViewpointModel>> getCachedViewpointsByFloor(String floorId) async {
+    final box = await _getBox();
+    final raw = box != null
+        ? box.get('viewpoints_$floorId') as String?
+        : _memoryCache['viewpoints_$floorId'] as String?;
+
+    if (raw != null) {
+      try {
+        final list = jsonDecode(raw) as List<dynamic>;
+        if (list.isNotEmpty) {
+          final vps = list
+              .map((item) => ViewpointModel.fromJson(
+                  Map<String, dynamic>.from(item as Map)))
+              .toList();
+          FloorDefinition.updateFloorViewpoints(floorId, vps);
+          return vps;
+        }
+      } catch (_) {}
+    }
+
+    final floor = await getCachedFloorById(floorId);
+    if (floor != null && floor.viewpoints.isNotEmpty) {
+      return floor.viewpoints;
+    }
+
+    return const [];
+  }
+
+  @override
   Future<FloorDefinition?> getCachedFloorById(String floorId,
       {String lang = 'en'}) async {
     final floors = await getCachedFloors(lang: lang);
     final match = floors.where((f) => f.id == floorId).toList();
-    if (match.isNotEmpty) return match.first;
-    return null;
+    FloorDefinition? floor = match.isNotEmpty ? match.first : FloorDefinition.fromId(floorId);
+
+    // Enforce live Hive cached viewpoints if present
+    final box = await _getBox();
+    final rawVps = box != null
+        ? box.get('viewpoints_$floorId') as String?
+        : _memoryCache['viewpoints_$floorId'] as String?;
+
+    if (rawVps != null) {
+      try {
+        final list = jsonDecode(rawVps) as List<dynamic>;
+        if (list.isNotEmpty) {
+          final vps = list
+              .map((item) => ViewpointModel.fromJson(
+                  Map<String, dynamic>.from(item as Map)))
+              .toList();
+          FloorDefinition.updateFloorViewpoints(floorId, vps);
+          floor = floor.copyWith(viewpoints: vps);
+        }
+      } catch (_) {}
+    }
+
+    return floor;
   }
 
   @override

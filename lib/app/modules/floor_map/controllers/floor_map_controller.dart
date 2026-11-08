@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
@@ -29,13 +30,24 @@ class FloorCameraState {
 }
 
 /// Controller managing floor map state, camera transformations, viewpoints, and audio playback.
-class FloorMapController extends GetxController {
+class FloorMapController extends GetxController with WidgetsBindingObserver {
   final TtsService ttsService;
   final TourNavigationEngine tourEngine;
   final CompassService compassService;
   final GpsLocationService gpsService;
   final VisitedViewpointsService visitedService;
   final ITourRepository tourRepository;
+  final bool? enablePeriodicSync;
+
+  bool get isPeriodicSyncEnabled {
+    if (enablePeriodicSync != null) return enablePeriodicSync!;
+    try {
+      if (Platform.environment.containsKey('FLUTTER_TEST')) {
+        return false;
+      }
+    } catch (_) {}
+    return true;
+  }
 
   FloorMapController({
     TtsService? ttsService,
@@ -44,6 +56,7 @@ class FloorMapController extends GetxController {
     GpsLocationService? gpsService,
     VisitedViewpointsService? visitedService,
     ITourRepository? tourRepository,
+    this.enablePeriodicSync,
   })  : ttsService = ttsService ?? TtsService(),
         tourEngine = tourEngine ?? TourNavigationEngine(),
         compassService = compassService ?? CompassService(),
@@ -203,6 +216,7 @@ class FloorMapController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     mapController = MapController();
     transformationController = TransformationController();
 
@@ -247,7 +261,27 @@ class FloorMapController extends GetxController {
 
     // Load viewpoints according to selected floor
     _loadFloorData();
-    _loadAvailableFloors();
+    _loadAvailableFloors(forceRefresh: true);
+    _startPeriodicFloorSync();
+  }
+
+  Timer? _periodicFloorSyncTimer;
+
+  void _startPeriodicFloorSync() {
+    if (!isPeriodicSyncEnabled) return;
+    _periodicFloorSyncTimer?.cancel();
+    _periodicFloorSyncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      _loadAvailableFloors(forceRefresh: true);
+      _loadRepositoryFloorData(currentFloor.value.id, forceRefresh: true);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadAvailableFloors(forceRefresh: true);
+      _loadRepositoryFloorData(currentFloor.value.id, forceRefresh: true);
+    }
   }
 
   int _currentSpeechStartOffset = 0;
@@ -585,11 +619,36 @@ class FloorMapController extends GetxController {
       isAutoPlayEnabled: tourState.value.isAutoPlayEnabled,
     );
     _refreshItinerarySegments();
-    _loadRepositoryFloorData(def.id);
+    _loadRepositoryFloorData(def.id, forceRefresh: true);
   }
 
-  Future<void> _loadRepositoryFloorData(String targetFloorId) async {
+  Future<void> _loadRepositoryFloorData(String targetFloorId, {bool forceRefresh = false}) async {
     try {
+      final liveViewpoints = await tourRepository.getViewpointsByFloor(
+        targetFloorId,
+        forceRefresh: forceRefresh,
+      );
+
+      if (targetFloorId == currentFloor.value.id && liveViewpoints.isNotEmpty) {
+        final storedVisited = visitedService.getVisitedForFloor(
+            targetFloorId, liveViewpoints.map((v) => v.id));
+        final populatedViewpoints = liveViewpoints.map((vp) {
+          return vp.copyWith(isVisited: storedVisited.contains(vp.id));
+        }).toList();
+
+        viewpoints.assignAll(populatedViewpoints);
+        currentFloor.value = currentFloor.value.copyWith(viewpoints: populatedViewpoints);
+
+        final idx = availableFloors.indexWhere((f) => f.id == targetFloorId);
+        if (idx != -1) {
+          availableFloors[idx] = currentFloor.value;
+        }
+
+        tourEngine.updateViewpoints(populatedViewpoints);
+        _refreshItinerarySegments();
+        return;
+      }
+
       final repoFloor = await tourRepository.getFloorById(targetFloorId);
       if (repoFloor != null && repoFloor.id == currentFloor.value.id) {
         currentFloor.value = repoFloor;
@@ -599,6 +658,7 @@ class FloorMapController extends GetxController {
           return vp.copyWith(isVisited: storedVisited.contains(vp.id));
         }).toList();
         viewpoints.assignAll(populatedViewpoints);
+        tourEngine.updateViewpoints(populatedViewpoints);
         _refreshItinerarySegments();
 
         // Synchronize availableFloors with the fully populated floor
@@ -610,14 +670,14 @@ class FloorMapController extends GetxController {
     } catch (_) {}
   }
 
-  Future<void> _loadAvailableFloors() async {
+  Future<void> _loadAvailableFloors({bool forceRefresh = false}) async {
     final cached = FloorDefinition.floorsForLandmark(landmarkId.value);
     if (cached.isNotEmpty) {
       availableFloors.assignAll(cached);
       _syncAvailableFloorsWithCurrent();
     }
     try {
-      final loadedFloors = await tourRepository.getFloors();
+      final loadedFloors = await tourRepository.getFloors(forceRefresh: forceRefresh);
       if (loadedFloors.isNotEmpty) {
         final matching = FloorDefinition.floorsForLandmark(landmarkId.value, loadedFloors);
         if (matching.isNotEmpty) {
@@ -674,6 +734,8 @@ class FloorMapController extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _periodicFloorSyncTimer?.cancel();
     _stopAudioProgressTimer();
     _gpsSubscription?.cancel();
     gpsService.dispose();
@@ -1173,6 +1235,7 @@ class FloorMapController extends GetxController {
     );
 
     _refreshItinerarySegments();
+    _loadRepositoryFloorData(targetDef.id, forceRefresh: true);
 
     // 12. Restore or default target floor camera
     if (_savedCameraStates.containsKey(targetDef.id)) {

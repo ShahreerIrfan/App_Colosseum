@@ -31,6 +31,7 @@ abstract class ApiConstants {
   static const String tourBundle = '$apiV1/tours/bundle';
   static const String syncManifest = '$apiV1/sync/manifest';
   static const String floors = '$apiV1/floors';
+  static const String viewpoints = '$apiV1/viewpoints';
   static const String landmarks = '$apiV1/landmarks';
   static const String languages = '$apiV1/languages';
   static const String validateTicket = '$apiV1/tickets/validate';

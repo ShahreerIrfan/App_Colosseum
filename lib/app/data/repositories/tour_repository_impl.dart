@@ -6,6 +6,7 @@ import '../models/floor_definition.dart';
 import '../models/landmark_marker_model.dart';
 import '../models/landmark_overlay_model.dart';
 import '../models/sync_manifest_model.dart';
+import '../models/viewpoint_model.dart';
 import 'i_tour_repository.dart';
 
 /// Implementation of [ITourRepository] orchestrating remote syncing with Hive local cache.
@@ -45,7 +46,15 @@ class TourRepositoryImpl implements ITourRepository {
     bool forceRefresh = false,
   }) async {
     if (forceRefresh) {
-      await syncTourBundle(lang: lang);
+      try {
+        final remote = await remoteDataSource.getFloors(lang: lang);
+        if (remote.isNotEmpty) {
+          await localDataSource.saveFloors(remote, lang: lang);
+          return remote;
+        }
+      } catch (_) {
+        await syncTourBundle(lang: lang);
+      }
     }
     return localDataSource.getCachedFloors(lang: lang);
   }
@@ -56,6 +65,39 @@ class TourRepositoryImpl implements ITourRepository {
     String lang = 'en',
   }) async {
     return localDataSource.getCachedFloorById(floorId, lang: lang);
+  }
+
+  @override
+  Future<List<ViewpointModel>> getViewpointsByFloor(
+    String floorId, {
+    bool forceRefresh = false,
+    String lang = 'en',
+  }) async {
+    if (forceRefresh) {
+      try {
+        final remote =
+            await remoteDataSource.getViewpointsByFloor(floorId, lang: lang);
+        if (remote.isNotEmpty) {
+          await localDataSource.saveViewpointsForFloor(floorId, remote);
+          return remote;
+        }
+      } catch (_) {
+        await syncTourBundle(lang: lang);
+      }
+    }
+    final cached = await localDataSource.getCachedViewpointsByFloor(floorId);
+    if (cached.isNotEmpty) {
+      return cached;
+    }
+    try {
+      final remote =
+          await remoteDataSource.getViewpointsByFloor(floorId, lang: lang);
+      if (remote.isNotEmpty) {
+        await localDataSource.saveViewpointsForFloor(floorId, remote);
+        return remote;
+      }
+    } catch (_) {}
+    return cached;
   }
 
   @override

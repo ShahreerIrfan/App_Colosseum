@@ -4,6 +4,7 @@ import '../models/floor_definition.dart';
 import '../models/landmark_marker_model.dart';
 import '../models/landmark_overlay_model.dart';
 import '../models/sync_manifest_model.dart';
+import '../models/viewpoint_model.dart';
 
 /// Contract for accessing tour data following the Repository Design Pattern.
 abstract class ITourRepository {
@@ -17,6 +18,13 @@ abstract class ITourRepository {
 
   /// Retrieves a specific floor definition by ID.
   Future<FloorDefinition?> getFloorById(String floorId, {String lang = 'en'});
+
+  /// Retrieves viewpoints for a specific floor (cache-first or live backend sync).
+  Future<List<ViewpointModel>> getViewpointsByFloor(
+    String floorId, {
+    bool forceRefresh = false,
+    String lang = 'en',
+  });
 
   /// Retrieves ground landmark overlays for monument and surrounding landmarks.
   Future<List<MapLandmarkOverlay>> getLandmarkOverlays(

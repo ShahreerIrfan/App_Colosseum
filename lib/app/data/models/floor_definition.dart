@@ -458,9 +458,20 @@ class FloorDefinition {
   }
 
   /// Caches loaded floor definitions in memory
-  static void cacheFloors(Iterable<FloorDefinition> floors) {
+  static void cacheFloors(Iterable<FloorDefinition> floors, {bool replaceAll = false}) {
+    if (replaceAll) {
+      _cachedFloors.clear();
+    }
     for (final f in floors) {
       _cachedFloors[f.id] = f;
+    }
+  }
+
+  /// Updates the viewpoints for a specific floor in the in-memory cache.
+  static void updateFloorViewpoints(String floorId, List<ViewpointModel> viewpoints) {
+    final existing = _cachedFloors[floorId];
+    if (existing != null) {
+      _cachedFloors[floorId] = existing.copyWith(viewpoints: viewpoints);
     }
   }
 

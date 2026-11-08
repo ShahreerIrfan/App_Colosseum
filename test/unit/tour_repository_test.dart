@@ -8,6 +8,7 @@ import 'package:colosseum_client/app/data/models/landmark_marker_model.dart';
 import 'package:colosseum_client/app/data/models/landmark_overlay_model.dart';
 import 'package:colosseum_client/app/data/models/sync_manifest_model.dart';
 import 'package:colosseum_client/app/data/models/tour_bundle_model.dart';
+import 'package:colosseum_client/app/data/models/viewpoint_model.dart';
 import 'package:colosseum_client/app/data/repositories/tour_repository_impl.dart';
 
 class FakeRemoteDataSource implements ITourRemoteDataSource {
@@ -64,6 +65,13 @@ class FakeRemoteDataSource implements ITourRemoteDataSource {
       {String lang = 'en'}) async {
     if (shouldThrow) throw Exception('Network timeout');
     return FloorDefinition.underground;
+  }
+
+  @override
+  Future<List<ViewpointModel>> getViewpointsByFloor(String floorId,
+      {String lang = 'en'}) async {
+    if (shouldThrow) throw Exception('Network timeout');
+    return FloorDefinition.underground.viewpoints;
   }
 }
 
@@ -209,6 +217,31 @@ void main() {
       final cached4 = await localDataSource.getCachedLandmarkMarkers();
       expect(cached4.length, equals(1));
       expect(cached4.any((m) => m.id == 'monument_2'), isFalse);
+    });
+
+    test('getViewpointsByFloor fetches live viewpoints and saves to local cache', () async {
+      const dynamicVp = ViewpointModel(
+        id: 'vp_online_1',
+        floorId: 'floor_underground',
+        title: 'Online Discovered Stop',
+        order: 1,
+        normalizedX: 0.5,
+        normalizedY: 0.5,
+        description: 'New viewpoint from admin panel',
+      );
+
+      await localDataSource.saveViewpointsForFloor('floor_underground', [dynamicVp]);
+      final cached = await localDataSource.getCachedViewpointsByFloor('floor_underground');
+      expect(cached.length, equals(1));
+      expect(cached.first.id, equals('vp_online_1'));
+      expect(cached.first.title, equals('Online Discovered Stop'));
+
+      final fromRepo = await repository.getViewpointsByFloor('floor_underground');
+      expect(fromRepo.length, equals(1));
+      expect(fromRepo.first.id, equals('vp_online_1'));
+
+      final floor = await localDataSource.getCachedFloorById('floor_underground');
+      expect(floor?.viewpoints.any((v) => v.id == 'vp_online_1'), isTrue);
     });
   });
 }

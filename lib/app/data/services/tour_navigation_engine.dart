@@ -101,6 +101,29 @@ class TourNavigationEngine {
     }
   }
 
+  /// Dynamically updates the viewpoints on the active tour from live sync
+  /// while preserving current navigation progress, visited status, and targets.
+  void updateViewpoints(List<ViewpointModel> newViewpoints) {
+    if (newViewpoints.isEmpty) return;
+    _viewpoints = List.from(newViewpoints);
+    _viewpoints.sort((a, b) => a.order.compareTo(b.order));
+
+    for (int i = 0; i < _viewpoints.length; i++) {
+      if (_state.visitedIds.contains(_viewpoints[i].id)) {
+        _viewpoints[i] = _viewpoints[i].copyWith(isVisited: true);
+      }
+    }
+
+    if (_state.navigationTargetId != null &&
+        !_viewpoints.any((vp) => vp.id == _state.navigationTargetId)) {
+      final nextTarget = _findNextItineraryTarget(_state.visitedIds, _state.skippedIds);
+      _state = _state.copyWith(
+        navigationTargetId: () => nextTarget ?? (_viewpoints.isNotEmpty ? _viewpoints.first.id : null),
+      );
+    }
+    _notifyState();
+  }
+
   void _speakInitialGreeting(ViewpointModel firstVp) {
     final landmark = _state.landmarkName;
     final isColosseum = landmark.toLowerCase() == 'colosseum';

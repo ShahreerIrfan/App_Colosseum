@@ -7,6 +7,7 @@ import '../../models/landmark_marker_model.dart';
 import '../../models/landmark_overlay_model.dart';
 import '../../models/sync_manifest_model.dart';
 import '../../models/tour_bundle_model.dart';
+import '../../models/viewpoint_model.dart';
 
 /// Contract for fetching tour data from the remote backend.
 abstract class ITourRemoteDataSource {
@@ -16,6 +17,7 @@ abstract class ITourRemoteDataSource {
   Future<List<LandmarkMarkerModel>> getLandmarkMarkers();
   Future<List<FloorDefinition>> getFloors({String lang = 'en'});
   Future<FloorDefinition?> getFloorDetail(String floorId, {String lang = 'en'});
+  Future<List<ViewpointModel>> getViewpointsByFloor(String floorId, {String lang = 'en'});
 }
 
 /// Implementation of [ITourRemoteDataSource] using [http.Client] and centralized [ApiConstants].
@@ -132,20 +134,33 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
   @override
   Future<FloorDefinition?> getFloorDetail(String floorId,
       {String lang = 'en'}) async {
-    final response = await _get(ApiConstants.floorDetail(floorId, lang: lang));
+    final url = '${ApiConstants.floors}/$floorId?lang=$lang';
+    final response = await _get(url);
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final data = json['data'] as Map<String, dynamic>?;
-      if (data != null) {
-        return FloorDefinition.fromJson(data);
-      }
-      return null;
-    } else if (response.statusCode == 404) {
-      return null;
+      final data = json['data'] as Map<String, dynamic>? ?? json;
+      return FloorDefinition.fromJson(data);
+    }
+    return null;
+  }
+
+  @override
+  Future<List<ViewpointModel>> getViewpointsByFloor(String floorId,
+      {String lang = 'en'}) async {
+    final url = '${ApiConstants.viewpoints}?floorId=$floorId&lang=$lang';
+    final response = await _get(url);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = (json['data'] as List<dynamic>?) ?? [];
+      return list
+          .map((item) =>
+              ViewpointModel.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList();
     } else {
       throw Exception(
-          'Failed to load floor detail: ${response.statusCode} ${response.reasonPhrase}');
+          'Failed to load viewpoints for floor $floorId: ${response.statusCode} ${response.reasonPhrase}');
     }
   }
 }
