@@ -1,3 +1,4 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_radius.dart';
@@ -54,7 +55,7 @@ class FloorSelectionMenu extends StatelessWidget {
                 ),
                 const SizedBox(width: 8.0),
                 Text(
-                  'Select Floor',
+                  'Select Floor'.tourText,
                   style: TextStyle(
                     color: colors.foreground,
                     fontWeight: FontWeight.w800,
@@ -64,7 +65,7 @@ class FloorSelectionMenu extends StatelessWidget {
                 ),
                 const Spacer(),
                 Semantics(
-                  label: 'Close floor menu',
+                  label: 'Close floor menu'.tourText,
                   button: true,
                   child: InkWell(
                     key: const Key('close_floor_menu_button'),

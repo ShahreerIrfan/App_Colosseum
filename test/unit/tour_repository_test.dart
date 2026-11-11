@@ -1,5 +1,8 @@
 import 'dart:ui' show Color;
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:colosseum_client/app/data/datasources/local/tour_local_data_source.dart';
 import 'package:colosseum_client/app/data/datasources/remote/tour_remote_data_source.dart';
@@ -10,6 +13,7 @@ import 'package:colosseum_client/app/data/models/sync_manifest_model.dart';
 import 'package:colosseum_client/app/data/models/tour_bundle_model.dart';
 import 'package:colosseum_client/app/data/models/viewpoint_model.dart';
 import 'package:colosseum_client/app/data/repositories/tour_repository_impl.dart';
+import 'package:colosseum_client/app/data/repositories/i_tour_repository.dart';
 
 class FakeRemoteDataSource implements ITourRemoteDataSource {
   TourSyncManifestModel manifestToReturn = const TourSyncManifestModel(
@@ -90,6 +94,106 @@ void main() {
         remoteDataSource: remoteDataSource,
         localDataSource: localDataSource,
       );
+    });
+
+    test('floor Viewpoints load across pages before replacing the cache', () async {
+      final pages = <String>[];
+      final client = MockClient((request) async {
+        final page = request.url.queryParameters['page']!;
+        pages.add(page);
+        final start = page == '1' ? 0 : 100;
+        final count = page == '1' ? 100 : 1;
+        return http.Response(jsonEncode({
+          'data': List.generate(count, (index) => {
+            'id': 'vp_${start + index}',
+            'floorId': 'floor_underground',
+          }),
+        }), 200);
+      });
+      final repo = TourRepositoryImpl(
+        remoteDataSource: TourRemoteDataSource(client: client),
+        localDataSource: localDataSource,
+      );
+      final items = await repo.getViewpointsByFloor('floor_underground', forceRefresh: true);
+      expect(pages, ['1', '2']);
+      expect(items.last.id, 'vp_100');
+      expect(await localDataSource.getCachedViewpointsByFloor('floor_underground'), hasLength(101));
+    });
+
+    test('explicit empty caches do not restore bundled content', () async {
+      await localDataSource.saveFloors([]);
+      await localDataSource.saveViewpointsForFloor('floor_underground', []);
+      await localDataSource.saveLandmarkMarkers([]);
+      await localDataSource.saveLandmarkOverlays([]);
+
+      expect(await localDataSource.getCachedFloors(), isEmpty);
+      expect(await localDataSource.getCachedViewpointsByFloor('floor_underground'), isEmpty);
+      expect(await localDataSource.getCachedLandmarkMarkers(), isEmpty);
+      expect(await localDataSource.getCachedLandmarkOverlays(), isEmpty);
+    });
+
+    test('a new bundle invalidates earlier live catalog overrides', () async {
+      final floor = FloorDefinition.underground;
+      await localDataSource.saveFloors([floor]);
+      await localDataSource.saveViewpointsForFloor(floor.id, floor.viewpoints);
+      await localDataSource.saveTourBundle(TourBundleModel(
+        manifest: remoteDataSource.manifestToReturn,
+        landmarks: const [],
+        floors: [floor.copyWith(viewpoints: [])],
+      ));
+      expect(await localDataSource.getCachedViewpointsByFloor(floor.id), isEmpty);
+
+      await localDataSource.saveViewpointsForFloor(floor.id, floor.viewpoints);
+      expect(await localDataSource.getCachedViewpointsByFloor(floor.id), floor.viewpoints);
+
+      await localDataSource.saveTourBundle(TourBundleModel(
+        manifest: remoteDataSource.manifestToReturn,
+        landmarks: const [],
+        floors: const [],
+      ));
+      expect(await localDataSource.getCachedFloorById(floor.id), isNull);
+      expect(await localDataSource.getCachedViewpointsByFloor(floor.id), isEmpty);
+    });
+
+    test('a new language downloads even when the content hash is unchanged', () async {
+      await repository.syncTourBundle(lang: 'en');
+      expect(await repository.syncTourBundle(lang: 'it'), isTrue);
+      expect(remoteDataSource.bundleCallCount, 2);
+      expect(await repository.syncTourBundle(lang: 'it'), isFalse);
+    });
+
+    test('a published offline seed preserves nested viewpoints and floor settings', () {
+      final seed = TourBundleModel.fromSeedJson({
+        'seedFormat': 'published-bundle-v1',
+        'manifest': {'packageVersion': '2.0.0'},
+        'floors': [{
+          'id': 'exported_floor',
+          'center': {'latitude': 41.89, 'longitude': 12.49},
+          'defaultZoom': 17,
+          'viewpoints': [{
+            'id': 'exported_stop',
+            'floorId': 'exported_floor',
+            'latitude': 41.89,
+            'longitude': 12.49,
+            'description': 'Published narration',
+          }],
+        }],
+      });
+      expect(seed.manifest.version, '2.0.0');
+      expect(seed.floors.single.center, const LatLng(41.89, 12.49));
+      expect(seed.floors.single.defaultZoom, 17);
+      expect(seed.floors.single.viewpoints.single.description, 'Published narration');
+    });
+
+    test('expired content refreshes with the same manifest and survives a failed refresh', () async {
+      expect(await repository.refreshTourBundle(), TourSyncResult.updated);
+      expect(await repository.refreshTourBundle(maxAge: const Duration(hours: 24)), TourSyncResult.unchanged);
+      expect(await repository.refreshTourBundle(maxAge: Duration.zero), TourSyncResult.updated);
+      expect(remoteDataSource.bundleCallCount, 2);
+      final savedAt = await repository.getLastBundleDownload();
+      remoteDataSource.shouldThrow = true;
+      expect(await repository.refreshTourBundle(maxAge: Duration.zero), TourSyncResult.unavailable);
+      expect(await repository.getLastBundleDownload(), savedAt);
     });
 
     test('TourSyncManifestModel parses json and matches equality', () {

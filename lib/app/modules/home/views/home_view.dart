@@ -1,3 +1,4 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -199,7 +200,7 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
 
                                   // Tour description in semantic muted foreground
                                   Text(
-                                    'Explore the Colosseum through panoramic views and immersive audio narration. Navigate through 5 iconic stops.',
+                                    'Explore the Colosseum through panoramic views and immersive audio narration. Navigate through 5 iconic stops.'.tourText,
                                     textAlign: TextAlign.center,
                                     style: textTheme.bodyMedium?.copyWith(
                                       fontSize: 14,
@@ -235,7 +236,7 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
                                   ),
                                 ),
                                 child: Text(
-                                  'Start Tour',
+                                  'Start Tour'.tourText,
                                   style: textTheme.titleMedium?.copyWith(
                                     color: colors.primaryForeground,
                                     fontSize: 15,
@@ -262,7 +263,7 @@ class _HomeLandingContentState extends State<_HomeLandingContent>
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'Immersive Audio Experience',
+                                  'Immersive Audio Experience'.tourText,
                                   style: textTheme.bodySmall?.copyWith(
                                     color: colors.mutedForeground
                                         .withValues(alpha: 0.75),

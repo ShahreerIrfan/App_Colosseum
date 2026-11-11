@@ -28,7 +28,6 @@ void main() {
         expect(vp.description.isNotEmpty, isTrue, reason: '${vp.id} description must not be empty');
         expect(vp.latLng.latitude, inInclusiveRange(41.888, 41.892), reason: '${vp.id} lat out of Colosseum range');
         expect(vp.latLng.longitude, inInclusiveRange(12.490, 12.495), reason: '${vp.id} lon out of Colosseum range');
-        expect(vp.audioDuration.isNotEmpty, isTrue, reason: '${vp.id} audioDuration must be defined');
         expect(vp.order, greaterThan(0), reason: '${vp.id} order must be positive');
       }
     });

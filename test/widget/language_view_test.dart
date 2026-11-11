@@ -16,7 +16,7 @@ void main() {
   });
 
   testWidgets(
-    'LanguageView renders languages, shows default selection, and changes selection on tap',
+    'LanguageView shows upcoming languages without selecting them',
     (WidgetTester tester) async {
       final controller = Get.put(LanguageController());
 
@@ -54,16 +54,14 @@ void main() {
       await tester.tap(find.text('Italiano'));
       await tester.pump();
 
-      // Verify selection updated
-      expect(controller.selectedLanguageCode.value, 'it');
+      expect(controller.selectedLanguageCode.value, 'en');
 
       // Tap on Français
       await tester.scrollUntilVisible(find.text('Français'), 100);
       await tester.tap(find.text('Français'));
       await tester.pump();
 
-      // Verify selection updated
-      expect(controller.selectedLanguageCode.value, 'fr');
+      expect(controller.selectedLanguageCode.value, 'en');
     },
   );
 

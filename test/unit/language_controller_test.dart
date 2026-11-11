@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:colosseum_client/app/core/localization/tour_localizations.dart';
 import 'package:colosseum_client/app/modules/language/controllers/language_controller.dart';
 
 void main() {
@@ -32,14 +34,20 @@ void main() {
       );
     });
 
-    test('selectLanguage changes selectedLanguageCode to "it"', () {
+    test('a language absent from the available server catalog cannot be selected', () {
       controller.selectLanguage('it');
-      expect(controller.selectedLanguageCode.value, 'it');
+      expect(controller.selectedLanguageCode.value, 'en');
     });
 
-    test('selectLanguage changes selectedLanguageCode to "fr"', () {
-      controller.selectLanguage('fr');
-      expect(controller.selectedLanguageCode.value, 'fr');
+    test('all bundled languages translate navigation prompts with the stop number', () {
+      addTearDown(() => Get.locale = const Locale('en'));
+      const phrase = 'Next, proceed toward Viewpoint {number}.';
+      for (final language in TourLocalizations.supportedLanguages.where((code) => code != 'en')) {
+        Get.locale = Locale(language);
+        final prompt = phrase.tourTextWith({'number': 7});
+        expect(prompt, contains('7'), reason: language);
+        expect(prompt, isNot('Next, proceed toward Viewpoint 7.'), reason: language);
+      }
     });
   });
 }

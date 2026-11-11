@@ -5,8 +5,15 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:colosseum_client/app/core/theme/app_colors.dart';
 import 'package:colosseum_client/app/core/theme/app_theme.dart';
+import 'package:colosseum_client/app/data/models/floor_definition.dart';
+import 'package:colosseum_client/app/data/models/landmark_overlay_model.dart';
+import 'package:colosseum_client/app/data/models/offline_aerial_map.dart';
+import 'package:colosseum_client/app/data/models/pedestrian_route_data.dart';
+import 'package:colosseum_client/app/data/models/sync_manifest_model.dart';
+import 'package:colosseum_client/app/data/services/offline_landmark_store.dart';
 import 'package:colosseum_client/app/modules/home/controllers/home_controller.dart';
 import 'package:colosseum_client/app/modules/home/views/allPointsMap.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.dart';
@@ -18,6 +25,21 @@ import 'package:colosseum_client/app/routes/app_pages.dart';
 import '../helpers/mock_http_overrides.dart';
 import '../helpers/mock_tts.dart';
 
+class _DownloadStore extends OfflineLandmarkStore {
+  OfflineLandmark? package;
+
+  @override
+  Future<OfflineLandmark?> get(String id, String language) async =>
+      package?.landmark.id == id ? package : null;
+
+  @override
+  Future<TourSyncManifestModel> latestManifest() async => package!.manifest;
+
+  @override
+  Future<List<OfflineLandmark>> list(String language) async =>
+      [if (package case final OfflineLandmark saved) saved];
+}
+
 void main() {
   setUpAll(() {
     HttpOverrides.global = MockHttpOverrides();
@@ -26,10 +48,12 @@ void main() {
 
   setUp(() {
     Get.reset();
+    Get.put<OfflineLandmarkStore>(_DownloadStore(), permanent: true);
   });
 
   tearDown(() {
     Get.reset();
+    SharedPreferences.setMockInitialValues({});
   });
 
   testWidgets(
@@ -159,6 +183,9 @@ void main() {
 
       // Now Arch of Constantine is the active selected landmark
       expect(controller.selectedLandmarkId.value, 'arch_of_constantine');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
 
       // Tap on Ludus Magnus marker
       final ludusTapFinder = find.byKey(const ValueKey('landmark_tap_ludus_magnus'));
@@ -171,37 +198,71 @@ void main() {
     },
   );
 
+  for (final withAerial in [false, true]) {
+    testWidgets(
+      withAerial ? 'The saved floor draws the aerial image below the offline map layers'
+          : 'A legacy offline floor opens without tiles or a landmark badge as its basemap',
+      (WidgetTester tester) async {
+        Get.put(HomeController());
+        final store = Get.find<OfflineLandmarkStore>() as _DownloadStore;
+        const outdoorPath = [LatLng(41.89021, 12.492231), LatLng(41.892, 12.489)];
+        store.package = OfflineLandmark(
+          landmark: const MapLandmarkOverlay(
+            id: 'colosseum', name: 'Colosseum', assetPath: 'assets/logo/Colosseum.png',
+            center: LatLng(41.89021, 12.492231), widthMeters: 100, heightMeters: 80,
+          ),
+          floors: [FloorDefinition.underground.copyWith(displayName: 'Saved Hypogeum')],
+          routes: const [PedestrianRouteData(outdoorPath)],
+          manifest: const TourSyncManifestModel(
+            version: '1', dataHash: 'saved', totalFloors: 1, totalViewpoints: 0,
+            totalLandmarks: 1, languages: ['en'],
+          ),
+          language: 'en',
+          aerialMap: withAerial ? OfflineAerialMap.forLandmark(const LatLng(41.89021, 12.492231))
+              ?.withImagePath('assets/images/viewpoint_default.png') : null,
+        );
+
+        await tester.pumpWidget(
+          GetMaterialApp(
+            theme: AppTheme.lightTheme,
+            initialRoute: Routes.allPointsMap,
+            getPages: AppPages.routes,
+          ),
+        );
+        await tester.pump();
+
+        final colosseumTapFinder = find.byKey(const ValueKey('landmark_tap_colosseum'));
+        expect(colosseumTapFinder, findsOneWidget);
+
+        await tester.tap(colosseumTapFinder);
+        await tester.pumpAndSettle();
+        expect(find.text('Update download'), findsOneWidget);
+        expect(find.byType(FloorMapView), findsNothing);
+        await tester.tap(find.text('Enter landmark'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FloorMapView), findsOneWidget);
+        expect(find.byType(TileLayer), findsNothing);
+        expect(find.byType(OverlayImageLayer), withAerial ? findsOneWidget : findsNothing);
+        expect(find.text(OfflineAerialMap.attribution), withAerial ? findsOneWidget : findsNothing);
+        expect(find.byType(PolygonLayer), findsNothing);
+        final floorPaths = tester.widgetList<PolylineLayer>(
+          find.descendant(
+            of: find.byType(FloorMapView),
+            matching: find.byType(PolylineLayer),
+          ),
+        ).expand((layer) => layer.polylines);
+        expect(floorPaths.map((path) => path.points), isNot(contains(outdoorPath)));
+        expect(find.text('Offline map'), findsOneWidget);
+        expect(find.text('Colosseum'), findsWidgets);
+        expect(find.textContaining('Saved Hypogeum'), findsWidgets);
+        expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
+      },
+    );
+  }
+
   testWidgets(
-    'Tapping Colosseum marker navigates directly to FloorMapView',
-    (WidgetTester tester) async {
-      Get.put(HomeController());
-
-      await tester.pumpWidget(
-        GetMaterialApp(
-          theme: AppTheme.lightTheme,
-          initialRoute: Routes.allPointsMap,
-          getPages: AppPages.routes,
-        ),
-      );
-      await tester.pump();
-
-      // Colosseum is initially selected; tapping it navigates directly to FloorMapView
-      final colosseumTapFinder = find.byKey(const ValueKey('landmark_tap_colosseum'));
-      expect(colosseumTapFinder, findsOneWidget);
-
-      await tester.tap(colosseumTapFinder);
-      await tester.pumpAndSettle();
-
-      // Verify navigated directly to FloorMapView
-      expect(find.byType(FloorMapView), findsOneWidget);
-      expect(find.text('Colosseum'), findsWidgets);
-      expect(find.textContaining('Underground (Hypogeum)'), findsWidgets);
-      expect(find.byKey(const Key('exit_landmark_button')), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'Tapping Temple of Venus and Rome marker navigates directly to FloorMapView with Temple floor',
+    'A landmark without a download can still open the live floor',
     (WidgetTester tester) async {
       Get.put(HomeController());
 
@@ -218,6 +279,9 @@ void main() {
       expect(templeTapFinder, findsOneWidget);
 
       await tester.tap(templeTapFinder);
+      await tester.pumpAndSettle();
+      expect(find.text('Download for offline use'), findsOneWidget);
+      await tester.tap(find.text('Enter landmark'));
       await tester.pumpAndSettle();
 
       // Verify navigated directly to FloorMapView displaying Temple of Venus and Rome

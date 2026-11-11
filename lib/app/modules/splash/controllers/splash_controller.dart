@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../data/repositories/i_tour_repository.dart';
 import '../../../data/repositories/tour_repository_impl.dart';
+import '../../../data/services/language_catalog_service.dart';
+import '../../../data/services/tour_sync_service.dart';
 import '../../../routes/app_pages.dart';
 
 class SplashController extends GetxController {
@@ -37,7 +40,20 @@ class SplashController extends GetxController {
 
     try {
       syncStatusMessage.value = 'Syncing tour package...';
-      await tourRepository.syncTourBundle(lang: 'en');
+      if (Get.isRegistered<TourSyncService>()) {
+        var language = 'en';
+        try {
+          final preferences = await SharedPreferences.getInstance();
+          language = preferences.getString(LanguageCatalogService.selectionKey) ?? 'en';
+        } catch (_) {}
+        final result = await Get.find<TourSyncService>().activate(language);
+        if (result == TourSyncResult.unavailable) {
+          if (!_isDisposed) syncStatusMessage.value = 'Offline mode enabled';
+          return;
+        }
+      } else {
+        await tourRepository.syncTourBundle(lang: 'en');
+      }
       if (!_isDisposed) {
         syncStatusMessage.value = 'Tour package ready';
       }

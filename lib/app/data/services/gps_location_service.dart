@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import '../../core/utils/geodesic_utils.dart';
+import '../models/landmark_overlay_model.dart';
 import '../models/user_location_model.dart';
 
 /// GPS tracking mode options.
@@ -73,6 +75,11 @@ class GpsLocationService {
 
   /// Low-pass filter factor between 0.0 (maximum smoothing) and 1.0 (raw instant updates).
   final double positionSmoothingAlpha;
+  MapLandmarkOverlay? _offlineLandmark;
+
+  void useOfflineLandmark(MapLandmarkOverlay landmark) {
+    _offlineLandmark = landmark;
+  }
 
   GpsLocationService({
     this.positionSmoothingAlpha = 0.40,
@@ -504,9 +511,14 @@ class GpsLocationService {
       distanceToCenter = 0.0;
     } else {
       // --- ABSOLUTE COLOSSEUM GEOFENCE MODE ---
-      distanceToCenter =
-          calculateDistanceToCenter(position.latitude, position.longitude);
-      inLocation = distanceToCenter <= geofenceRadiusMeters;
+      final landmark = _offlineLandmark;
+      final point = LatLng(position.latitude, position.longitude);
+      distanceToCenter = landmark == null
+          ? calculateDistanceToCenter(position.latitude, position.longitude)
+          : const Distance().as(LengthUnit.Meter, landmark.center, point);
+      final radius = landmark == null ? geofenceRadiusMeters
+          : math.max(geofenceRadiusMeters, math.max(landmark.widthMeters, landmark.heightMeters) / 2);
+      inLocation = distanceToCenter <= radius;
 
       if (!inLocation) {
         _lastFilteredX = null;
@@ -523,10 +535,16 @@ class GpsLocationService {
         return;
       }
 
-      targetCanvasOffset = projectGpsToCanvas(
-        position.latitude,
-        position.longitude,
-      );
+      targetCanvasOffset = landmark == null
+          ? projectGpsToCanvas(position.latitude, position.longitude)
+          : GeodesicUtils.latLngToCanvasOffset(
+              point,
+              centerLat: landmark.center.latitude,
+              centerLng: landmark.center.longitude,
+              arenaWidthMeters: math.max(1, landmark.widthMeters),
+              arenaHeightMeters: math.max(1, landmark.heightMeters),
+              monumentRotationDegrees: landmark.rotationDegrees,
+            );
     }
 
     // Low-Pass Exponential Moving Average Smoothing to eliminate standing jitter

@@ -3,14 +3,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/localization/tour_localizations.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/theme_extensions.dart';
 import '../../../core/utils/contain_circle_camera_constraint.dart';
 import '../../../data/models/landmark_marker_model.dart';
+import '../../../data/models/floor_definition.dart';
 import '../../../data/models/map_view_type.dart';
+import '../../../data/services/offline_landmark_store.dart';
+import '../../../data/services/tour_analytics_service.dart';
+import '../../../routes/app_pages.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/landmark_markers_layer.dart';
+import '../widgets/landmark_download_dialog.dart';
 import '../widgets/user_location_map_marker.dart';
 
 class AllPointsMapView extends GetView<HomeController> {
@@ -81,7 +88,7 @@ class AllPointsMapView extends GetView<HomeController> {
                       );
                     }),
 
-                    // Layer 2: 600-meter boundary circle centered on Colosseum
+                    // Layer 2: Park boundary
                     // Greenish when user is in the circle, reddish otherwise
                     Obx(() {
                       final inZone = controller.isUserInZone;
@@ -142,7 +149,7 @@ class AllPointsMapView extends GetView<HomeController> {
                         markers: controller.landmarkMarkers,
                         selectedLandmarkId: controller.selectedLandmarkId.value,
                         currentZoom: controller.currentZoom.value,
-                        onLandmarkTap: controller.selectLandmark,
+                        onLandmarkTap: (id) => _showLandmarkActions(context, id),
                       );
                     }),
 
@@ -211,7 +218,9 @@ class AllPointsMapView extends GetView<HomeController> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'you are not in the zone',
+                              controller.userLocation.value == null
+                                  ? 'GPS location unavailable'.tourText
+                                  : 'you are not in the zone',
                               style: textTheme.labelMedium?.copyWith(
                                 color: colors.destructive,
                                 fontWeight: FontWeight.w600,
@@ -219,6 +228,32 @@ class AllPointsMapView extends GetView<HomeController> {
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+
+              Positioned(
+                top: 100,
+                left: 12,
+                right: 12,
+                child: Obx(() {
+                  if (!controller.isTourActive.value || controller.remainingTourLandmarks.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final route = controller.currentTourRouteDetails;
+                  final message = route.points.length < 2
+                      ? 'No walking route is available.'
+                      : route.instructions.isNotEmpty ? route.instructions.first : null;
+                  if (message == null) return const SizedBox.shrink();
+                  return Center(
+                    child: Material(
+                      color: colors.card,
+                      borderRadius: AppRadius.borderMd,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(message, maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
                     ),
                   );
@@ -267,7 +302,7 @@ class AllPointsMapView extends GetView<HomeController> {
                                   controller.selectedMapView.value ==
                                           MapViewType.satellite
                                       ? 'General'
-                                      : 'Satellite',
+                                      : 'Satellite'.tourText,
                                   style: textTheme.labelMedium?.copyWith(
                                     color: colors.foreground,
                                     fontWeight: FontWeight.w600,
@@ -324,6 +359,20 @@ class AllPointsMapView extends GetView<HomeController> {
                 ),
               ),
 
+              Positioned(
+                top: 12,
+                left: 12,
+                child: Material(
+                  color: colors.card,
+                  borderRadius: AppRadius.borderMd,
+                  child: IconButton(
+                    tooltip: 'Offline tour downloads'.tourText,
+                    icon: const Icon(Icons.sync),
+                    onPressed: () => _showTourDownloads(context),
+                  ),
+                ),
+              ),
+
               // Bottom Tour Action / Arrival Overlay
               Positioned(
                 bottom: 16,
@@ -372,6 +421,147 @@ class AllPointsMapView extends GetView<HomeController> {
     );
   }
 
+  OfflineLandmarkStore get _offlineStore => Get.isRegistered<OfflineLandmarkStore>()
+      ? Get.find<OfflineLandmarkStore>() : OfflineLandmarkStore();
+
+  Future<void> _showLandmarkActions(BuildContext context, String id) async {
+    controller.selectedLandmarkId.value = id;
+    final name = controller.landmarkMarkers.firstWhereOrNull((marker) => marker.id == id)?.name
+        ?? FloorDefinition.landmarkNameFor(id);
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => LandmarkDownloadDialog(
+        landmarkId: id,
+        name: name,
+        language: controller.tourLanguage,
+        voiceLocale: controller.ttsLocale,
+        store: _offlineStore,
+        onEnter: (package) => controller.navigateToLandmarkDetails(id, offline: package),
+      ),
+    );
+  }
+
+  Future<void> _showSavedLandmarks(BuildContext context) async {
+    final package = await showDialog<OfflineLandmark>(
+      context: context,
+      builder: (context) => SavedLandmarkDownloads(language: controller.tourLanguage, store: _offlineStore),
+    );
+    if (package != null && context.mounted) {
+      controller.navigateToLandmarkDetails(package.landmark.id, offline: package);
+    }
+  }
+
+  Future<void> _showTourDownloads(BuildContext context) => showModalBottomSheet<void>(
+    context: context,
+    builder: (sheetContext) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Obx(() {
+          final downloaded = controller.lastBundleDownload.value?.toLocal();
+          final busy = controller.isDownloadingBundle.value;
+          final message = controller.bundleDownloadMessage.value;
+          final formatter = MaterialLocalizations.of(sheetContext);
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Offline tour'.tourText, style: Theme.of(sheetContext).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(downloaded == null
+                  ? 'No recorded download yet.'.tourText
+                  : 'Last download: {time}'.tourTextWith({
+                    'time': '${formatter.formatMediumDate(downloaded)} '
+                        '${formatter.formatTimeOfDay(TimeOfDay.fromDateTime(downloaded))}',
+                  })),
+              Text('Downloads include tour content. Map tiles and device voices are separate.'.tourText),
+              if (message != null) Text(message, semanticsLabel: message),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: busy ? null : controller.downloadTourBundle,
+                child: Text(busy ? 'Downloading…'.tourText : 'Download latest tour'.tourText),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  _showSavedLandmarks(context);
+                },
+                child: Text('Downloaded landmarks'.tourText),
+              ),
+              TextButton(
+                onPressed: () => _showAnalyticsPrivacy(sheetContext),
+                child: Text('Tour analytics privacy'.tourText),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  Get.offAllNamed(Routes.language);
+                },
+                child: Text('Change language'.tourText),
+              ),
+            ],
+          );
+        }),
+      ),
+    ),
+  );
+
+  Future<void> _showAnalyticsPrivacy(BuildContext context) async {
+    final analytics = TourAnalyticsService.instance;
+    final initial = await analytics.consent;
+    final policy = Uri.tryParse(const String.fromEnvironment('COLOSSEUM_PRIVACY_URL'));
+    final hasPolicy = policy != null && policy.scheme == 'https' && policy.host.isNotEmpty;
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        var allowed = initial;
+        return StatefulBuilder(builder: (context, setState) => AlertDialog(
+          title: Text('Tour analytics'.tourText),
+          content: SingleChildScrollView(child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Optionally share tour activity, such as stops visited and narration completion. Analytics uses a random identifier and does not collect GPS coordinates or your name. Sent events expire after 90 days. Turning this off clears unsent events.'.tourText),
+              if (hasPolicy)
+                TextButton(
+                  onPressed: () async {
+                    var opened = false;
+                    try {
+                      opened = await launchUrl(policy, mode: LaunchMode.externalApplication);
+                    } catch (_) {
+                      // The offline disclosure remains visible when no browser is available.
+                    }
+                    if (!opened && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not open the privacy notice.'.tourText)),
+                      );
+                    }
+                  },
+                  child: Text('Read the privacy notice'.tourText),
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Share tour activity'.tourText),
+                value: allowed,
+                onChanged: (value) => setState(() => allowed = value),
+              ),
+            ],
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text('Cancel'.tourText)),
+            FilledButton(
+              onPressed: () async {
+                await analytics.setConsent(allowed);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              },
+              child: Text('Save'.tourText),
+            ),
+          ],
+        ));
+      },
+    );
+  }
+
   Widget _buildStartTourButton(BuildContext context) {
     final colors = context.colors;
     final textTheme = context.textTheme;
@@ -409,7 +599,7 @@ class AllPointsMapView extends GetView<HomeController> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Show Itinerary',
+                  'Show Itinerary'.tourText,
                   style: textTheme.labelLarge?.copyWith(
                     color: colors.primaryForeground,
                     fontWeight: FontWeight.bold,
@@ -464,7 +654,7 @@ class AllPointsMapView extends GetView<HomeController> {
                 children: [
                   Text(
                     remaining.isNotEmpty
-                        ? 'Next: ${remaining.first.name}'
+                        ? 'Next: {place}'.tourTextWith({'place': remaining.first.name})
                         : 'Tour Complete',
                     style: textTheme.labelLarge?.copyWith(
                       color: colors.foreground,
@@ -475,7 +665,8 @@ class AllPointsMapView extends GetView<HomeController> {
                   ),
                   Text(
                     remaining.isNotEmpty
-                        ? '${remaining.length} landmark${remaining.length > 1 ? 's' : ''} remaining'
+                        ? (remaining.length == 1 ? '{count} landmark remaining' : '{count} landmarks remaining')
+                        .tourTextWith({'count': remaining.length})
                         : 'All landmarks visited or skipped',
                     style: textTheme.bodySmall?.copyWith(
                       color: colors.mutedForeground,
@@ -508,7 +699,7 @@ class AllPointsMapView extends GetView<HomeController> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'End Tour',
+                        'End Tour'.tourText,
                         style: textTheme.labelSmall?.copyWith(
                           color: colors.destructive,
                           fontWeight: FontWeight.w600,
@@ -579,7 +770,7 @@ class AllPointsMapView extends GetView<HomeController> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'You are near ${landmark.name}',
+                        'You are near {place}'.tourTextWith({'place': landmark.name}),
                         style: textTheme.titleSmall?.copyWith(
                           color: colors.foreground,
                           fontWeight: FontWeight.bold,
@@ -589,7 +780,7 @@ class AllPointsMapView extends GetView<HomeController> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Do you want to enter ${landmark.name} or skip to next?',
+                        'Do you want to enter {place} or skip to next?'.tourTextWith({'place': landmark.name}),
                         style: textTheme.bodySmall?.copyWith(
                           color: colors.mutedForeground,
                           fontSize: 12,
@@ -628,7 +819,7 @@ class AllPointsMapView extends GetView<HomeController> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Skip',
+                              'Skip'.tourText,
                               style: textTheme.labelLarge?.copyWith(
                                 color: colors.secondaryForeground,
                                 fontWeight: FontWeight.w600,
@@ -665,7 +856,7 @@ class AllPointsMapView extends GetView<HomeController> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Enter',
+                              'Enter'.tourText,
                               style: textTheme.labelLarge?.copyWith(
                                 color: colors.primaryForeground,
                                 fontWeight: FontWeight.bold,

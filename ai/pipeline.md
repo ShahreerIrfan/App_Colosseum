@@ -1,366 +1,124 @@
-# Colosseum Audio Tour Guide — Build, Release & Delivery Pipeline Reference
+# Colosseum Audio Tour Guide Android release pipeline
 
-> **Document Purpose:** Complete, step-by-step authoritative reference for compiling, signing, testing, and delivering production-ready Universal release APKs (and App Bundles) for the **Colosseum Audio Tour Guide Client** (`ColosseumClient`), along with keystore provisioning, artifact distribution, and on-site visitor hardware/OS onboarding and troubleshooting.
+Use this runbook to build, verify and distribute the Flutter Android client. Run the commands from `project/ColosseumClient` unless otherwise specified.
 
----
+## Compatibility and release formats
 
-## 1. Release Build Architecture Overview
+| Item | Current project and verified release APK |
+| --- | --- |
+| Package ID | `com.example.colosseum_client` |
+| Minimum Android | Android 7.0, API 24 |
+| Compile and target SDK | API 36, supplied by the installed Flutter SDK |
+| Native architectures in the Universal APK | `armeabi-v7a` (32-bit ARM), `arm64-v8a` (64-bit ARM), `x86_64` (64-bit Intel/AMD) |
+| Direct distribution | Signed Universal APK |
+| Google Play | Signed Android App Bundle (AAB) |
 
-```
-Colosseum/
-├── requirement pdfs/                      # Client specs, dev spec, sensor PoC documentation
-├── project/
-│   ├── ColosseumClient/                   # Flutter client (GetX, Offline-First, Sensor-Fused Navigation)
-│   │   ├── android/
-│   │   │   ├── app/
-│   │   │   │   ├── build.gradle.kts       # compileSdk = 34, targetSdk = 34, release signing config
-│   │   │   │   └── key.properties         # Local signing credentials (git-ignored)
-│   │   │   ├── colosseum-release-key.jks  # Production RSA-2048 release keystore
-│   │   │   └── build.gradle.kts           # Root Gradle build script
-│   │   ├── lib/                           # GetX Architecture (core, data, modules, routes)
-│   │   ├── test/                          # Unit and widget test suite (96+ automated tests)
-│   │   ├── pubspec.yaml                   # App version, assets, and dependencies
-│   │   └── ai/
-│   │       ├── rules.md                   # Architecture & styling guidelines
-│   │       └── pipeline.md                # Build, release & delivery pipeline reference (this file)
-│   │
-│   ├── backend/                           # Next.js + TypeScript + PostgreSQL/PostGIS (Admin & Tickets)
-│   │   └── readme.md
-│   │
-│   └── release_apks/                      # Distribution directory containing signed release APKs
-│       ├── colosseum-guide-v1.0.0-universal-release.apk
-│       └── SHA256SUMS.txt
-```
+Universal means one file includes all three supported architectures. The phone still needs a compatible Android version and ABI, sufficient storage and permission to install from the chosen channel. APK installation and tour functionality are separate checks. Location, compass availability and local TTS voices affect navigation and narration after installation.
 
----
+The inspected release APK passed signature verification, APK ZIP alignment and 16 KB ELF alignment for its 64-bit native libraries. Recheck the **new artifact** for every release, since a Flutter or plugin update can change its manifest and native libraries. See the [Flutter release guide](https://docs.flutter.dev/deployment/android) and [Android 16 KB compatibility guide](https://developer.android.com/guide/practices/page-sizes).
 
-## 2. Signing & Keystore Configurations
+## Signing and versioning
 
-The mobile client must be signed with a dedicated, persistent RSA-2048 keystore (never the default ephemeral `debug.keystore`). Sideloading updates or releasing production builds signed with different keys causes fatal `INSTALL_FAILED_UPDATE_INCOMPATIBLE` collisions on visitor devices.
+- Use the existing production signing key for updates to the direct-distribution APK. Keep the package ID and signer stable and increase the version code for every release. Flutter reads `versionName+versionCode` from `pubspec.yaml`, for example `1.0.1+2`.
+- Provision the approved keystore and `android/key.properties` through the team's secure storage or CI secret store. The Android ignore rules cover `key.properties`, `*.jks` and `*.keystore`. Keep a protected backup of the keystore and record the expected certificate SHA-256 fingerprint independently of the APK being built.
+- The current Gradle release configuration falls back to debug signing when `key.properties` is absent. Confirm signing material before building and verify the signer afterwards. A future CI improvement is to make production builds fail during Gradle configuration when release signing material is missing.
+- An earlier revision of this runbook contained a signing password. If it was used, change the affected password and review repository history and key access. Changing the password on an existing keystore preserves the signer. If the private key itself was exposed, coordinate a signing migration before distributing an update.
 
-### 2.1. Keystore Specifications
-
-| Parameter | Specification | Notes |
-| :--- | :--- | :--- |
-| **Keystore File** | `project/ColosseumClient/android/colosseum-release-key.jks` | Kept secure; never committed to public VCS |
-| **Key Alias** | `colosseumkey` | Unique key alias in keystore |
-| **Store Password** | `Colosseum2026Secure!` *(Configurable via `key.properties`)* | Min 8 chars alphanumeric |
-| **Key Password** | `Colosseum2026Secure!` *(Configurable via `key.properties`)* | Matches or differs from store password |
-| **Algorithm** | RSA 2048-bit | Industry standard for Android V2/V3 signing |
-| **Validity** | 10,000 days (approx. 27 years) | Exceeds Google Play minimum requirement |
-| **Distinguished Name** | `CN=Colosseum Tour, OU=Mobile, O=Hakaluki, L=Rome, C=IT` | Signer certificate identity |
-
----
-
-### 2.2. Generating the Production Keystore
-
-Execute the following command inside the `android/` directory of `ColosseumClient`:
-
-```bash
-cd /mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/ColosseumClient/android
-
-keytool -genkey -v \
-  -keystore colosseum-release-key.jks \
-  -alias colosseumkey \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000 \
-  -storetype JKS \
-  -dname "CN=Colosseum Tour, OU=Mobile, O=Hakaluki, L=Rome, C=IT" \
-  -storepass "Colosseum2026Secure!" \
-  -keypass "Colosseum2026Secure!"
-```
-
----
-
-### 2.3. Secure Gradle Properties Configuration (`key.properties`)
-
-Create the credential mapping file at `project/ColosseumClient/android/key.properties`. This keeps private credentials decoupled from Gradle source code and version control:
+The local properties file has this shape. Supply the values through your secure provisioning process.
 
 ```properties
-# project/ColosseumClient/android/key.properties
-storePassword=Colosseum2026Secure!
-keyPassword=Colosseum2026Secure!
-keyAlias=colosseumkey
 storeFile=../colosseum-release-key.jks
+keyAlias=<approved release key alias>
+storePassword=<from secure storage>
+keyPassword=<from secure storage>
 ```
 
-> [!CAUTION]
-> Add `android/key.properties` and `*.jks` to `project/ColosseumClient/.gitignore` to prevent leaking production signing keys.
+For a first-ever distribution with no existing production signer, use Android's [app signing guide](https://developer.android.com/studio/publish/app-signing) to provision a dedicated key. For Google Play, record the upload certificate and the Play app-signing certificate separately. Test switching between direct and Play distribution before offering that as an update path, because Android compares the installed and incoming app signatures.
 
----
+## Build the release
 
-### 2.4. Configuring `android/app/build.gradle.kts` for Production Signing
-
-Update `project/ColosseumClient/android/app/build.gradle.kts` to load `key.properties` when building release variants:
-
-```kotlin
-import java.util.Properties
-import java.io.FileInputStream
-
-plugins {
-    id("com.android.application")
-    id("dev.flutter.flutter-gradle-plugin")
-}
-
-// Load signing properties if available
-val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-}
-
-android {
-    namespace = "com.example.colosseum_client"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    defaultConfig {
-        applicationId = "com.example.colosseum_client"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
-
-    signingConfigs {
-        create("release") {
-            if (keystorePropertiesFile.exists()) {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-            } else {
-                // Fallback for CI/local test builds if key.properties is not yet provisioned
-                initWith(getByName("debug"))
-            }
-        }
-    }
-
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
-            isShrinkResources = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
-}
-
-flutter {
-    source = "../.."
-}
-```
-
----
-
-## 3. Pre-Build Quality Gates & Compilation
-
-Always execute the automated verification test gates before initiating a release compilation.
-
-```mermaid
-flowchart LR
-    A["Flutter Pub Get"] --> B["Flutter Analyze (0 issues)"]
-    B --> C["Flutter Test (96+ unit & widget tests)"]
-    C --> D{"Tests Passed?"}
-    D -- Yes --> E["Assemble Release APK / AAB"]
-    D -- No --> F["Halt Pipeline & Fix Bugs"]
-```
-
-### 3.1. Quality Gate Commands
+1. Record the source commit, Flutter version and JDK version used for the build. Resolve dependencies against the committed `pubspec.lock`.
+2. Confirm `pubspec.yaml` has the release version and a version code higher than the previously distributed APK.
+3. Run analysis and tests. Resolve failures before building.
+4. Verify that the build points to the intended backend. The client reads `COLOSSEUM_API_URL` as a Dart define and appends `/api/v1` itself. Supply the approved base URL if overriding the default. Set `COLOSSEUM_PRIVACY_URL` if the release should link to a published HTTPS privacy page.
+5. Build a Universal APK for direct delivery. Build an AAB when publishing through Google Play, and check the [current Play target SDK requirements](https://developer.android.com/google/play/requirements/target-sdk).
 
 ```bash
-cd /mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/ColosseumClient
-
-# 1. Ensure dependency tree matches pubspec.lock
-flutter pub get
-
-# 2. Strict static analysis check
-flutter analyze
-
-# 3. Complete unit & widget regression test suite
-flutter test
-```
-
----
-
-### 3.2. Universal Release APK Compilation
-
-> [!IMPORTANT]
-> **Always generate Universal (Fat) APKs for on-site sideloading and customer delivery.**
-> Never use `--split-per-abi` for visitor handovers or direct distribution. A split APK compiled for `arm64-v8a` fails on 32-bit (`armeabi-v7a`) devices, legacy tourist phones, or x86/x86_64 tablets with fatal `INSTALL_FAILED_NO_MATCHING_ABIS`.
-
-Run the compilation command:
-
-```bash
-cd /mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/ColosseumClient
-
-# Clean previous build artifacts
-flutter clean
-flutter pub get
-
-# Compile Universal Release APK
-flutter build apk --release --no-tree-shake-icons
-```
-
-* **Build Output Path:** `project/ColosseumClient/build/app/outputs/flutter-apk/app-release.apk`
-* **Architectures Included:** `arm64-v8a`, `armeabi-v7a`, `x86_64` (Universal compatibility).
-
----
-
-### 3.3. Google Play Store Release (AAB) Compilation
-
-For official Google Play Store submission:
-
-```bash
-cd /mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/ColosseumClient
-flutter build appbundle --release
-```
-
-* **Build Output Path:** `project/ColosseumClient/build/app/outputs/bundle/release/app-release.aab`
-
----
-
-## 4. Distribution Artifacts Sync Script
-
-To automate verification, compilation, artifact staging, and cryptographic checksum generation into the central `project/release_apks/` directory:
-
-```bash
-#!/usr/bin/env bash
-# ==============================================================================
-# Colosseum Audio Tour Guide — Build & Distribution Script
-# Path: project/ColosseumClient/sync_release.sh
-# ==============================================================================
 set -euo pipefail
-
-CLIENT_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/ColosseumClient"
-RELEASE_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/release_apks"
-VERSION=$(grep 'version: ' "${CLIENT_DIR}/pubspec.yaml" | awk '{print $2}' | cut -d'+' -f1)
-BUILD_NUM=$(grep 'version: ' "${CLIENT_DIR}/pubspec.yaml" | awk '{print $2}' | cut -d'+' -f2)
-TARGET_APK_NAME="colosseum-guide-v${VERSION}-${BUILD_NUM}-universal-release.apk"
-
-echo "========================================================"
-echo " Starting Colosseum Release Pipeline v${VERSION}+${BUILD_NUM}"
-echo "========================================================"
-
-cd "${CLIENT_DIR}"
-
-# Step 1: Pre-flight Quality Assurance
-echo ">> Running Flutter Analyze..."
+flutter --version
+java -version
+flutter pub get
 flutter analyze
-
-echo ">> Running Flutter Test Suite..."
 flutter test
 
-# Step 2: Clean & Compile Universal APK
-echo ">> Building Universal Release APK..."
-flutter clean
-flutter pub get
-flutter build apk --release --no-tree-shake-icons
-
-# Step 3: Stage Distribution Artifact
-echo ">> Syncing distribution artifact to ${RELEASE_DIR}..."
-mkdir -p "${RELEASE_DIR}"
-rm -f "${RELEASE_DIR}"/*.apk
-
-cp "${CLIENT_DIR}/build/app/outputs/flutter-apk/app-release.apk" \
-   "${RELEASE_DIR}/${TARGET_APK_NAME}"
-
-# Step 4: Generate Checksums
-cd "${RELEASE_DIR}"
-sha256sum "${TARGET_APK_NAME}" > SHA256SUMS.txt
-
-echo "========================================================"
-echo " SUCCESS! Artifact deployed to:"
-echo " ${RELEASE_DIR}/${TARGET_APK_NAME}"
-echo " SHA256: $(cat SHA256SUMS.txt)"
-echo "========================================================"
+test -r android/key.properties
+flutter build apk --release
+# For a Play release, use the same approved configuration:
+# flutter build appbundle --release
 ```
 
----
+The APK is at `build/app/outputs/flutter-apk/app-release.apk`. The AAB is at `build/app/outputs/bundle/release/app-release.aab`. Use the default APK architecture set for a single visitor download. ABI-specific APKs are useful for controlled distribution where the target device architecture is known.
 
-## 5. Visitor / Client Onboarding & Troubleshooting Guide (গ্রাহকদের জন্য ইনস্টলেশন ও অন-সাইট ব্যবহার নির্দেশিকা)
+## Verify the APK before staging
 
-The Colosseum Audio Tour Guide operates in a challenging historical environment featuring thick ancient travertine stone walls, underground hypogeum tunnels, metal scaffolding, and high tourist density. Standard phone security settings and power managers can disrupt background location tracking, sensor fusion, and automated Text-to-Speech (TTS) narration.
+Set `ANDROID_BUILD_TOOLS` to an installed Android SDK Build Tools directory with `aapt`, `apksigner` and a 16 KB-capable `zipalign`. Set `EXPECTED_SIGNER_SHA256` to the approved release certificate fingerprint in lowercase hex without separators. Set `PREVIOUS_VERSION_CODE` from the last distributed APK and `EXPECTED_VERSION_CODE` from the intended release. For the first release, use `0` as the previous version code.
 
-### 5.1. Onboarding Workflow
+```bash
+set -euo pipefail
+apk=build/app/outputs/flutter-apk/app-release.apk
+: "${ANDROID_BUILD_TOOLS:?Set the Android SDK Build Tools directory}"
+: "${EXPECTED_SIGNER_SHA256:?Set the approved release certificate fingerprint}"
+: "${EXPECTED_VERSION_CODE:?Set the intended release version code}"
+: "${PREVIOUS_VERSION_CODE:?Set the previously distributed version code}"
 
-```mermaid
-flowchart TD
-    A["Download Colosseum APK on Visitor Device"] --> B{"Is Samsung Device with One UI 6+?"}
-    B -- Yes --> C["Disable 'Auto Blocker' in Settings -> Security & Privacy"]
-    B -- No --> D{"Play Protect Block Dialog?"}
-    C --> D
-    D -- Yes --> E["Tap 'More details' -> 'Install anyway'"]
-    D -- No --> F["Complete APK Installation"]
-    E --> F
-    F --> G["Open App: Grant 'Location' (Allow while using app / Precise)"]
-    G --> H["Battery Settings: Set to 'Unrestricted' / 'No restrictions'"]
-    H --> I["Pre-download Tour & Voices over Wi-Fi (Before entering stone gates)"]
-    I --> J["Calibrate Compass: Rotate phone in Figure-8 motion"]
-    J --> K["Enter Ticket Token & Plug in Earphones: Tour Active"]
+badging=$("$ANDROID_BUILD_TOOLS/aapt" dump badging "$apk")
+printf '%s\n' "$badging" | grep -F "package: name='com.example.colosseum_client' versionCode='$EXPECTED_VERSION_CODE'"
+printf '%s\n' "$badging" | grep -Fx "sdkVersion:'24'"
+printf '%s\n' "$badging" | grep -Fx "targetSdkVersion:'36'"
+abi_line=$(printf '%s\n' "$badging" | grep '^native-code:')
+for abi in armeabi-v7a arm64-v8a x86_64; do
+  printf '%s\n' "$abi_line" | grep -F "'$abi'"
+done
+test "$EXPECTED_VERSION_CODE" -gt "$PREVIOUS_VERSION_CODE"
+
+signature=$("$ANDROID_BUILD_TOOLS/apksigner" verify --verbose --print-certs "$apk")
+actual_signer=$(printf '%s\n' "$signature" | awk '/certificate SHA-256 digest:/ {print $NF}')
+test "$actual_signer" = "$EXPECTED_SIGNER_SHA256"
+"$ANDROID_BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$apk"
 ```
 
----
+Review SDK expectations whenever the Flutter toolchain or product support range changes. Follow the [Android ELF alignment procedure](https://developer.android.com/guide/practices/page-sizes#check_elf_alignment) to check the native libraries in addition to ZIP alignment. For an AAB, also verify bundle alignment and test the generated APKs using Play internal testing or [bundletool](https://developer.android.com/tools/bundletool).
 
-### 5.2. Sideloading & Installation Unblocking
+## Device acceptance tests
 
-1. **Samsung One UI 6+ (Auto Blocker Block):**
-   * Go to **Settings** $\rightarrow$ **Security and privacy** $\rightarrow$ **Auto Blocker**.
-   * Turn the toggle **OFF** temporarily during installation.
-2. **Google Play Protect ("Blocked by Play Protect - Unsafe app"):**
-   * When the prompt appears, tap **"More details"** $\rightarrow$ **"Install anyway"**.
-   * *(Note: This warning occurs for all non-Play Store sideloaded APKs).*
-3. **Xiaomi / Redmi (MIUI & HyperOS Install Warnings):**
-   * In the package installer security popup, select **"I am aware of the possible risks"** $\rightarrow$ check the countdown confirmation box $\rightarrow$ tap **OK**.
+Use the exact signed file intended for distribution. Record the device model, Android version, ABI and test result alongside its version code and checksum.
 
----
+| Test environment | What to verify |
+| --- | --- |
+| API 24 device or emulator | Fresh install, launch and access to the tour |
+| 32-bit ARM device, when available | `armeabi-v7a` install and launch |
+| Recent 64-bit Android phone | Fresh install and a normal download and install through the intended distribution channel |
+| 16 KB Android device or emulator | Install, launch and use features that load native libraries |
+| Device with the previous signed release | Install as an update and confirm existing saved tours and settings are retained |
 
-### 5.3. Permissions & System Hardware Calibration
+On test devices, use `adb install <apk>` for a fresh install and `adb install -r <apk>` for an update. Exercise the live tour sync, map, precise location and compass behavior. Download a landmark and the device voice for the chosen language, then test its offline map, saved tour and narration in airplane mode. Include Italian TTS when validating a multilingual handoff.
 
-1. **Precise Location Permission:**
-   * When prompted, select **"While using the app"** (or **"Always"**).
-   * Ensure **"Use precise location"** is toggled **ON**. Coarse location prevents POI proximity triggers ($\approx 5\text{m}$ radius).
-2. **Battery Optimization Bypass (Crucial for Audio Narration):**
-   * *Problem:* Android aggressive battery saving suspends GPS and compass polling when the phone screen is turned off or put in a pocket with earphones.
-   * *Fix:* Open phone **Settings** $\rightarrow$ **Apps** $\rightarrow$ **Colosseum Tour Guide** $\rightarrow$ **Battery** $\rightarrow$ choose **"Unrestricted"** / **"No restrictions"**.
-   * *Xiaomi / Vivo / Oppo:* Enable **"Autostart"** and set Battery Saver to **"No restrictions"**.
-3. **Compass / Magnetometer Calibration (Travertine & Metal Interference):**
-   * The Colosseum has extensive iron tie rods, modern steel railings, and reinforced pedestrian ramps that cause local magnetic distortions.
-   * *Action:* If the orientation arrow on the floor plan map jitters or drifts, hold the phone flat and move it in a **figure-8 ($\infty$) motion** for 5 seconds to recalibrate the magnetometer.
-4. **Offline Tour Preparation (Crucial for Hypogeum & Level 3):**
-   * The underground **Hypogeum** and inner stone vaulted corridors have near-zero cellular signal (Faraday-like stone occlusion).
-   * *Action:* Visitors must select their preferred language and confirm the tour download while connected to Wi-Fi at the entrance/visitor center or hotel before entering the monument.
-5. **TTS Voice Engine Configuration:**
-   * Narration relies on local Text-to-Speech (`flutter_tts`).
-   * Verify that **Google Speech Services** (or the device's default TTS engine) has offline voice data downloaded for the chosen tour language (English, Italian, Spanish, French, German).
-   * *Check:* Device **Settings** $\rightarrow$ **System** $\rightarrow$ **Languages & input** $\rightarrow$ **Text-to-speech output** $\rightarrow$ **Install voice data**.
+## Stage and distribute
 
----
+- Stage a versioned name such as `colosseum-guide-v1.0.1-2-universal-release.apk`. Create `SHA256SUMS.txt` in the same directory and confirm it with `sha256sum -c SHA256SUMS.txt`. Publish the APK and its checksum together.
+- Keep previous verified artifacts in versioned directories. Stage the new APK and checksum in a temporary directory on the same filesystem, verify the copies, then rename the completed directory into place. Update any stable download link after this step.
+- The existing [`sync_release.sh`](../sync_release.sh) builds and copies APKs into the workspace's `release/` and `project/release_apks/` directories. It uses absolute paths and clears old APKs before copying. Use the staged procedure above for a production handoff until the script incorporates these checks and keeps prior releases.
 
-## 6. Summary of Key File Locations
+## Visitor installation and troubleshooting
 
-| Item | File Path |
-| :--- | :--- |
-| **Pipeline Reference** | `project/ColosseumClient/ai/pipeline.md` |
-| **Architectural Rules** | `project/ColosseumClient/ai/rules.md` |
-| **Flutter Source Root** | `project/ColosseumClient/lib/` |
-| **Android App Gradle** | `project/ColosseumClient/android/app/build.gradle.kts` |
-| **Release Keystore** | `project/ColosseumClient/android/colosseum-release-key.jks` |
-| **Signing Credentials** | `project/ColosseumClient/android/key.properties` |
-| **Output Universal APK** | `project/ColosseumClient/build/app/outputs/flutter-apk/app-release.apk` |
-| **Release Staging Directory**| `project/release_apks/` |
+Share an approved download link or use the selected Google Play track. For direct delivery, visitors may need to allow installation for the browser or file manager that opens the APK. If Play Protect or a device policy blocks the installer, confirm the file and distribution channel with the release owner. [Google Play Protect guidance](https://support.google.com/googleplay/answer/2812853)
+
+| Symptom | Check |
+| --- | --- |
+| Update fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Compare the installed and incoming package IDs and signing certificates. Use the update from the matching distribution channel. |
+| `INSTALL_FAILED_VERSION_DOWNGRADE` | Check the installed version code and build a release with a higher version code. |
+| `INSTALL_FAILED_NO_MATCHING_ABIS` | Confirm the device ABI and that the distributed file is the Universal APK. |
+| `INSTALL_FAILED_OLDER_SDK` | Check the device's Android version against the APK's minimum API. |
+| App opens but navigation or narration fails | Check precise location permission, available sensors, downloaded landmark content and the offline voice for the selected language. |
+
+For an on-site visit, use Wi-Fi to download the landmark and its language voice before entering areas with weak signal. Grant precise location while using the app. If the compass direction drifts, follow the in-app calibration prompt. Phone settings for voice downloads and location vary by manufacturer.

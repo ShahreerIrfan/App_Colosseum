@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:colosseum_client/app/data/models/landmark_marker_model.dart';
 import 'package:colosseum_client/app/data/services/pedestrian_street_router.dart';
+import 'package:colosseum_client/app/data/models/pedestrian_route_data.dart';
 import 'package:latlong2/latlong.dart';
 
 void main() {
@@ -118,5 +119,33 @@ void main() {
         expect(route[i], isNot(equals(route[i + 1])));
       }
     });
+  });
+
+  test('removed or disconnected route segments do not generate straight lines', () {
+    final router = PedestrianStreetRouter.instance;
+    const start = LatLng(41.89, 12.49);
+    const destination = LatLng(41.892, 12.492);
+    router.initializeGraph(const [
+      [start, LatLng(41.89, 12.4905)],
+      [destination, LatLng(41.892, 12.4925)],
+    ]);
+    expect(router.routeBetween(start, destination), isEmpty);
+    expect(router.walkingDistance(start, destination), double.infinity);
+
+    router.initializeGraph([]);
+    expect(router.routeBetween(start, destination), isEmpty);
+  });
+
+  test('one-way routes cannot be traversed in reverse and expose forward instructions', () {
+    final router = PedestrianStreetRouter.instance;
+    const start = LatLng(41.89, 12.49);
+    const end = LatLng(41.89, 12.491);
+    router.initializeRoutes(const [
+      PedestrianRouteData([start, end], isOneWay: true, instruction: 'Use the marked footpath.'),
+    ]);
+    final instructions = <String>[];
+    expect(router.routeBetween(start, end, instructions: instructions), [start, end]);
+    expect(instructions, ['Use the marked footpath.']);
+    expect(router.routeBetween(end, start), isEmpty);
   });
 }

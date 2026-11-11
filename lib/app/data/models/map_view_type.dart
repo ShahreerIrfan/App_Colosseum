@@ -1,3 +1,5 @@
+import '../../core/localization/tour_localizations.dart';
+
 /// Defines the supported base map view presentations for the Colosseum map.
 enum MapViewType {
   /// Standard Google Maps roadmap / vector architectural presentation.
@@ -10,9 +12,9 @@ enum MapViewType {
   String get displayName {
     switch (this) {
       case MapViewType.general:
-        return 'General View';
+        return 'General View'.tourText;
       case MapViewType.satellite:
-        return 'Satellite View';
+        return 'Satellite View'.tourText;
     }
   }
 
@@ -20,9 +22,9 @@ enum MapViewType {
   String get shortName {
     switch (this) {
       case MapViewType.general:
-        return 'General';
+        return 'General'.tourText;
       case MapViewType.satellite:
-        return 'Satellite';
+        return 'Satellite'.tourText;
     }
   }
 
@@ -30,9 +32,9 @@ enum MapViewType {
   String get semanticLabel {
     switch (this) {
       case MapViewType.general:
-        return 'General map view';
+        return 'General map view'.tourText;
       case MapViewType.satellite:
-        return 'Satellite map view';
+        return 'Satellite map view'.tourText;
     }
   }
 
@@ -40,9 +42,9 @@ enum MapViewType {
   String get description {
     switch (this) {
       case MapViewType.general:
-        return 'Standard map view';
+        return 'Standard map view'.tourText;
       case MapViewType.satellite:
-        return 'High-resolution satellite view';
+        return 'High-resolution satellite view'.tourText;
     }
   }
 

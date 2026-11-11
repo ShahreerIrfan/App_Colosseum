@@ -6,7 +6,7 @@ import '../models/itinerary_segment_model.dart';
 import '../models/viewpoint_model.dart';
 
 /// Single source of truth data model representing a monument floor or area level,
-/// its architectural configuration, viewpoints, guided itinerary, and calibration.
+/// its architectural configuration, viewpoints, walking paths, and calibration.
 class FloorDefinition {
   final String id;
   final String landmarkId;
@@ -69,7 +69,8 @@ class FloorDefinition {
     final rawFloorId = json['id'] as String? ?? json['floorId'] as String? ?? '';
     final parsedLandmarkId = landmarkIdForFloorId(
       rawFloorId,
-      json['landmarkId'] as String? ?? json['landmarkCode'] as String?,
+      json['landmarkId'] as String?,
+      landmarkCode: json['landmarkCode'] as String?,
     );
 
     final calibObj = json['calibration'] is Map ? (json['calibration'] as Map) : null;
@@ -107,6 +108,7 @@ class FloorDefinition {
         'id': id,
         'floorId': id,
         'landmarkId': landmarkId,
+        'landmarkCode': landmarkId,
         'displayName': displayName,
         'shortName': shortName,
         'floorNumberLabel': floorNumberLabel,
@@ -412,9 +414,15 @@ class FloorDefinition {
     return 'colosseum';
   }
 
-  /// Infers the canonical landmark ID from a floor ID with strict prefix enforcement,
-  /// overriding any corrupted or legacy landmark ID (e.g. 'arch_ground' with 'colosseum').
-  static String landmarkIdForFloorId(String? floorId, [String? fallbackLandmarkId]) {
+  static String landmarkIdForFloorId(
+    String? floorId,
+    String? fallbackLandmarkId, {
+    String? landmarkCode,
+  }) {
+    final code = landmarkCode?.trim();
+    if (code != null && code.isNotEmpty) return code;
+
+    // Older records may only have a legacy landmark ID or a known floor prefix.
     if (floorId != null) {
       final lower = floorId.toLowerCase().trim();
       if (lower.startsWith('arch_') || lower.contains('arch')) {
@@ -513,15 +521,9 @@ class FloorDefinition {
             .toList();
       }
 
-      final floorLandmarkId = landmarkIdForFloorId(
-        floorId,
-        fMap['landmarkId'] as String? ?? fMap['landmarkCode'] as String?,
-      );
-
       return FloorDefinition.fromJson({
         ...fMap,
         'id': floorId,
-        'landmarkId': floorLandmarkId,
         'viewpoints': floorVps,
         'itinerary': floorItin,
       });
@@ -614,16 +616,18 @@ class FloorDefinition {
   /// Filters loaded floors for a specific landmark ID.
   static List<FloorDefinition> floorsForLandmark(String? landmarkId, [List<FloorDefinition>? loadedFloors]) {
     final normalizedLandmarkId = normalizeLandmarkId(landmarkId);
+    bool matches(FloorDefinition floor) => floor.landmarkId == landmarkId;
+    bool matchesLegacy(FloorDefinition floor) => floor.landmarkId == normalizedLandmarkId;
     if (loadedFloors != null && loadedFloors.isNotEmpty) {
-      final list = loadedFloors
-          .where((f) => normalizeLandmarkId(landmarkIdForFloorId(f.id, f.landmarkId)) == normalizedLandmarkId)
-          .toList();
+      final exact = loadedFloors.where(matches).toList();
+      if (exact.isNotEmpty) return exact;
+      final list = loadedFloors.where(matchesLegacy).toList();
       if (list.isNotEmpty) return list;
     }
     ensureInitialized();
-    final list = _cachedFloors.values
-        .where((f) => normalizeLandmarkId(landmarkIdForFloorId(f.id, f.landmarkId)) == normalizedLandmarkId)
-        .toList();
+    final exact = _cachedFloors.values.where(matches).toList();
+    if (exact.isNotEmpty) return exact;
+    final list = _cachedFloors.values.where(matchesLegacy).toList();
     if (list.isNotEmpty) return list;
     return [defaultFloorForLandmark(normalizedLandmarkId)];
   }

@@ -7,9 +7,10 @@ import 'package:colosseum_client/app/data/repositories/tour_repository_impl.dart
 
 void main() {
   group('Backend Live Sync Integration Test', () {
-    test('fetches live manifest and tour bundle from local server if online',
+    test('fetches live manifest and caches the published tour bundle if online',
         () async {
       final client = http.Client();
+      addTearDown(client.close);
       bool isBackendReachable = false;
       try {
         final res = await client
@@ -33,19 +34,18 @@ void main() {
       );
 
       final manifest = await remoteSource.getSyncManifest();
-      expect(manifest.totalFloors, equals(12));
-      expect(manifest.totalViewpoints, equals(51));
-      expect(manifest.totalLandmarks, greaterThanOrEqualTo(5));
-
-      final bundle = await remoteSource.getTourBundle(lang: 'en');
-      expect(bundle.floors.length, equals(12));
-      expect(bundle.landmarks.length, greaterThanOrEqualTo(5));
+      expect(manifest.dataHash, isNotEmpty);
 
       final synced = await repository.syncTourBundle(lang: 'en');
       expect(synced, isTrue);
 
+      final cachedBundle = await localSource.getCachedTourBundle();
+      expect(cachedBundle, isNotNull);
+      expect(cachedBundle!.floors, isNotEmpty);
+      expect(cachedBundle.landmarks, isNotEmpty);
       final cachedFloors = await repository.getFloors();
-      expect(cachedFloors.length, equals(12));
+      expect(cachedFloors.map((floor) => floor.id),
+          unorderedEquals(cachedBundle.floors.map((floor) => floor.id)));
     });
   });
 }

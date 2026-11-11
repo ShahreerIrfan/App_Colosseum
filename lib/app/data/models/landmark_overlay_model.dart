@@ -14,6 +14,7 @@ class MapLandmarkOverlay {
 
   /// Human-readable landmark name (e.g. 'Colosseum').
   final String name;
+  final String description;
 
   /// Flutter asset bundle path or Cloudinary URL to the transparent PNG.
   final String assetPath;
@@ -60,6 +61,7 @@ class MapLandmarkOverlay {
   const MapLandmarkOverlay({
     required this.id,
     required this.name,
+    this.description = '',
     required this.assetPath,
     this.thumbnailUrl,
     required this.center,
@@ -136,6 +138,7 @@ class MapLandmarkOverlay {
     return MapLandmarkOverlay(
       id: json['code'] as String? ?? json['landmarkId'] as String? ?? json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
       assetPath: json['assetPath'] as String? ?? '',
       thumbnailUrl: json['thumbnailUrl'] as String? ?? json['cardUrl'] as String?,
       center: center,
@@ -156,6 +159,7 @@ class MapLandmarkOverlay {
         'id': id,
         'landmarkId': id,
         'name': name,
+        'description': description,
         'assetPath': assetPath,
         'thumbnailUrl': thumbnailUrl,
         'centerCoordinates': {
@@ -190,6 +194,7 @@ class MapLandmarkOverlay {
   MapLandmarkOverlay copyWith({
     String? id,
     String? name,
+    String? description,
     String? assetPath,
     String? thumbnailUrl,
     LatLng? center,
@@ -208,6 +213,7 @@ class MapLandmarkOverlay {
     return MapLandmarkOverlay(
       id: id ?? this.id,
       name: name ?? this.name,
+      description: description ?? this.description,
       assetPath: assetPath ?? this.assetPath,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       center: center ?? this.center,
@@ -232,6 +238,7 @@ class MapLandmarkOverlay {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
+          description == other.description &&
           assetPath == other.assetPath &&
           thumbnailUrl == other.thumbnailUrl &&
           center == other.center &&
@@ -250,6 +257,7 @@ class MapLandmarkOverlay {
   int get hashCode => Object.hash(
         id,
         name,
+        description,
         assetPath,
         thumbnailUrl,
         center,

@@ -1,6 +1,8 @@
+import '../../core/localization/tour_localizations.dart';
 import 'dart:math' as math;
 import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/floor_definition.dart';
 import '../models/tour_navigation_state.dart';
 import '../models/user_location_model.dart';
@@ -9,7 +11,8 @@ import '../models/viewpoint_model.dart';
 /// Centralized state machine engine managing location-aware indoor tour guidance,
 /// proximity detection, arrival dwell, departure hysteresis, audio auto-play, and user overrides.
 class TourNavigationEngine {
-  final TourConfig config;
+  final TourConfig defaultConfig;
+  TourConfig get config => defaultConfig;
 
   TourNavigationState _state = const TourNavigationState();
   TourNavigationState get state => _state;
@@ -19,6 +22,8 @@ class TourNavigationEngine {
 
   Offset? _entryLocation;
   Offset? _exitLocation;
+  bool get _hasExit => _exitLocation != null;
+  bool _canReevaluateHeading = false;
   final Set<String> _announcedApproachViewpointIds = <String>{};
 
   /// Callbacks for engine events
@@ -31,7 +36,7 @@ class TourNavigationEngine {
     this.onSpeakInstruction,
     this.onAutoPlayViewpoint,
     this.onStateChanged,
-  }) : config = config ?? const TourConfig();
+  }) : defaultConfig = config ?? const TourConfig();
 
   /// Initializes or starts the guided tour on a specific floor.
   void startTour({
@@ -48,10 +53,11 @@ class TourNavigationEngine {
     _viewpoints = List.from(viewpoints);
     _entryLocation = entryLocation;
     _exitLocation = exitLocation;
+    _canReevaluateHeading = false;
     _announcedApproachViewpointIds.clear();
 
     // Sort viewpoints by order if present
-    _viewpoints.sort((a, b) => a.order.compareTo(b.order));
+    _orderViewpoints();
 
     final initialVisited = initialVisitedIds != null
         ? Set<String>.from(initialVisitedIds)
@@ -67,7 +73,7 @@ class TourNavigationEngine {
     final effectiveFirstTarget = firstUnvisited ??
         (_viewpoints.isNotEmpty
             ? _viewpoints.first.id
-            : (_exitLocation != null ? 'EXIT' : null));
+            : (_hasExit ? 'EXIT' : null));
 
     final resolvedFloor = FloorDefinition.fromId(floorId);
     final effectiveLandmarkName = landmarkName ?? resolvedFloor.landmarkName;
@@ -101,12 +107,16 @@ class TourNavigationEngine {
     }
   }
 
+  void _orderViewpoints() {
+    _viewpoints.sort((a, b) => a.order.compareTo(b.order));
+  }
+
   /// Dynamically updates the viewpoints on the active tour from live sync
   /// while preserving current navigation progress, visited status, and targets.
   void updateViewpoints(List<ViewpointModel> newViewpoints) {
-    if (newViewpoints.isEmpty) return;
+    final wasEmpty = _viewpoints.isEmpty;
     _viewpoints = List.from(newViewpoints);
-    _viewpoints.sort((a, b) => a.order.compareTo(b.order));
+    _orderViewpoints();
 
     for (int i = 0; i < _viewpoints.length; i++) {
       if (_state.visitedIds.contains(_viewpoints[i].id)) {
@@ -114,11 +124,45 @@ class TourNavigationEngine {
       }
     }
 
-    if (_state.navigationTargetId != null &&
-        !_viewpoints.any((vp) => vp.id == _state.navigationTargetId)) {
+    final availableIds = _viewpoints.map((vp) => vp.id).toSet();
+    bool wasRemoved(String? id) => id != null &&
+        id != 'ENTRY' && id != 'EXIT' && !availableIds.contains(id);
+    final activeAudioRemoved = wasRemoved(_state.activeAudioViewpointId);
+    final previousRemoved = wasRemoved(_state.previousTargetId);
+    if (previousRemoved) {
+      _state = _state.copyWith(previousTargetId: () => null, distanceFromPrevious: () => null);
+    }
+    if (wasRemoved(_state.selectedViewpointId)) {
+      _state = _state.copyWith(selectedViewpointId: () => null);
+    }
+    if (wasRemoved(_state.reachedViewpointId)) {
+      _state = _state.copyWith(reachedViewpointId: () => null);
+    }
+    if (activeAudioRemoved) {
+      _state = _state.copyWith(activeAudioViewpointId: () => null);
+    }
+    if (wasRemoved(_state.navigationTargetId) ||
+        (_state.navigationTargetId == 'EXIT' && !_hasExit) ||
+        (wasEmpty && _state.navigationTargetId == null && _viewpoints.isNotEmpty)) {
       final nextTarget = _findNextItineraryTarget(_state.visitedIds, _state.skippedIds);
       _state = _state.copyWith(
-        navigationTargetId: () => nextTarget ?? (_viewpoints.isNotEmpty ? _viewpoints.first.id : null),
+        navigationTargetId: () => nextTarget,
+        armedAutoPlayViewpointId: () => nextTarget,
+        previousTargetId: () => null,
+        arrivalDwellStartedAt: () => null,
+        distanceToTarget: () => null,
+        distanceFromPrevious: () => null,
+        navigationStatus: nextTarget == null
+            ? TourNavigationStatus.itineraryComplete
+            : TourNavigationStatus.navigating,
+      );
+    } else if (activeAudioRemoved ||
+        (previousRemoved && _state.navigationStatus == TourNavigationStatus.waitingForDeparture)) {
+      _state = _state.copyWith(
+        armedAutoPlayViewpointId: () => _state.navigationTargetId,
+        navigationStatus: _state.navigationTargetId == null
+            ? TourNavigationStatus.itineraryComplete
+            : TourNavigationStatus.navigating,
       );
     }
     _notifyState();
@@ -129,7 +173,7 @@ class TourNavigationEngine {
     final isColosseum = landmark.toLowerCase() == 'colosseum';
     if (isColosseum) {
       _speakThrottled(
-        'Begin the ${_getFloorTourName(_state.activeFloorId)} tour. Proceed toward Viewpoint ${firstVp.order}.',
+        'Begin the {floor} tour. Proceed toward Viewpoint {number}.'.tourTextWith({'floor': _localizedFloorName, 'number': firstVp.order}),
       );
     } else {
       final formattedLandmark = landmark.toLowerCase().startsWith('the ')
@@ -137,10 +181,18 @@ class TourNavigationEngine {
           : 'the $landmark';
       final titleSuffix = firstVp.title.isNotEmpty ? ': ${firstVp.title}' : '';
       _speakThrottled(
-        'Welcome to $formattedLandmark. Proceed to Viewpoint ${firstVp.order}$titleSuffix.',
+        'Welcome to {place}. Proceed to Viewpoint {number}{title}.'.tourTextWith({
+          'place': TourLocalizations.currentLanguage == 'en' ? formattedLandmark : landmark,
+          'number': firstVp.order,
+          'title': titleSuffix,
+        }),
       );
     }
   }
+
+  String get _localizedFloorName =>
+      TourLocalizations.currentLanguage != 'en' && _state.floorName != null
+          ? _state.floorName! : _getFloorTourName(_state.activeFloorId);
 
   String _getFloorTourName(String? floorId) {
     if (floorId == null) return _state.landmarkName;
@@ -158,6 +210,42 @@ class TourNavigationEngine {
     return math.sqrt(dx * dx + dy * dy);
   }
 
+  double _distanceToViewpoint(Offset offset, ViewpointModel viewpoint) {
+    final location = _state.userLocation;
+    if (location?.latitude != null && location?.longitude != null &&
+        viewpoint.hasGeographicPosition) {
+      return const Distance(roundResult: false).as(
+        LengthUnit.Meter, location!.latLng, viewpoint.latLng,
+      );
+    }
+    return calculateMetricDistance(
+      offset, Offset(viewpoint.normalizedX, viewpoint.normalizedY),
+    );
+  }
+
+  /// Recheck a heading-gated stop using the last accepted, fresh GPS fix.
+  void updateHeading(double? heading, {DateTime? now}) {
+    final location = _state.userLocation;
+    final timestamp = location?.timestamp;
+    final time = now ?? DateTime.now();
+    if (!_canReevaluateHeading || location == null || timestamp == null ||
+        !_viewpoints.any((vp) => vp.id == _state.navigationTargetId &&
+            vp.targetGazeHeadingDegrees != null)) {
+      return;
+    }
+    if (time.difference(timestamp) > config.maxLocationAge) {
+      _canReevaluateHeading = false;
+      _state = _state.copyWith(arrivalDwellStartedAt: () => null);
+      return;
+    }
+    _state = _state.copyWith(userLocation: () => location.copyWith(
+      headingDegrees: heading, clearHeading: heading == null,
+    ));
+    _evaluateTargetProximity(
+      Offset(location.normalizedX, location.normalizedY), time,
+    );
+  }
+
   /// Evaluates an incoming indoor location beacon and advances navigation state.
   /// If [isSimulated] is true (e.g. developer map tap or snap stop), jump detection and dwell
   /// timers are bypassed so arrival and auto-play trigger immediately.
@@ -167,6 +255,7 @@ class TourNavigationEngine {
     bool isSimulated = false,
   }) {
     final currentTime = now ?? location.timestamp ?? DateTime.now();
+    _canReevaluateHeading = false;
 
     // 1. Floor Validation Check
     if (location.floorId != _state.activeFloorId) {
@@ -206,7 +295,13 @@ class TourNavigationEngine {
         _state.userLocation!.normalizedY,
       );
       final newOffset = Offset(location.normalizedX, location.normalizedY);
-      final jumpDist = calculateMetricDistance(prevOffset, newOffset);
+      final previous = _state.userLocation!;
+      final jumpDist = previous.latitude != null && previous.longitude != null &&
+              location.latitude != null && location.longitude != null
+          ? const Distance(roundResult: false).as(
+              LengthUnit.Meter, previous.latLng, location.latLng,
+            )
+          : calculateMetricDistance(prevOffset, newOffset);
 
       if (jumpDist > config.maxJumpDistanceMeters) {
         // Mark jump suspicious; invalidate pending arrival dwell
@@ -221,6 +316,7 @@ class TourNavigationEngine {
 
     // Record user location
     _state = _state.copyWith(userLocation: () => location);
+    _canReevaluateHeading = !isSimulated;
 
     final userOffset = Offset(location.normalizedX, location.normalizedY);
 
@@ -238,20 +334,20 @@ class TourNavigationEngine {
   void _evaluateDeparture(Offset userOffset, DateTime currentTime) {
     if (_state.previousTargetId == null) return;
 
-    Offset? prevOffset;
+    double? distFromPrev;
     if (_state.previousTargetId == 'ENTRY') {
-      prevOffset = _entryLocation;
+      final entry = _entryLocation;
+      if (entry != null) distFromPrev = calculateMetricDistance(userOffset, entry);
     } else {
       final prevVp = _viewpoints
           .where((vp) => vp.id == _state.previousTargetId)
           .firstOrNull;
       if (prevVp != null) {
-        prevOffset = Offset(prevVp.normalizedX, prevVp.normalizedY);
+        distFromPrev = _distanceToViewpoint(userOffset, prevVp);
       }
     }
 
-    if (prevOffset != null) {
-      final distFromPrev = calculateMetricDistance(userOffset, prevOffset);
+    if (distFromPrev != null) {
       _state = _state.copyWith(
         distanceFromPrevious: () => distFromPrev,
       );
@@ -263,7 +359,13 @@ class TourNavigationEngine {
               _state.armedAutoPlayViewpointId == null &&
               _state.navigationTargetId != null &&
               _state.navigationTargetId != 'EXIT')) {
-        if (distFromPrev >= config.departureRadiusMeters) {
+        final previousViewpoint =
+            _viewpoints.where((vp) => vp.id == _state.previousTargetId).firstOrNull;
+        final departureRadius = math.max(
+          config.departureRadiusMeters,
+          (previousViewpoint?.triggerRadiusMeters ?? config.arrivalRadiusMeters) + 0.5,
+        );
+        if (distFromPrev >= departureRadius) {
           // Confirmed physical departure!
           final nextTargetId = _state.navigationTargetId;
           _state = _state.copyWith(
@@ -279,10 +381,10 @@ class TourNavigationEngine {
               _state.activeAudioViewpointId == null) {
             if (nextVp != null) {
               _speakThrottled(
-                'Next, proceed toward Viewpoint ${nextVp.order}.',
+                'Next, proceed toward Viewpoint {number}.'.tourTextWith({'number': nextVp.order}),
               );
             } else if (nextTargetId == 'EXIT') {
-              _speakThrottled('Proceed toward the Exit portal.');
+              _speakThrottled('Proceed toward the Exit portal.'.tourText);
             }
           }
         }
@@ -299,7 +401,7 @@ class TourNavigationEngine {
 
     // Handle EXIT Portal Target
     if (_state.navigationTargetId == 'EXIT') {
-      if (_exitLocation != null) {
+      if (_hasExit) {
         final distToExit = calculateMetricDistance(userOffset, _exitLocation!);
         _state = _state.copyWith(distanceToTarget: () => distToExit);
 
@@ -326,11 +428,11 @@ class TourNavigationEngine {
                     _state.landmarkName.toLowerCase() == 'colosseum';
                 if (isColosseum) {
                   _speakThrottled(
-                    'You have completed the ${_getFloorTourName(_state.activeFloorId)} itinerary. The exit is here.',
+                    'You have completed the {place} itinerary. The exit is here.'.tourTextWith({'place': _localizedFloorName}),
                   );
                 } else {
                   _speakThrottled(
-                    'You have completed the ${_state.landmarkName} itinerary. The exit is here.',
+                    'You have completed the {place} itinerary. The exit is here.'.tourTextWith({'place': _state.landmarkName}),
                   );
                 }
               }
@@ -353,8 +455,11 @@ class TourNavigationEngine {
       return;
     }
 
-    final targetOffset = Offset(targetVp.normalizedX, targetVp.normalizedY);
-    final distToTarget = calculateMetricDistance(userOffset, targetOffset);
+    final distToTarget = _distanceToViewpoint(userOffset, targetVp);
+    final configuredRadius = targetVp.triggerRadiusMeters;
+    final arrivalRadius = configuredRadius != null && configuredRadius.isFinite && configuredRadius > 0
+        ? configuredRadius : config.arrivalRadiusMeters;
+    final approachRadius = math.max(config.approachRadiusMeters, arrivalRadius);
 
     _state = _state.copyWith(distanceToTarget: () => distToTarget);
 
@@ -371,7 +476,7 @@ class TourNavigationEngine {
     }
 
     // 1. Outside Approach Radius with 2m Hysteresis (> approachRadius + 2m)
-    if (distToTarget > config.approachRadiusMeters + 2.0) {
+    if (distToTarget > approachRadius + 2.0) {
       if (_state.navigationStatus == TourNavigationStatus.approaching ||
           _state.navigationStatus == TourNavigationStatus.arrivalPending) {
         _state = _state.copyWith(
@@ -381,7 +486,7 @@ class TourNavigationEngine {
       }
     }
     // 2. Inside Approach Radius (arrivalRadius < dist <= approachRadius)
-    else if (distToTarget > config.arrivalRadiusMeters && distToTarget <= config.approachRadiusMeters) {
+    else if (distToTarget > arrivalRadius && distToTarget <= approachRadius) {
       _state = _state.copyWith(arrivalDwellStartedAt: () => null);
       if (_state.navigationStatus != TourNavigationStatus.approaching &&
           !isAtOrExploring) {
@@ -392,12 +497,21 @@ class TourNavigationEngine {
             _state.activeAudioViewpointId == null &&
             !_announcedApproachViewpointIds.contains(targetVp.id)) {
           _announcedApproachViewpointIds.add(targetVp.id);
-          _speakThrottled('Viewpoint ${targetVp.order} is ahead.');
+          _speakThrottled('Viewpoint {number} is ahead.'.tourTextWith({'number': targetVp.order}));
         }
       }
     }
     // 3. Inside Arrival Radius (<= arrivalRadius) -> Dwell Verification
-    else if (distToTarget <= config.arrivalRadiusMeters) {
+    else if (distToTarget <= arrivalRadius) {
+      final targetHeading = targetVp.targetGazeHeadingDegrees;
+      final heading = _state.userLocation?.headingDegrees;
+      if (targetHeading != null &&
+          (heading == null || !heading.isFinite || !targetHeading.isFinite ||
+           ((heading - targetHeading + 180) % 360 - 180).abs() > config.headingToleranceDegrees)) {
+        _state = _state.copyWith(arrivalDwellStartedAt: () => null);
+        _notifyState();
+        return;
+      }
       final isDwellSatisfied = isSimulated ||
           (_state.arrivalDwellStartedAt != null &&
               currentTime.difference(_state.arrivalDwellStartedAt!) >=
@@ -427,8 +541,12 @@ class TourNavigationEngine {
 
         if (_state.isVoiceGuidanceEnabled) {
           _speakThrottled(
-            'You have arrived at Viewpoint ${targetVp.order}.',
+            'You have arrived at Viewpoint {number}.'.tourTextWith({'number': targetVp.order}),
             onDone: () {
+              if (_state.navigationTargetId != targetVp.id ||
+                  _state.reachedViewpointId != targetVp.id) {
+                return;
+              }
               if (isEligibleForAutoPlay) {
                 _triggerAutoPlay(targetVp);
               } else {
@@ -521,20 +639,20 @@ class TourNavigationEngine {
         final isColosseum = _state.landmarkName.toLowerCase() == 'colosseum';
         if (isColosseum) {
           _speakThrottled(
-              'You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
+              'You have completed the {place} tour.'.tourTextWith({'place': _localizedFloorName}));
         } else {
           final floorLabel = _state.floorName ?? _state.activeFloorId;
           _speakThrottled(
-              'You have completed the ${_state.landmarkName}: $floorLabel tour.');
+              'You have completed the {place} tour.'.tourTextWith({'place': '${_state.landmarkName}: $floorLabel'}));
         }
       } else if (nextTargetId == 'EXIT') {
-        _speakThrottled('Proceed toward the Exit portal.');
+        _speakThrottled('Proceed toward the Exit portal.'.tourText);
       } else {
         final nextVp = _viewpoints
             .where((vp) => vp.id == nextTargetId)
             .firstOrNull;
         if (nextVp != null) {
-          _speakThrottled('Next, proceed toward Viewpoint ${nextVp.order}.');
+          _speakThrottled('Next, proceed toward Viewpoint {number}.'.tourTextWith({'number': nextVp.order}));
         }
       }
     }
@@ -601,7 +719,7 @@ class TourNavigationEngine {
         return vp.id;
       }
     }
-    return _exitLocation != null ? 'EXIT' : null;
+    return _hasExit ? 'EXIT' : null;
   }
 
   /// Sets or navigates directly to a target viewpoint (used for developer simulation / snap stop).
@@ -693,7 +811,8 @@ class TourNavigationEngine {
 
   /// Audio narration finishes playing.
   void onAudioCompleted() {
-    final reachedId = _state.reachedViewpointId ?? _state.selectedViewpointId;
+    final reachedId = _state.activeAudioViewpointId ??
+        _state.selectedViewpointId ?? _state.reachedViewpointId;
     _state = _state.copyWith(
       activeAudioViewpointId: () => null,
     );
@@ -715,20 +834,20 @@ class TourNavigationEngine {
                 _state.landmarkName.toLowerCase() == 'colosseum';
             if (isColosseum) {
               _speakThrottled(
-                  'You have completed the ${_getFloorTourName(_state.activeFloorId)} tour.');
+                  'You have completed the {place} tour.'.tourTextWith({'place': _localizedFloorName}));
             } else {
               final floorLabel = _state.floorName ?? _state.activeFloorId;
               _speakThrottled(
-                  'You have completed the ${_state.landmarkName}: $floorLabel tour.');
+                  'You have completed the {place} tour.'.tourTextWith({'place': '${_state.landmarkName}: $floorLabel'}));
             }
           } else if (nextTargetId == 'EXIT') {
-            _speakThrottled('Proceed toward the Exit portal.');
+            _speakThrottled('Proceed toward the Exit portal.'.tourText);
           } else {
             final nextVp = _viewpoints
                 .where((vp) => vp.id == nextTargetId)
                 .firstOrNull;
             if (nextVp != null) {
-              _speakThrottled('Next, proceed toward Viewpoint ${nextVp.order}.');
+              _speakThrottled('Next, proceed toward Viewpoint {number}.'.tourTextWith({'number': nextVp.order}));
             }
           }
         }
@@ -765,7 +884,7 @@ class TourNavigationEngine {
 
     final firstTarget = _viewpoints.isNotEmpty
         ? _viewpoints.first.id
-        : (_exitLocation != null ? 'EXIT' : null);
+        : (_hasExit ? 'EXIT' : null);
 
     _state = TourNavigationState(
       itineraryId: _state.itineraryId,

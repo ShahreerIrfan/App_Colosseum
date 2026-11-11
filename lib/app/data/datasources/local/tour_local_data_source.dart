@@ -10,21 +10,25 @@ import '../../models/landmark_overlay_model.dart';
 import '../../models/sync_manifest_model.dart';
 import '../../models/tour_bundle_model.dart';
 import '../../models/viewpoint_model.dart';
+import '../../models/pedestrian_route_data.dart';
 
 /// Contract for local caching of tour assets and manifests.
 abstract class ITourLocalDataSource {
+  Future<TourBundleModel?> getCachedTourBundle({String lang = 'en', bool allowSeed = false});
   Future<void> saveTourBundle(TourBundleModel bundle, {String lang = 'en'});
   Future<void> saveFloors(List<FloorDefinition> floors, {String lang = 'en'});
-  Future<void> saveViewpointsForFloor(String floorId, List<ViewpointModel> viewpoints);
+  Future<void> saveViewpointsForFloor(String floorId, List<ViewpointModel> viewpoints, {String lang = 'en'});
   Future<void> saveLandmarkMarkers(List<LandmarkMarkerModel> markers);
   Future<void> saveLandmarkOverlays(List<MapLandmarkOverlay> overlays);
-  Future<TourSyncManifestModel?> getCachedManifest();
+  Future<TourSyncManifestModel?> getCachedManifest({String lang = 'en'});
+  Future<DateTime?> getLastBundleDownload({String lang = 'en'});
   Future<List<FloorDefinition>> getCachedFloors({String lang = 'en'});
   Future<FloorDefinition?> getCachedFloorById(String floorId, {String lang = 'en'});
-  Future<List<ViewpointModel>> getCachedViewpointsByFloor(String floorId);
+  Future<List<ViewpointModel>> getCachedViewpointsByFloor(String floorId, {String lang = 'en'});
   Future<List<MapLandmarkOverlay>> getCachedLandmarkOverlays();
-  Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers();
+  Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers({String lang = 'en'});
   Future<List<List<LatLng>>> getCachedPedestrianStreetSegments();
+  Future<List<PedestrianRouteData>> getCachedPedestrianRoutes({String lang = 'en'});
   Future<void> clearCache();
 }
 
@@ -35,6 +39,48 @@ class TourLocalDataSource implements ITourLocalDataSource {
   final Box? box;
   final Map<String, dynamic> _memoryCache = {};
   TourBundleModel? _cachedSeedBundle;
+  int _bundleSequence = 0;
+
+  Object? _read(Box? box, String key) =>
+      box == null ? _memoryCache[key] : box.get(key);
+
+  Future<void> _write(Box? box, String key, String value) async {
+    if (box == null) {
+      _memoryCache[key] = value;
+    } else {
+      await box.put(key, value);
+    }
+  }
+
+  String? _bundleGeneration(Box? box, String lang) {
+    final raw = _read(box, 'bundle_$lang');
+    if (raw is! String) return null;
+    try {
+      return (jsonDecode(raw) as Map)['cacheGeneration'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveOverride(Box? box, String key, List<dynamic> values, {String lang = 'en'}) =>
+      _write(box, key, jsonEncode({
+        'generation': _bundleGeneration(box, lang),
+        'values': values,
+      }));
+
+  List<dynamic>? _readOverride(Box? box, String key, {String lang = 'en'}) {
+    final raw = _read(box, key);
+    if (raw is! String) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      final generation = _bundleGeneration(box, lang);
+      if (decoded is List<dynamic>) return generation == null ? decoded : null;
+      if (decoded is Map && decoded['generation'] == generation) {
+        return decoded['values'] as List<dynamic>?;
+      }
+    } catch (_) {}
+    return null;
+  }
 
   TourLocalDataSource({this.box});
 
@@ -90,37 +136,60 @@ class TourLocalDataSource implements ITourLocalDataSource {
   }
 
   @override
+  Future<TourBundleModel?> getCachedTourBundle({String lang = 'en', bool allowSeed = false}) async {
+    final raw = _read(await _getBox(), 'bundle_$lang');
+    if (raw is String) {
+      try {
+        return TourBundleModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      } catch (_) {}
+    }
+    return allowSeed && lang == 'en' ? _loadAssetSeed() : null;
+  }
+
+  @override
   Future<void> saveTourBundle(TourBundleModel bundle,
       {String lang = 'en'}) async {
-    FloorDefinition.cacheFloors(bundle.floors);
+    final box = await _getBox();
+    final generation = '${DateTime.now().microsecondsSinceEpoch}-${_bundleSequence++}';
+    final bundleJson = jsonEncode({
+      ...bundle.toJson(),
+      'cacheSchemaVersion': 1,
+      'cacheGeneration': generation,
+      'downloadedAt': DateTime.now().toUtc().toIso8601String(),
+    });
+
+    // One write commits the bundle and its manifest together. Older overrides
+    // become invalid at the same time because their generation no longer matches.
+    await _write(box, 'bundle_$lang', bundleJson);
+    FloorDefinition.cacheFloors(bundle.floors, replaceAll: true);
     LandmarkMarkerModel.cacheMarkers(bundle.landmarkMarkers);
     MapLandmarkOverlay.cacheOverlays(bundle.landmarks);
-    final box = await _getBox();
-    final bundleJson = jsonEncode(bundle.toJson());
+  }
 
-    if (box != null) {
-      await box.put('manifest', jsonEncode(bundle.manifest.toJson()));
-      await box.put('bundle_$lang', bundleJson);
-    } else {
-      _memoryCache['manifest'] = jsonEncode(bundle.manifest.toJson());
-      _memoryCache['bundle_$lang'] = bundleJson;
+  @override
+  Future<TourSyncManifestModel?> getCachedManifest({String lang = 'en'}) async {
+    final box = await _getBox();
+    final raw = box != null
+        ? box.get('bundle_$lang') as String?
+        : _memoryCache['bundle_$lang'] as String?;
+    if (raw == null) return null;
+    try {
+      final bundle = jsonDecode(raw) as Map<String, dynamic>;
+      return TourSyncManifestModel.fromJson(
+        Map<String, dynamic>.from(bundle['manifest'] as Map),
+      );
+    } catch (_) {
+      return null;
     }
   }
 
   @override
-  Future<TourSyncManifestModel?> getCachedManifest() async {
-    final box = await _getBox();
-    final raw = box != null
-        ? box.get('manifest') as String?
-        : _memoryCache['manifest'] as String?;
-
-    if (raw == null) {
-      final seed = await _loadAssetSeed();
-      return seed?.manifest;
-    }
+  Future<DateTime?> getLastBundleDownload({String lang = 'en'}) async {
+    final raw = _read(await _getBox(), 'bundle_$lang');
+    if (raw is! String) return null;
     try {
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      return TourSyncManifestModel.fromJson(json);
+      final timestamp = (jsonDecode(raw) as Map)['downloadedAt'];
+      return timestamp is String ? DateTime.tryParse(timestamp) : null;
     } catch (_) {
       return null;
     }
@@ -131,55 +200,52 @@ class TourLocalDataSource implements ITourLocalDataSource {
     FloorDefinition.cacheFloors(floors, replaceAll: true);
     final box = await _getBox();
     final jsonList = floors.map((f) => f.toJson()).toList();
-    final encoded = jsonEncode(jsonList);
-    if (box != null) {
-      await box.put('cached_floors_$lang', encoded);
-    } else {
-      _memoryCache['cached_floors_$lang'] = encoded;
-    }
+    await _saveOverride(box, 'cached_floors_$lang', jsonList, lang: lang);
   }
 
   @override
   Future<List<FloorDefinition>> getCachedFloors({String lang = 'en'}) async {
     final box = await _getBox();
-
-    // 1. Direct cached floors list if saved via live sync
-    final rawFloors = box != null
-        ? box.get('cached_floors_$lang') as String?
-        : _memoryCache['cached_floors_$lang'] as String?;
-
-    if (rawFloors != null) {
+    List<FloorDefinition>? bundledFloors;
+    final raw = _read(box, 'bundle_$lang');
+    if (raw is String) {
       try {
-        final list = jsonDecode(rawFloors) as List<dynamic>;
-        if (list.isNotEmpty) {
-          final floors = list
-              .map((item) =>
-                  FloorDefinition.fromJson(Map<String, dynamic>.from(item as Map)))
-              .toList();
-          FloorDefinition.cacheFloors(floors, replaceAll: true);
-          return floors;
-        }
+        bundledFloors = FloorDefinition.parseFloorsFromBundleJson(
+          jsonDecode(raw) as Map<String, dynamic>,
+        );
       } catch (_) {}
     }
 
-    final raw = box != null
-        ? box.get('bundle_$lang') as String?
-        : _memoryCache['bundle_$lang'] as String?;
+    // The live floor catalog supplies metadata; the bundle supplies route geometry.
+    final cachedOverride = _readOverride(box, 'cached_floors_$lang', lang: lang);
 
-    if (raw != null) {
+    if (cachedOverride != null) {
       try {
-        final json = jsonDecode(raw) as Map<String, dynamic>;
-        final floors = FloorDefinition.parseFloorsFromBundleJson(json);
-        if (floors.isNotEmpty) {
-          FloorDefinition.cacheFloors(floors);
-          return floors;
-        }
+        final list = cachedOverride;
+        final bundledById = {for (final floor in bundledFloors ?? <FloorDefinition>[]) floor.id: floor};
+        final floors = list
+            .map((item) =>
+                FloorDefinition.fromJson(Map<String, dynamic>.from(item as Map)))
+            .map((floor) {
+              final bundled = bundledById[floor.id];
+              if (bundled == null) return floor;
+              return floor.copyWith(
+                viewpoints: floor.viewpoints.isEmpty ? bundled.viewpoints : floor.viewpoints,
+                itinerary: floor.itinerary.isEmpty ? bundled.itinerary : floor.itinerary,
+              );
+            }).toList();
+        FloorDefinition.cacheFloors(floors, replaceAll: true);
+        return floors;
       } catch (_) {}
+    }
+
+    if (bundledFloors != null) {
+      FloorDefinition.cacheFloors(bundledFloors, replaceAll: true);
+      return bundledFloors;
     }
 
     final seed = await _loadAssetSeed();
     if (seed != null && seed.floors.isNotEmpty) {
-      await saveTourBundle(seed, lang: lang);
       return seed.floors;
     }
 
@@ -188,40 +254,31 @@ class TourLocalDataSource implements ITourLocalDataSource {
 
   @override
   Future<void> saveViewpointsForFloor(
-      String floorId, List<ViewpointModel> viewpoints) async {
+      String floorId, List<ViewpointModel> viewpoints, {String lang = 'en'}) async {
     FloorDefinition.updateFloorViewpoints(floorId, viewpoints);
     final box = await _getBox();
     final jsonList = viewpoints.map((vp) => vp.toJson()).toList();
-    final encoded = jsonEncode(jsonList);
-    if (box != null) {
-      await box.put('viewpoints_$floorId', encoded);
-    } else {
-      _memoryCache['viewpoints_$floorId'] = encoded;
-    }
+    await _saveOverride(box, 'viewpoints_${lang}_$floorId', jsonList, lang: lang);
   }
 
   @override
-  Future<List<ViewpointModel>> getCachedViewpointsByFloor(String floorId) async {
+  Future<List<ViewpointModel>> getCachedViewpointsByFloor(String floorId, {String lang = 'en'}) async {
     final box = await _getBox();
-    final raw = box != null
-        ? box.get('viewpoints_$floorId') as String?
-        : _memoryCache['viewpoints_$floorId'] as String?;
+    final cachedOverride = _readOverride(box, 'viewpoints_${lang}_$floorId', lang: lang);
 
-    if (raw != null) {
+    if (cachedOverride != null) {
       try {
-        final list = jsonDecode(raw) as List<dynamic>;
-        if (list.isNotEmpty) {
-          final vps = list
-              .map((item) => ViewpointModel.fromJson(
-                  Map<String, dynamic>.from(item as Map)))
-              .toList();
-          FloorDefinition.updateFloorViewpoints(floorId, vps);
-          return vps;
-        }
+        final list = cachedOverride;
+        final vps = list
+            .map((item) => ViewpointModel.fromJson(
+                Map<String, dynamic>.from(item as Map)))
+            .toList();
+        FloorDefinition.updateFloorViewpoints(floorId, vps);
+        return vps;
       } catch (_) {}
     }
 
-    final floor = await getCachedFloorById(floorId);
+    final floor = await getCachedFloorById(floorId, lang: lang);
     if (floor != null && floor.viewpoints.isNotEmpty) {
       return floor.viewpoints;
     }
@@ -234,25 +291,22 @@ class TourLocalDataSource implements ITourLocalDataSource {
       {String lang = 'en'}) async {
     final floors = await getCachedFloors(lang: lang);
     final match = floors.where((f) => f.id == floorId).toList();
-    FloorDefinition? floor = match.isNotEmpty ? match.first : FloorDefinition.fromId(floorId);
+    if (match.isEmpty) return null;
+    var floor = match.first;
 
     // Enforce live Hive cached viewpoints if present
     final box = await _getBox();
-    final rawVps = box != null
-        ? box.get('viewpoints_$floorId') as String?
-        : _memoryCache['viewpoints_$floorId'] as String?;
+    final cachedViewpoints = _readOverride(box, 'viewpoints_${lang}_$floorId', lang: lang);
 
-    if (rawVps != null) {
+    if (cachedViewpoints != null) {
       try {
-        final list = jsonDecode(rawVps) as List<dynamic>;
-        if (list.isNotEmpty) {
-          final vps = list
-              .map((item) => ViewpointModel.fromJson(
-                  Map<String, dynamic>.from(item as Map)))
-              .toList();
-          FloorDefinition.updateFloorViewpoints(floorId, vps);
-          floor = floor.copyWith(viewpoints: vps);
-        }
+        final list = cachedViewpoints;
+        final vps = list
+            .map((item) => ViewpointModel.fromJson(
+                Map<String, dynamic>.from(item as Map)))
+            .toList();
+        FloorDefinition.updateFloorViewpoints(floorId, vps);
+        floor = floor.copyWith(viewpoints: vps);
       } catch (_) {}
     }
 
@@ -264,12 +318,7 @@ class TourLocalDataSource implements ITourLocalDataSource {
     LandmarkMarkerModel.cacheMarkers(markers);
     final box = await _getBox();
     final jsonList = markers.map((m) => m.toJson()).toList();
-    final encoded = jsonEncode(jsonList);
-    if (box != null) {
-      await box.put('landmark_markers', encoded);
-    } else {
-      _memoryCache['landmark_markers'] = encoded;
-    }
+    await _saveOverride(box, 'landmark_markers', jsonList);
   }
 
   @override
@@ -277,32 +326,23 @@ class TourLocalDataSource implements ITourLocalDataSource {
     MapLandmarkOverlay.cacheOverlays(overlays);
     final box = await _getBox();
     final jsonList = overlays.map((o) => o.toJson()).toList();
-    final encoded = jsonEncode(jsonList);
-    if (box != null) {
-      await box.put('landmark_overlays', encoded);
-    } else {
-      _memoryCache['landmark_overlays'] = encoded;
-    }
+    await _saveOverride(box, 'landmark_overlays', jsonList);
   }
 
   @override
   Future<List<MapLandmarkOverlay>> getCachedLandmarkOverlays() async {
     final box = await _getBox();
-    final rawDirect = box != null
-        ? box.get('landmark_overlays') as String?
-        : _memoryCache['landmark_overlays'] as String?;
+    final cachedOverride = _readOverride(box, 'landmark_overlays');
 
-    if (rawDirect != null) {
+    if (cachedOverride != null) {
       try {
-        final list = jsonDecode(rawDirect) as List<dynamic>;
-        if (list.isNotEmpty) {
-          final overlays = list
-              .map((l) => MapLandmarkOverlay.fromJson(
-                  Map<String, dynamic>.from(l as Map)))
-              .toList();
-          MapLandmarkOverlay.cacheOverlays(overlays);
-          return overlays;
-        }
+        final list = cachedOverride;
+        final overlays = list
+            .map((l) => MapLandmarkOverlay.fromJson(
+                Map<String, dynamic>.from(l as Map)))
+            .toList();
+        MapLandmarkOverlay.cacheOverlays(overlays);
+        return overlays;
       } catch (_) {}
     }
 
@@ -314,14 +354,12 @@ class TourLocalDataSource implements ITourLocalDataSource {
       try {
         final json = jsonDecode(raw) as Map<String, dynamic>;
         final rawOverlays = json['landmarks'] as List<dynamic>? ?? [];
-        if (rawOverlays.isNotEmpty) {
-          final overlays = rawOverlays
-              .map((l) => MapLandmarkOverlay.fromJson(
-                  Map<String, dynamic>.from(l as Map)))
-              .toList();
-          MapLandmarkOverlay.cacheOverlays(overlays);
-          return overlays;
-        }
+        final overlays = rawOverlays
+            .map((l) => MapLandmarkOverlay.fromJson(
+                Map<String, dynamic>.from(l as Map)))
+            .toList();
+        MapLandmarkOverlay.cacheOverlays(overlays);
+        return overlays;
       } catch (_) {}
     }
 
@@ -334,29 +372,23 @@ class TourLocalDataSource implements ITourLocalDataSource {
   }
 
   @override
-  Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers() async {
+  Future<List<LandmarkMarkerModel>> getCachedLandmarkMarkers({String lang = 'en'}) async {
     final box = await _getBox();
-    final rawDirect = box != null
-        ? box.get('landmark_markers') as String?
-        : _memoryCache['landmark_markers'] as String?;
+    final cachedOverride = lang == 'en' ? _readOverride(box, 'landmark_markers') : null;
 
-    if (rawDirect != null) {
+    if (cachedOverride != null) {
       try {
-        final list = jsonDecode(rawDirect) as List<dynamic>;
-        if (list.isNotEmpty) {
-          final markers = list
-              .map((l) => LandmarkMarkerModel.fromJson(
-                  Map<String, dynamic>.from(l as Map)))
-              .toList();
-          LandmarkMarkerModel.cacheMarkers(markers);
-          return markers;
-        }
+        final list = cachedOverride;
+        final markers = list
+            .map((l) => LandmarkMarkerModel.fromJson(
+                Map<String, dynamic>.from(l as Map)))
+            .toList();
+        LandmarkMarkerModel.cacheMarkers(markers);
+        return markers;
       } catch (_) {}
     }
 
-    final raw = box != null
-        ? box.get('bundle_en') as String?
-        : _memoryCache['bundle_en'] as String?;
+    final raw = _read(box, 'bundle_$lang') as String?;
 
     if (raw != null) {
       try {
@@ -366,17 +398,16 @@ class TourLocalDataSource implements ITourLocalDataSource {
           FloorDefinition.cacheFloors(floors);
         }
         final rawLandmarks = json['landmarks'] as List<dynamic>? ?? [];
-        if (rawLandmarks.isNotEmpty) {
-          final markers = rawLandmarks
-              .map((l) => LandmarkMarkerModel.fromJson(
-                  Map<String, dynamic>.from(l as Map)))
-              .toList();
-          LandmarkMarkerModel.cacheMarkers(markers);
-          return markers;
-        }
+        final markers = rawLandmarks
+            .map((l) => LandmarkMarkerModel.fromJson(
+                Map<String, dynamic>.from(l as Map)))
+            .toList();
+        LandmarkMarkerModel.cacheMarkers(markers);
+        return markers;
       } catch (_) {}
     }
 
+    if (lang != 'en') return getCachedLandmarkMarkers();
     final seed = await _loadAssetSeed();
     if (seed != null && seed.landmarkMarkers.isNotEmpty) {
       return seed.landmarkMarkers;
@@ -386,43 +417,19 @@ class TourLocalDataSource implements ITourLocalDataSource {
   }
 
   @override
-  Future<List<List<LatLng>>> getCachedPedestrianStreetSegments() async {
-    final box = await _getBox();
-    final raw = box != null
-        ? box.get('bundle_en') as String?
-        : _memoryCache['bundle_en'] as String?;
+  Future<List<List<LatLng>>> getCachedPedestrianStreetSegments() async =>
+      (await getCachedPedestrianRoutes()).map((route) => route.waypoints).toList();
 
-    if (raw != null) {
+  @override
+  Future<List<PedestrianRouteData>> getCachedPedestrianRoutes({String lang = 'en'}) async {
+    final raw = _read(await _getBox(), 'bundle_$lang');
+    if (raw is String) {
       try {
-        final json = jsonDecode(raw) as Map<String, dynamic>;
-        final rawRoutes = json['pedestrianRoutes'] as List<dynamic>? ?? [];
-        final List<List<LatLng>> segments = [];
-        for (final r in rawRoutes) {
-          if (r is Map && r['waypoints'] is List) {
-            final pts = (r['waypoints'] as List).map<LatLng>((w) {
-              final wm = w as Map;
-              return LatLng(
-                (wm['latitude'] as num).toDouble(),
-                (wm['longitude'] as num).toDouble(),
-              );
-            }).toList();
-            if (pts.length >= 2) {
-              segments.add(pts);
-            }
-          }
-        }
-        if (segments.isNotEmpty) {
-          return segments;
-        }
+        return PedestrianRouteData.parseList((jsonDecode(raw) as Map)['pedestrianRoutes']);
       } catch (_) {}
     }
-
     final seed = await _loadAssetSeed();
-    if (seed != null && seed.pedestrianStreetSegments.isNotEmpty) {
-      return seed.pedestrianStreetSegments;
-    }
-
-    return const [];
+    return seed?.pedestrianRoutes ?? const [];
   }
 
   @override

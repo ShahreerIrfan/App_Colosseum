@@ -19,7 +19,6 @@ void main() {
         normalizedX: 0.80,
         normalizedY: 0.50,
         description: 'Spectacles description text',
-        audioDuration: '4 min',
       ),
       ViewpointModel(
         id: 'vp_101',
@@ -29,7 +28,6 @@ void main() {
         normalizedX: 0.88,
         normalizedY: 0.38,
         description: 'Tunnel description text',
-        audioDuration: '5 min',
       ),
       ViewpointModel(
         id: 'vp_102',
@@ -39,7 +37,6 @@ void main() {
         normalizedX: 0.68,
         normalizedY: 0.30,
         description: 'Phases description text',
-        audioDuration: '4 min',
       ),
     ];
 
@@ -81,6 +78,31 @@ void main() {
       expect(engine.state.armedAutoPlayViewpointId, equals('vp_100'));
       expect(engine.state.navigationStatus, equals(TourNavigationStatus.navigating));
       expect(spokenInstructions, contains('Begin the Underground tour. Proceed toward Viewpoint 100.'));
+    });
+
+    test('removing the arrival target cancels pending auto-play and preserves the exit', () {
+      engine.startTour(
+        floorId: 'floor_underground',
+        viewpoints: [testViewpoints.first],
+        exitLocation: const Offset(0.1, 0.5),
+      );
+      void Function()? finishArrival;
+      engine.onSpeakInstruction = (_, {onDone}) => finishArrival = onDone;
+      engine.updateLocation(const UserLocationModel(
+        floorId: 'floor_underground',
+        normalizedX: 0.8,
+        normalizedY: 0.5,
+      ), isSimulated: true);
+      expect(finishArrival, isNotNull);
+
+      engine.updateViewpoints([]);
+      expect(engine.viewpoints, isEmpty);
+      expect(engine.state.navigationTargetId, 'EXIT');
+      expect(engine.state.reachedViewpointId, isNull);
+      finishArrival!();
+      expect(autoPlayedIds, isEmpty);
+      engine.updateViewpoints([]);
+      expect(engine.state.navigationTargetId, 'EXIT');
     });
 
     test('2. Metric physical distance calculation uses Colosseum physical scale (86m x 54m)', () {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:latlong2/latlong.dart';
 import '../../core/utils/geodesic_utils.dart';
 
@@ -7,13 +8,14 @@ class ItinerarySegmentModel {
   final String fromId;
   final String toId;
   final List<Offset> points;
+  final bool usesGpsCoordinates;
   final bool isCompleted;
   final bool isActive;
 
   /// Gets geographic [LatLng] points along this walking path segment.
   List<LatLng> get latLngPoints {
     return points.map((p) {
-      if (p.dx > 1.0 && p.dy > 1.0) {
+      if (usesGpsCoordinates || (p.dx > 1.0 && p.dy > 1.0)) {
         return LatLng(p.dx, p.dy);
       }
       return GeodesicUtils.canvasOffsetToLatLng(p);
@@ -24,6 +26,7 @@ class ItinerarySegmentModel {
     required this.fromId,
     required this.toId,
     required this.points,
+    this.usesGpsCoordinates = false,
     this.isCompleted = false,
     this.isActive = false,
   });
@@ -45,6 +48,7 @@ class ItinerarySegmentModel {
       fromId: json['fromId'] as String? ?? '',
       toId: json['toId'] as String? ?? '',
       points: points,
+      usesGpsCoordinates: json['coordinateSpace'] == 'gps',
       isCompleted: json['isCompleted'] as bool? ?? false,
       isActive: json['isActive'] as bool? ?? false,
     );
@@ -54,6 +58,7 @@ class ItinerarySegmentModel {
         'fromId': fromId,
         'toId': toId,
         'points': points.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+        if (usesGpsCoordinates) 'coordinateSpace': 'gps',
         'isCompleted': isCompleted,
         'isActive': isActive,
       };
@@ -69,6 +74,7 @@ class ItinerarySegmentModel {
       fromId: fromId ?? this.fromId,
       toId: toId ?? this.toId,
       points: points ?? this.points,
+      usesGpsCoordinates: usesGpsCoordinates,
       isCompleted: isCompleted ?? this.isCompleted,
       isActive: isActive ?? this.isActive,
     );
@@ -81,10 +87,13 @@ class ItinerarySegmentModel {
           runtimeType == other.runtimeType &&
           fromId == other.fromId &&
           toId == other.toId &&
+          listEquals(points, other.points) &&
+          usesGpsCoordinates == other.usesGpsCoordinates &&
           isCompleted == other.isCompleted &&
           isActive == other.isActive;
 
   @override
-  int get hashCode =>
-      fromId.hashCode ^ toId.hashCode ^ isCompleted.hashCode ^ isActive.hashCode;
+  int get hashCode => Object.hash(
+        fromId, toId, Object.hashAll(points), usesGpsCoordinates, isCompleted, isActive,
+      );
 }

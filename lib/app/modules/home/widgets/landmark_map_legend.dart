@@ -1,3 +1,4 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_radius.dart';
@@ -41,7 +42,7 @@ class LandmarkMapLegend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Landmarks',
+            'Landmarks'.tourText,
             style: textTheme.labelSmall?.copyWith(
               fontWeight: FontWeight.w700,
               color: colors.mutedForeground,

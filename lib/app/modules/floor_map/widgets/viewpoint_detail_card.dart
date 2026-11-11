@@ -1,7 +1,9 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/theme/theme_extensions.dart';
+import '../../../core/utils/tour_image_provider.dart';
 import '../../../data/models/viewpoint_model.dart';
 
 /// Contextual bottom sheet/card showing details of the selected viewpoint.
@@ -172,7 +174,7 @@ class ViewpointDetailCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 5.0),
                         Text(
-                          viewpoint.isVisited ? 'Visited' : 'Mark as Visited',
+                          viewpoint.isVisited ? 'Visited'.tourText : 'Mark as Visited'.tourText,
                           style: TextStyle(
                             color: viewpoint.isVisited
                                 ? colors.primary
@@ -408,7 +410,7 @@ class ViewpointDetailCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 5.5),
                       Text(
-                        viewpoint.isVisited ? 'Visited' : 'Mark as Visited',
+                        viewpoint.isVisited ? 'Visited'.tourText : 'Mark as Visited'.tourText,
                         style: TextStyle(
                           color: viewpoint.isVisited
                               ? colors.primary
@@ -433,8 +435,8 @@ class ViewpointDetailCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14.0),
               child: Stack(
                 children: [
-                  Image.asset(
-                    viewpoint.imageAsset!,
+                  Image(
+                    image: tourImageProvider(viewpoint.imageAsset!),
                     height: 135.0,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -528,7 +530,7 @@ class ViewpointDetailCard extends StatelessWidget {
                     color: colors.primaryForeground,
                   ),
                   label: Text(
-                    isPlaying ? 'Pause Audio' : 'Listen Guide',
+                    isPlaying ? 'Pause Audio'.tourText : 'Listen Guide'.tourText,
                     style: TextStyle(
                       color: colors.primaryForeground,
                       fontWeight: FontWeight.w700,
@@ -561,7 +563,7 @@ class ViewpointDetailCard extends StatelessWidget {
                       color: colors.primary,
                     ),
                     label: Text(
-                      'Directions',
+                      'Directions'.tourText,
                       style: TextStyle(
                         color: colors.primary,
                         fontWeight: FontWeight.w700,

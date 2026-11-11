@@ -1,0 +1,166 @@
+import 'package:get/get.dart';
+
+import 'tour_de.dart';
+import 'tour_es.dart';
+import 'tour_fr.dart';
+import 'tour_ja.dart';
+import 'tour_ko.dart';
+import 'tour_pt.dart';
+
+/// English source phrases are also the fallback for unsupported locales.
+abstract final class TourLocalizations {
+  static const _translations = {
+    'en': <String, String>{},
+    'it': _italian,
+    'es': tourEs,
+    'fr': tourFr,
+    'de': tourDe,
+    'pt': tourPt,
+    'ja': tourJa,
+    'ko': tourKo,
+  };
+  static Iterable<String> get supportedLanguages => _translations.keys;
+  static String get currentLanguage => Get.locale?.languageCode ?? 'en';
+
+  static String translate(String phrase, [Map<String, Object> values = const {}]) {
+    final localized = _translations[currentLanguage]?[phrase] ?? phrase;
+    return localized.replaceAllMapped(RegExp(r'\{(\w+)\}'), (match) {
+      return values[match[1]]?.toString() ?? match[0]!;
+    });
+  }
+
+  static const _italian = {
+    'Enter landmark': 'Entra nel sito',
+    'Download for offline use': 'Scarica per l’uso offline',
+    'Downloaded': 'Scaricato',
+    'Update download': 'Aggiorna download',
+    'Downloaded landmarks': 'Siti scaricati',
+    'Available offline': 'Disponibile offline',
+    'Offline map': 'Mappa offline',
+    'This offline map shows saved routes and viewpoints. Satellite imagery is available in the live tour.': 'Questa mappa offline mostra i percorsi e i punti di interesse salvati. Le immagini satellitari sono disponibili nella visita online.',
+    'Downloaded aerial imagery with saved routes and viewpoints.': 'Immagini aeree scaricate con percorsi e punti di interesse salvati.',
+    'Open live tour': 'Apri la visita online',
+    'Preparing download…': 'Preparazione del download…',
+    'Estimated download: {size} MB': 'Dimensione stimata: {size} MB',
+    'The download size could not be estimated.': 'Non è stato possibile stimare la dimensione del download.',
+    'Download failed. Check your connection and available storage.': 'Download non riuscito. Controlla la connessione e lo spazio disponibile.',
+    'Remove download?': 'Rimuovere il download?',
+    'Remove download': 'Rimuovi download',
+    'No landmarks downloaded in this language.': 'Nessun sito scaricato in questa lingua.',
+    'Could not open downloads.': 'Impossibile aprire i download.',
+    'Could not remove the download.': 'Impossibile rimuovere il download.',
+    'Install an offline voice for this language in your phone’s text-to-speech settings. You can read the tour without it.': 'Installa una voce offline per questa lingua nelle impostazioni di sintesi vocale del telefono. Puoi comunque leggere i testi della visita.',
+    'Install a voice for this language in Settings → Accessibility → Spoken Content → Voices. You can read the tour without it.': 'Installa una voce per questa lingua in Impostazioni → Accessibilità → Contenuto letto ad alta voce → Voci. Puoi comunque leggere i testi della visita.',
+    'Read the privacy notice': 'Leggi l’informativa sulla privacy',
+    'Could not open the privacy notice.': 'Impossibile aprire l’informativa sulla privacy.',
+    'Pause': 'Pausa',
+    'Entry': 'Ingresso',
+    'General': 'Normale',
+    'General View': 'Vista normale',
+    'Satellite View': 'Vista satellitare',
+    'General map view': 'Vista normale della mappa',
+    'Satellite map view': 'Vista satellitare della mappa',
+    'Standard map view': 'Mappa standard',
+    'High-resolution satellite view': 'Immagini satellitari ad alta risoluzione',
+    'Viewing {floor}': 'Piano visualizzato: {floor}',
+    'Tour Ready': 'Tour pronto',
+    'Exit ahead ({distance} m)': 'Uscita più avanti ({distance} m)',
+    'Heading to Exit': 'Verso l’uscita',
+    'Stop {stop} ({distance} m)': 'Tappa {stop} ({distance} m)',
+    'Heading to Stop {stop}': 'Verso la tappa {stop}',
+    'Approaching Stop {stop}': 'In prossimità della tappa {stop}',
+    'Confirming arrival at Stop {stop}…': 'Verifica dell’arrivo alla tappa {stop}…',
+    'Arrived at Stop {stop}': 'Arrivo alla tappa {stop}',
+    'Listening to Stop {stop}': 'Ascolto della tappa {stop}',
+    'Exploring Stop {stop}': 'Visita della tappa {stop}',
+    'Stop {stop} · Mark Visited': 'Tappa {stop} · Segna come visitata',
+    'Departing Stop {stop}': 'In partenza dalla tappa {stop}',
+    'Calibrating indoor GPS…': 'Calibrazione del GPS al chiuso…',
+    'Floor Tour Complete': 'Tour del piano completato',
+    'Choose a language for the tour and narration.': 'Scegli la lingua del tour e della narrazione.',
+    'English audio guide is available now.\nAdditional languages will be released soon.':
+        'L’audioguida è disponibile in inglese. Altre lingue saranno disponibili prossimamente.',
+    'Continue with {language}': 'Continua in {language}',
+    'Connect to the internet to download this language.':
+        'Connettiti a Internet per scaricare questa lingua.',
+    'Change language': 'Cambia lingua',
+    'Start Tour': 'Inizia il tour',
+    'End Tour': 'Termina il tour',
+    'Skip': 'Salta',
+    'Enter': 'Entra',
+    'Exit': 'Esci',
+    'Show Itinerary': 'Mostra itinerario',
+    'Directions': 'Indicazioni',
+    'Landmarks': 'Luoghi di interesse',
+    'Active': 'In corso',
+    'Select Floor': 'Seleziona il piano',
+    'Select map view': 'Seleziona la vista della mappa',
+    'Normal': 'Normale',
+    'Satellite': 'Satellite',
+    'Zoom In': 'Ingrandisci',
+    'Zoom Out': 'Riduci',
+    'Recenter': 'Ricentra',
+    'Close map view menu': 'Chiudi il menu della mappa',
+    'Close floor menu': 'Chiudi il menu dei piani',
+    'Exit landmark view and return to itinerary map': 'Esci dalla visita e torna alla mappa dell’itinerario',
+    'Listen Guide': 'Ascolta la guida',
+    'Pause Audio': 'Metti in pausa',
+    'Visited': 'Visitato',
+    'Mark as Visited': 'Segna come visitato',
+    'Resume': 'Riprendi',
+    'Reset': 'Ripristina',
+    'Field Test': 'Test sul campo',
+    'Snap Stop': 'Posizionati sulla tappa',
+    'GPS location unavailable': 'Posizione GPS non disponibile',
+    'You are not in the location': 'Non ti trovi nell’area',
+    'Walking Paused · Relocate to an open path & tap Resume': 'Percorso in pausa. Spostati in un’area aperta e tocca Riprendi',
+    'Move phone in figure-8 to improve compass accuracy': 'Muovi il telefono a forma di otto per calibrare la bussola',
+    'Narration is unavailable. You can still read the guide.': 'La narrazione non è disponibile. Puoi comunque leggere la guida.',
+    'No viewpoints': 'Nessuna tappa',
+    'Offline tour': 'Tour offline',
+    'Offline tour downloads': 'Download del tour offline',
+    'No recorded download yet.': 'Nessun download registrato.',
+    'Downloads include tour content. Map tiles and device voices are separate.': 'Il download include i contenuti del tour. Le mappe e le voci del dispositivo sono separate.',
+    'Downloading…': 'Download in corso…',
+    'Download latest tour': 'Scarica l’ultima versione del tour',
+    'Tour analytics privacy': 'Privacy delle statistiche del tour',
+    'Tour analytics': 'Statistiche del tour',
+    'Share tour activity': 'Condividi l’attività del tour',
+    'Cancel': 'Annulla',
+    'Save': 'Salva',
+    'Download failed. Your saved tour is still available.': 'Download non riuscito. Il tour salvato è ancora disponibile.',
+    'Tour downloaded.': 'Tour scaricato.',
+    'Unable to refresh the tour.': 'Impossibile aggiornare il tour.',
+    'Immersive Audio Experience': 'Esperienza audio immersiva',
+    'Select Language': 'Seleziona la lingua',
+    'AVAILABLE NOW': 'DISPONIBILI ORA',
+    'RELEASING SOON': 'PROSSIMAMENTE',
+    'Coming Soon': 'Prossimamente',
+    'Full Audio Guide': 'Audioguida completa',
+    'Releasing Soon': 'Prossimamente',
+    'You can change your language anytime in Settings': 'Puoi cambiare lingua in qualsiasi momento dalle impostazioni',
+    'You are near {place}': 'Sei vicino a {place}',
+    'Do you want to enter {place} or skip to next?': 'Vuoi visitare {place} o passare alla prossima tappa?',
+    'Next: {place}': 'Prossima tappa: {place}',
+    '{count} landmark remaining': 'Rimane {count} luogo da visitare',
+    '{count} landmarks remaining': 'Rimangono {count} luoghi da visitare',
+    'Begin the {floor} tour. Proceed toward Viewpoint {number}.': 'Inizia il tour di {floor}. Dirigiti verso la tappa {number}.',
+    'Welcome to {place}. Proceed to Viewpoint {number}{title}.': 'Ti diamo il benvenuto a {place}. Dirigiti verso la tappa {number}{title}.',
+    'Next, proceed toward Viewpoint {number}.': 'Ora dirigiti verso la tappa {number}.',
+    'Proceed toward the Exit portal.': 'Dirigiti verso l’uscita.',
+    'You have completed the {place} itinerary. The exit is here.': 'Hai completato l’itinerario di {place}. L’uscita è qui.',
+    'Viewpoint {number} is ahead.': 'La tappa {number} è poco più avanti.',
+    'You have arrived at Viewpoint {number}.': 'Sei alla tappa {number}.',
+    'You have completed the {place} tour.': 'Hai completato il tour di {place}.',
+    'Completed: {done}/{total}': 'Completate: {done}/{total}',
+    '✓ Completed {done}/{total}': '✓ Completate {done}/{total}',
+    'Last download: {time}': 'Ultimo download: {time}',
+    'Explore the Colosseum through panoramic views and immersive audio narration. Navigate through 5 iconic stops.': 'Esplora il Colosseo attraverso viste panoramiche e un’audioguida. Visita cinque tappe iconiche.',
+    'Optionally share tour activity, such as stops visited and narration completion. Analytics uses a random identifier and does not collect GPS coordinates or your name. Sent events expire after 90 days. Turning this off clears unsent events.': 'Puoi condividere l’attività del tour, come le tappe visitate e gli ascolti completati. Le statistiche usano un identificativo casuale e non raccolgono coordinate GPS o nomi. Gli eventi inviati scadono dopo 90 giorni. Disattivando la condivisione, gli eventi in attesa vengono eliminati.',
+  };
+}
+
+extension LocalizedTourPhrase on String {
+  String get tourText => TourLocalizations.translate(this);
+  String tourTextWith(Map<String, Object> values) => TourLocalizations.translate(this, values);
+}

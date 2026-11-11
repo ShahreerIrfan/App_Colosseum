@@ -1,3 +1,4 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -180,7 +181,7 @@ class LanguageTile extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Active',
+                            'Active'.tourText,
                             style: textTheme.labelSmall?.copyWith(
                               color: colors.primary,
                               fontSize: 11,
@@ -221,7 +222,7 @@ class LanguageTile extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Coming Soon',
+                          'Coming Soon'.tourText,
                           style: textTheme.labelSmall?.copyWith(
                             color: colors.mutedForeground.withValues(alpha: 0.85),
                             fontSize: 10,

@@ -1,10 +1,14 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/theme_extensions.dart';
 import '../../../core/utils/geodesic_utils.dart';
+import '../../../core/utils/tour_image_provider.dart';
 import '../../../data/models/map_view_type.dart';
+import '../../../data/models/offline_aerial_map.dart';
 import '../../../data/models/tour_navigation_state.dart';
 import '../controllers/floor_map_controller.dart';
 import '../widgets/floor_bottom_bar.dart';
@@ -23,6 +27,8 @@ class FloorMapView extends GetView<FloorMapController> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final textTheme = context.textTheme;
+    final offline = controller.offlineLandmark;
+    final aerialMap = offline?.aerialMap;
 
     return PopScope(
       canPop:
@@ -68,7 +74,7 @@ class FloorMapView extends GetView<FloorMapController> {
                   ),
                   children: [
                     // Layer 1: Dynamic Google Maps Base Tiles (General vs Satellite)
-                    Obx(() {
+                    if (offline == null) Obx(() {
                       final viewType = controller.selectedMapView.value;
                       final isSatellite = viewType == MapViewType.satellite;
 
@@ -87,6 +93,13 @@ class FloorMapView extends GetView<FloorMapController> {
                         },
                       );
                     }),
+                    if (aerialMap != null)
+                      OverlayImageLayer(overlayImages: [
+                        OverlayImage(
+                          bounds: aerialMap.bounds,
+                          imageProvider: tourImageProvider(aerialMap.imagePath),
+                        ),
+                      ]),
 
                     // Layer 3: Guided Itinerary Tour Walking Path & Architectural Geometry
                     Obx(() {
@@ -171,13 +184,76 @@ class FloorMapView extends GetView<FloorMapController> {
                 ),
               ),
 
+              if (offline != null)
+                Positioned(
+                  top: 12,
+                  left: 16,
+                  child: ActionChip(
+                    avatar: const Icon(Icons.offline_pin_outlined, size: 18),
+                    label: Text('Offline map'.tourText),
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(offline.landmark.name),
+                        content: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(aerialMap == null
+                                  ? 'This offline map shows saved routes and viewpoints. Satellite imagery is available in the live tour.'.tourText
+                                  : 'Downloaded aerial imagery with saved routes and viewpoints.'.tourText),
+                              if (aerialMap != null)
+                                TextButton(
+                                  onPressed: () => launchUrl(Uri.parse(OfflineAerialMap.sourceUrl)),
+                                  child: const Text('AGEA Ortofoto 2023'),
+                                ),
+                              if (aerialMap != null)
+                                TextButton(
+                                  onPressed: () => launchUrl(Uri.parse(OfflineAerialMap.licenseUrl)),
+                                  child: const Text('CC BY 4.0'),
+                                ),
+                              const SizedBox(height: 8),
+                              if (offline.landmark.thumbnailUrl case final String thumbnail)
+                                if (thumbnail.isNotEmpty)
+                                  Image(image: tourImageProvider(thumbnail), height: 130,
+                                    errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                              Text(offline.landmark.description),
+                              for (final route in offline.routes)
+                                if (route.instruction.isNotEmpty)
+                                  Padding(padding: const EdgeInsets.only(top: 8), child: Text(route.instruction)),
+                            ],
+                          ),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context), child: Text('Close'.tourText)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (aerialMap != null)
+                const Positioned(
+                  left: 16,
+                  bottom: 78,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: Color(0xEFFFFFFF)),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      child: Text(OfflineAerialMap.attribution,
+                        style: TextStyle(color: Colors.black87, fontSize: 10)),
+                    ),
+                  ),
+                ),
+
               // 2. Exit Landmark Button (Top Right)
               Positioned(
                 top: 12.0,
                 right: 16.0,
                 child: Semantics(
                   button: true,
-                  label: 'Exit landmark view and return to itinerary map',
+                  label: 'Exit landmark view and return to itinerary map'.tourText,
                   child: Material(
                     color: colors.card,
                     borderRadius: BorderRadius.circular(22.0),
@@ -209,7 +285,7 @@ class FloorMapView extends GetView<FloorMapController> {
                             ),
                             const SizedBox(width: 5.0),
                             Text(
-                              'Exit',
+                              'Exit'.tourText,
                               style: TextStyle(
                                 color: colors.foreground,
                                 fontWeight: FontWeight.w800,
@@ -251,7 +327,7 @@ class FloorMapView extends GetView<FloorMapController> {
                           // Zoom In Button
                           _ToolbarButton(
                             icon: Icons.add_rounded,
-                            tooltip: 'Zoom In',
+                            tooltip: 'Zoom In'.tourText,
                             onPressed: controller.zoomIn,
                             colors: colors,
                           ),
@@ -265,7 +341,7 @@ class FloorMapView extends GetView<FloorMapController> {
                           // Zoom Out Button
                           _ToolbarButton(
                             icon: Icons.remove_rounded,
-                            tooltip: 'Zoom Out',
+                            tooltip: 'Zoom Out'.tourText,
                             onPressed: controller.zoomOut,
                             colors: colors,
                           ),
@@ -279,11 +355,11 @@ class FloorMapView extends GetView<FloorMapController> {
                           // Recenter on Location Button
                           _ToolbarButton(
                             icon: Icons.my_location_rounded,
-                            tooltip: 'Recenter',
+                            tooltip: 'Recenter'.tourText,
                             onPressed: controller.recenter,
                             colors: colors,
                           ),
-                          VerticalDivider(
+                          if (offline == null) VerticalDivider(
                             width: 1.0,
                             thickness: 1.0,
                             color: colors.border,
@@ -291,7 +367,7 @@ class FloorMapView extends GetView<FloorMapController> {
                             endIndent: 6.0,
                           ),
                           // Toggle Map View (Satellite vs General) Button
-                          Obx(() {
+                          if (offline == null) Obx(() {
                             final isSatellite =
                                 controller.selectedMapView.value ==
                                 MapViewType.satellite;
@@ -372,7 +448,7 @@ class FloorMapView extends GetView<FloorMapController> {
                             ),
                             Flexible(
                               child: Text(
-                                'You are not in the location',
+                                'You are not in the location'.tourText,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -415,7 +491,7 @@ class FloorMapView extends GetView<FloorMapController> {
                                     ),
                                     const SizedBox(width: 4.0),
                                     Text(
-                                      'Field Test',
+                                      'Field Test'.tourText,
                                       style: TextStyle(
                                         color: colors.primary,
                                         fontWeight: FontWeight.w700,
@@ -436,7 +512,7 @@ class FloorMapView extends GetView<FloorMapController> {
                   final isPlayground = controller.isPlaygroundMode.value;
                   final isViewingOther = controller.isViewingDifferentFloor;
                   final statusText = isViewingOther
-                      ? 'Viewing ${controller.currentFloor.value.displayName}'
+                      ? 'Viewing {floor}'.tourTextWith({'floor': controller.currentFloor.value.displayName})
                       : _getTourStatusText(state);
                   final statusIcon = isViewingOther
                       ? Icons.visibility_rounded
@@ -541,8 +617,8 @@ class FloorMapView extends GetView<FloorMapController> {
                                       const SizedBox(width: 3.0),
                                       Text(
                                         controller.isDisplacementPaused.value
-                                            ? 'Resume'
-                                            : 'Pause',
+                                            ? 'Resume'.tourText
+                                            : 'Pause'.tourText,
                                         style: TextStyle(
                                           color:
                                               controller
@@ -588,7 +664,7 @@ class FloorMapView extends GetView<FloorMapController> {
                                       ),
                                       const SizedBox(width: 3.0),
                                       Text(
-                                        'Snap Stop',
+                                        'Snap Stop'.tourText,
                                         style: TextStyle(
                                           color: colors.primary,
                                           fontWeight: FontWeight.w700,
@@ -630,7 +706,7 @@ class FloorMapView extends GetView<FloorMapController> {
                                       ),
                                       const SizedBox(width: 3.0),
                                       Text(
-                                        'Reset',
+                                        'Reset'.tourText,
                                         style: TextStyle(
                                           color: colors.primary,
                                           fontWeight: FontWeight.w700,
@@ -730,9 +806,9 @@ class FloorMapView extends GetView<FloorMapController> {
                             color: Color(0xFFD97706),
                           ),
                           const SizedBox(width: 6.0),
-                          const Flexible(
+                          Flexible(
                             child: Text(
-                              'Walking Paused · Relocate to an open path & tap Resume',
+                              'Walking Paused · Relocate to an open path & tap Resume'.tourText,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -756,7 +832,7 @@ class FloorMapView extends GetView<FloorMapController> {
                                 color: const Color(0xFFD97706),
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
@@ -766,7 +842,7 @@ class FloorMapView extends GetView<FloorMapController> {
                                   ),
                                   SizedBox(width: 2.0),
                                   Text(
-                                    'Resume',
+                                    'Resume'.tourText,
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w700,
@@ -784,6 +860,28 @@ class FloorMapView extends GetView<FloorMapController> {
                 }),
               ),
 
+              Positioned(
+                top: 155,
+                left: 20,
+                right: 20,
+                child: Obx(() {
+                  final message = controller.narrationError.value;
+                  if (message == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return Center(
+                    child: Material(
+                      color: colors.card,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(message.tourText),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+
               // 5. Non-blocking Compass Calibration Notification (only when sensor accuracy is low)
               Positioned(
                 top: 196.0,
@@ -791,7 +889,8 @@ class FloorMapView extends GetView<FloorMapController> {
                 right: 20.0,
                 child: Obx(() {
                   final orientation = controller.userOrientation.value;
-                  if (!orientation.isCalibrating) {
+                  final needsCompass = controller.needsCompassForAutoPlay;
+                  if (!orientation.isCalibrating && !needsCompass) {
                     return const SizedBox.shrink();
                   }
 
@@ -825,14 +924,16 @@ class FloorMapView extends GetView<FloorMapController> {
                             color: Colors.amber.shade800,
                           ),
                           const SizedBox(width: 6.0),
-                          Text(
-                            'Move phone in figure-8 to improve compass accuracy',
+                          Flexible(child: Text(
+                            orientation.isCalibrating
+                                ? 'Move phone in figure-8 to improve compass accuracy'.tourText
+                                : 'Compass unavailable. Open this Viewpoint to play narration manually.',
                             style: textTheme.bodySmall?.copyWith(
                               color: colors.foreground,
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                             ),
-                          ),
+                          )),
                         ],
                       ),
                     ),
@@ -1013,6 +1114,31 @@ class FloorMapView extends GetView<FloorMapController> {
                   ),
                 ),
               ),
+              Positioned.fill(
+                child: Obx(() {
+                  if (!controller.liveFloorUnavailable.value) return const SizedBox.shrink();
+                  return ColoredBox(
+                    color: colors.background.withValues(alpha: 0.96),
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('This floor is no longer available.'.tourText, style: textTheme.titleMedium),
+                            for (final floor in controller.availableFloors)
+                              TextButton(
+                                onPressed: () => controller.switchFloor(floor.id),
+                                child: Text(floor.displayName),
+                              ),
+                            TextButton(onPressed: () => Get.back(), child: Text('Exit'.tourText)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
             ],
           ),
         ),
@@ -1021,45 +1147,44 @@ class FloorMapView extends GetView<FloorMapController> {
   }
 
   String _getTourStatusText(TourNavigationState state) {
+    String label(String? id) {
+      final viewpoint = controller.viewpoints.firstWhereOrNull((viewpoint) => viewpoint.id == id);
+      return viewpoint?.order.toString() ?? id ?? '–';
+    }
+
+    String forStop(String phrase, String? id) => phrase.tourTextWith({'stop': label(id)});
+    final distance = state.distanceToTarget?.toStringAsFixed(0);
     switch (state.navigationStatus) {
       case TourNavigationStatus.idle:
-        return 'Tour Ready';
+        return 'Tour Ready'.tourText;
       case TourNavigationStatus.navigating:
       case TourNavigationStatus.navigatingToNext:
         if (state.navigationTargetId == 'EXIT') {
-          return state.distanceToTarget != null
-              ? 'Exit ahead (${state.distanceToTarget!.toStringAsFixed(0)}m)'
-              : 'Heading to Exit';
+          return distance == null ? 'Heading to Exit'.tourText
+              : 'Exit ahead ({distance} m)'.tourTextWith({'distance': distance});
         }
-        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
-        return state.distanceToTarget != null
-            ? 'Stop $targetNum (${state.distanceToTarget!.toStringAsFixed(0)}m)'
-            : 'Heading to Stop $targetNum';
+        return distance == null ? forStop('Heading to Stop {stop}', state.navigationTargetId)
+            : 'Stop {stop} ({distance} m)'.tourTextWith({
+                'stop': label(state.navigationTargetId), 'distance': distance,
+              });
       case TourNavigationStatus.approaching:
-        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
-        return 'Approaching Stop $targetNum (${state.distanceToTarget?.toStringAsFixed(0)}m)';
+        return forStop('Approaching Stop {stop}', state.navigationTargetId);
       case TourNavigationStatus.arrivalPending:
-        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
-        return 'Confirming arrival at Stop $targetNum…';
+        return forStop('Confirming arrival at Stop {stop}…', state.navigationTargetId);
       case TourNavigationStatus.arrived:
-        final targetNum = state.navigationTargetId?.replaceAll('vp_', '');
-        return 'Arrived at Stop $targetNum';
+        return forStop('Arrived at Stop {stop}', state.navigationTargetId);
       case TourNavigationStatus.viewpointAudioPlaying:
-        final targetNum = state.activeAudioViewpointId?.replaceAll('vp_', '');
-        return 'Listening to Stop $targetNum';
+        return forStop('Listening to Stop {stop}', state.activeAudioViewpointId);
       case TourNavigationStatus.waitingAtViewpoint:
-        final targetNum = state.reachedViewpointId?.replaceAll('vp_', '');
-        return 'Exploring Stop $targetNum';
+        return forStop('Exploring Stop {stop}', state.reachedViewpointId);
       case TourNavigationStatus.waitingForVisited:
-        final targetNum = state.reachedViewpointId?.replaceAll('vp_', '');
-        return 'Stop $targetNum · Mark Visited';
+        return forStop('Stop {stop} · Mark Visited', state.reachedViewpointId);
       case TourNavigationStatus.waitingForDeparture:
-        final targetNum = state.previousTargetId?.replaceAll('vp_', '');
-        return 'Departing Stop $targetNum';
+        return forStop('Departing Stop {stop}', state.previousTargetId);
       case TourNavigationStatus.locationUncertain:
-        return 'Calibrating indoor GPS…';
+        return 'Calibrating indoor GPS…'.tourText;
       case TourNavigationStatus.itineraryComplete:
-        return 'Underground Tour Complete';
+        return 'Floor Tour Complete'.tourText;
     }
   }
 

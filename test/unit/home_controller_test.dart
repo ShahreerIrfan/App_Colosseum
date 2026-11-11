@@ -122,17 +122,18 @@ void main() {
       expect(controller.distanceToColosseumMeters!, greaterThan(600.0));
     });
 
-    test('startTour initializes active tour, default location, and generates route', () {
+    test('startTour plans from the default starting point without inventing a GPS fix', () {
       expect(controller.isTourActive.value, isFalse);
       expect(controller.currentTourRoutePoints, isEmpty);
 
       controller.startTour();
 
       expect(controller.isTourActive.value, isTrue);
-      expect(controller.userLocation.value, equals(HomeController.defaultTourStartLocation));
+      expect(controller.userLocation.value, isNull);
+      expect(controller.approachingLandmark.value, isNull);
       // Route follows realistic pedestrian streets with multiple dense waypoints
       expect(controller.currentTourRoutePoints.length, greaterThan(15));
-      expect(controller.currentTourRoutePoints.first, equals(HomeController.defaultTourStartLocation));
+      expect(controller.currentTourRoutePoints.first, HomeController.defaultTourStartLocation);
     });
 
     test('dynamic itinerary route updates when user moves', () {

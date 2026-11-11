@@ -71,6 +71,7 @@ class TourConfig {
 
   /// Maximum allowable positioning error before marking location uncertain.
   final double maxAcceptableAccuracyMeters;
+  final double headingToleranceDegrees;
 
   /// Physical dimensions of Colosseum Hypogeum in meters (East-West x North-South).
   final double arenaWidthMeters;
@@ -87,10 +88,12 @@ class TourConfig {
     this.maxJumpDistanceMeters = 15.0,
     this.maxLocationAge = const Duration(seconds: 5),
     this.maxAcceptableAccuracyMeters = 25.0,
+    this.headingToleranceDegrees = 20.0,
     this.arenaWidthMeters = 86.0,
     this.arenaHeightMeters = 54.0,
     this.autoMarkVisitedOnAudioComplete = false,
   });
+
 }
 
 /// Immutable state model capturing the full indoor guided-tour state.

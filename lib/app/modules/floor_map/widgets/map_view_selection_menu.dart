@@ -1,3 +1,4 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_radius.dart';
@@ -52,7 +53,7 @@ class MapViewSelectionMenu extends StatelessWidget {
                 ),
                 const SizedBox(width: 8.0),
                 Text(
-                  'Select map view',
+                  'Select map view'.tourText,
                   style: TextStyle(
                     color: colors.foreground,
                     fontWeight: FontWeight.w800,
@@ -62,7 +63,7 @@ class MapViewSelectionMenu extends StatelessWidget {
                 ),
                 const Spacer(),
                 Semantics(
-                  label: 'Close map view menu',
+                  label: 'Close map view menu'.tourText,
                   button: true,
                   child: InkWell(
                     key: const Key('close_map_view_menu_button'),

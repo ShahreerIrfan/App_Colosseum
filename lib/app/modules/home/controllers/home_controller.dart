@@ -1,5 +1,5 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -16,7 +16,11 @@ import '../../../data/repositories/i_tour_repository.dart';
 import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../data/services/compass_service.dart';
 import '../../../data/services/gps_location_service.dart';
+import '../../../data/services/offline_landmark_store.dart';
+import '../../../data/services/tour_sync_service.dart';
+import '../../../data/models/tour_bundle_model.dart';
 import '../../../data/services/pedestrian_street_router.dart';
+import '../../../data/services/tour_analytics_service.dart';
 import '../../../routes/app_pages.dart';
 import '../views/allPointsMap.dart';
 
@@ -25,13 +29,32 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   final ITourRepository tourRepository;
   final GpsLocationService gpsLocationService;
   final CompassService compassService;
+  String ttsLocale = 'en-US';
+  String tourLanguage = 'en';
+  String? _outdoorAnalyticsSession;
 
+  void _recordOutdoorEvent(String type, {String? landmark}) {
+    final session = _outdoorAnalyticsSession;
+    if (session == null) return;
+    unawaited(TourAnalyticsService.instance.record(
+      sessionId: session, type: type, tourKind: 'outdoor',
+      language: tourLanguage, landmarkId: landmark,
+    ));
+  }
+
+  void _finishOutdoorAnalyticsIfDone() {
+    if (remainingTourLandmarks.isNotEmpty) return;
+    _recordOutdoorEvent('tour_completed');
+    _outdoorAnalyticsSession = null;
+  }
+  final lastBundleDownload = Rxn<DateTime>();
+  final isDownloadingBundle = false.obs;
+  final bundleDownloadMessage = RxnString();
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<UserOrientationState>? _compassSubscription;
-  Timer? _periodicSyncTimer;
+  StreamSubscription<TourBundleModel>? _tourUpdates;
+  TourSyncService? get _sync => Get.isRegistered<TourSyncService>() ? Get.find<TourSyncService>() : null;
 
-  /// Periodic background sync interval for live landmark updates (5 minutes).
-  static const Duration periodicSyncInterval = Duration(minutes: 5);
 
   static const LatLng colosseumCoordinates = LatLng(41.890210, 12.492231);
   static const double defaultZoom = 16.5;
@@ -95,36 +118,48 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     }).toList();
   }
 
+  final _pedestrianRouter = PedestrianStreetRouter.instance.obs;
+  int _pedestrianRefreshGeneration = 0;
+
   /// Dynamically calculated planned itinerary route points following real streets and roads.
-  List<LatLng> get currentTourRoutePoints {
+  List<LatLng> get currentTourRoutePoints => _buildOutdoorRoute();
+
+  ({List<LatLng> points, List<String> instructions}) get currentTourRouteDetails {
+    final instructions = <String>[];
+    return (points: _buildOutdoorRoute(instructions: instructions), instructions: instructions);
+  }
+
+  List<LatLng> _buildOutdoorRoute({List<String>? instructions}) {
     if (!isTourActive.value) return const [];
     final start = userLocation.value ?? defaultTourStartLocation;
     final remaining = remainingTourLandmarks;
     if (remaining.isEmpty) return const [];
 
-    return PedestrianStreetRouter.instance.routeItinerary(start, remaining);
+    return _pedestrianRouter.value.routeItinerary(start, remaining,
+      firstLegInstructions: instructions);
   }
 
   /// Starts the interactive tour itinerary.
   void startTour() {
+    if (_outdoorAnalyticsSession != null) _recordOutdoorEvent('tour_stopped');
+    _outdoorAnalyticsSession = TourAnalyticsService.newId();
+    _recordOutdoorEvent('tour_started');
     isTourActive.value = true;
     visitedLandmarkIds.clear();
     skippedLandmarkIds.clear();
     hasPromptedLandmarkIds.clear();
     approachingLandmark.value = null;
-    final start = userLocation.value ?? defaultTourStartLocation;
-    if (userLocation.value == null) {
-      setUserLocation(start);
-    } else {
-      checkProximityToLandmarks(start);
-    }
+    final location = userLocation.value;
+    if (location != null) checkProximityToLandmarks(location);
     try {
-      mapController.move(start, defaultZoom);
+      mapController.move(location ?? defaultTourStartLocation, defaultZoom);
     } catch (_) {}
   }
 
   /// Stops/ends the interactive tour.
   void stopTour() {
+    _recordOutdoorEvent('tour_stopped');
+    _outdoorAnalyticsSession = null;
     isTourActive.value = false;
     approachingLandmark.value = null;
   }
@@ -213,9 +248,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     final landmark = approachingLandmark.value;
     if (landmark == null) return;
     visitedLandmarkIds.add(landmark.id);
+    _recordOutdoorEvent('landmark_entered', landmark: landmark.id);
+    _finishOutdoorAnalyticsIfDone();
     visitedLandmarkIds.refresh();
     approachingLandmark.value = null;
-    navigateToLandmarkDetails(landmark.id);
+    unawaited(_enterSavedOrLive(landmark.id));
   }
 
   /// User action: Skips the approaching landmark and continues to next point.
@@ -223,6 +260,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     final landmark = approachingLandmark.value;
     if (landmark == null) return;
     skippedLandmarkIds.add(landmark.id);
+    _recordOutdoorEvent('landmark_skipped', landmark: landmark.id);
+    _finishOutdoorAnalyticsIfDone();
     skippedLandmarkIds.refresh();
     approachingLandmark.value = null;
   }
@@ -239,28 +278,17 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   /// Whether the user is currently located inside the 600m Colosseum zone.
   bool get isUserInZone {
-    final d = distanceToColosseumMeters;
-    if (d == null) return false;
-    return d <= zoneBoundaryRadiusMeters;
-  }
-
-  final bool? enablePeriodicSync;
-
-  bool get isPeriodicSyncEnabled {
-    if (enablePeriodicSync != null) return enablePeriodicSync!;
-    try {
-      if (Platform.environment.containsKey('FLUTTER_TEST')) {
-        return false;
-      }
-    } catch (_) {}
-    return true;
+    final user = userLocation.value;
+    if (user == null) return false;
+    final center = colosseumCoordinates;
+    return Geolocator.distanceBetween(user.latitude, user.longitude,
+      center.latitude, center.longitude) <= zoneBoundaryRadiusMeters;
   }
 
   HomeController({
     ITourRepository? tourRepository,
     GpsLocationService? gpsLocationService,
     CompassService? compassService,
-    this.enablePeriodicSync,
   })  : tourRepository = tourRepository ??
             (Get.isRegistered<ITourRepository>()
                 ? Get.find<ITourRepository>()
@@ -271,29 +299,54 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   @override
   void onInit() {
     super.onInit();
+    final arguments = Get.arguments;
+    if (arguments is Map && arguments['ttsLocale'] is String) {
+      ttsLocale = arguments['ttsLocale'] as String;
+    }
+    if (arguments is Map && arguments['language'] is String) {
+      tourLanguage = arguments['language'] as String;
+    }
+    unawaited(TourAnalyticsService.instance.flush());
     WidgetsBinding.instance.addObserver(this);
     mapController = MapController();
-    _initLandmarkMarkers();
-    _initLandmarkOverlays();
-    _initPedestrianRoutes();
-    _initFloors();
+    final sync = _sync;
+    if (sync != null) {
+      _tourUpdates = sync.snapshots.listen(_applyTourSnapshot);
+      final snapshot = sync.snapshotFor(tourLanguage);
+      if (snapshot != null) _applyTourSnapshot(snapshot);
+      unawaited(sync.activate(tourLanguage));
+    } else {
+      _initLandmarkMarkers();
+      _initLandmarkOverlays();
+      unawaited(_initPedestrianRoutes());
+      _initFloors();
+    }
     _initLocationTracking();
-    _startPeriodicSync();
   }
 
-  /// Automatically synchronizes landmark markers and overlays periodically.
-  void _startPeriodicSync() {
-    if (!isPeriodicSyncEnabled) return;
-    _periodicSyncTimer?.cancel();
-    _periodicSyncTimer = Timer.periodic(periodicSyncInterval, (_) {
-      refreshLandmarks();
-    });
+  void _applyTourSnapshot(TourBundleModel snapshot) {
+    if (isClosed || !identical(_sync?.snapshotFor(tourLanguage), snapshot)) return;
+    landmarkMarkers.assignAll(snapshot.landmarkMarkers);
+    _applyOverlays(snapshot.landmarks);
+    _pedestrianRouter.value.initializeRoutes(snapshot.pedestrianRoutes ?? []);
+    _pedestrianRouter.refresh();
+    final ids = snapshot.landmarkMarkers.map((marker) => marker.id).toSet();
+    if (!ids.contains(selectedLandmarkId.value)) selectedLandmarkId.value = null;
+    if (approachingLandmark.value case final LandmarkMarkerModel approaching) {
+      approachingLandmark.value = snapshot.landmarkMarkers.firstWhereOrNull(
+        (marker) => marker.id == approaching.id,
+      );
+    }
+    unawaited(tourRepository.getLastBundleDownload(lang: tourLanguage).then((date) {
+      if (!isClosed) lastBundleDownload.value = date;
+    }));
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      refreshLandmarks();
+      unawaited(TourAnalyticsService.instance.flush());
+      if (_sync == null) refreshLandmarks();
     }
   }
 
@@ -303,7 +356,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   Future<void> _loadRepositoryFloors() async {
     try {
-      final floors = await tourRepository.getFloors();
+      final floors = await tourRepository.getFloors(lang: tourLanguage);
       if (floors.isNotEmpty) {
         FloorDefinition.cacheFloors(floors);
       }
@@ -316,11 +369,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   Future<void> _loadRepositoryMarkers() async {
     try {
-      final markers = await tourRepository.getLandmarkMarkers();
+      final markers = await tourRepository.getLandmarkMarkers(lang: tourLanguage);
       if (markers.isNotEmpty) {
         landmarkMarkers.assignAll(markers);
       }
-      final liveMarkers = await tourRepository.getLandmarkMarkers(forceRefresh: true);
+      final liveMarkers = await tourRepository.getLandmarkMarkers(lang: tourLanguage, forceRefresh: true);
       if (liveMarkers.isNotEmpty) {
         landmarkMarkers.assignAll(liveMarkers);
       }
@@ -331,13 +384,62 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _loadRepositoryOverlays();
   }
 
-  Future<void> _initPedestrianRoutes() async {
+  Future<void> _initPedestrianRoutes({bool forceRefresh = false}) async {
+    final generation = ++_pedestrianRefreshGeneration;
     try {
-      final segments = await tourRepository.getPedestrianStreetSegments();
-      if (segments.isNotEmpty) {
-        PedestrianStreetRouter.instance.initializeGraph(segments);
+      final result = forceRefresh ? await tourRepository.refreshTourBundle(
+        lang: tourLanguage, maxAge: const Duration(hours: 24),
+      ) : null;
+      var routes = await tourRepository.getPedestrianRoutes(lang: tourLanguage);
+      if ((result == TourSyncResult.unavailable || (result == null && routes.isEmpty)) &&
+          Get.isRegistered<OfflineLandmarkStore>()) {
+        try {
+          final saved = await Get.find<OfflineLandmarkStore>().list(tourLanguage);
+          final existing = routes.map((route) => route.waypoints.join('|')).toSet();
+          routes = [...routes, for (final package in saved)
+            for (final route in package.routes)
+              if (existing.add(route.waypoints.join('|'))) route];
+        } catch (_) {}
+      }
+      if (isClosed || generation != _pedestrianRefreshGeneration) return;
+      _pedestrianRouter.value.initializeRoutes(routes);
+      _pedestrianRouter.refresh();
+      final downloadedAt = await tourRepository.getLastBundleDownload(lang: tourLanguage);
+      if (!isClosed && generation == _pedestrianRefreshGeneration) {
+        lastBundleDownload.value = downloadedAt;
       }
     } catch (_) {}
+  }
+
+  Future<void> downloadTourBundle() async {
+    if (isDownloadingBundle.value) return;
+    isDownloadingBundle.value = true;
+    bundleDownloadMessage.value = null;
+    try {
+      final result = await (_sync?.check(force: true)
+          ?? tourRepository.refreshTourBundle(lang: tourLanguage, force: true));
+      if (isClosed) return;
+      if (result == TourSyncResult.unavailable) {
+        bundleDownloadMessage.value = 'Download failed. Your saved tour is still available.'.tourText;
+        return;
+      }
+      if (_sync != null) {
+        lastBundleDownload.value = await tourRepository.getLastBundleDownload(lang: tourLanguage);
+        if (!isClosed) bundleDownloadMessage.value = 'Tour downloaded.'.tourText;
+        return;
+      }
+      final markers = await tourRepository.getLandmarkMarkers(lang: tourLanguage);
+      final overlays = await tourRepository.getLandmarkOverlays();
+      if (isClosed) return;
+      landmarkMarkers.assignAll(markers);
+      _applyOverlays(overlays);
+      await _initPedestrianRoutes();
+      if (!isClosed) bundleDownloadMessage.value = 'Tour downloaded.'.tourText;
+    } catch (_) {
+      if (!isClosed) bundleDownloadMessage.value = 'Unable to refresh the tour.'.tourText;
+    } finally {
+      if (!isClosed) isDownloadingBundle.value = false;
+    }
   }
 
   Future<void> _loadRepositoryOverlays() async {
@@ -376,11 +478,20 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   /// Navigates directly to the landmark's detailed view (FloorMapView),
   /// bypassing the intermediary levels selection view.
-  void navigateToLandmarkDetails(String landmarkId) {
-    final normalizedId = FloorDefinition.normalizeLandmarkId(landmarkId);
+  void navigateToLandmarkDetails(String landmarkId, {OfflineLandmark? offline}) {
+    final snapshot = _sync?.snapshotFor(tourLanguage);
+    final normalizedId = offline?.landmark.id ??
+        (snapshot != null ? landmarkId : FloorDefinition.normalizeLandmarkId(landmarkId));
+    final liveFloor = snapshot?.floors.firstWhereOrNull((floor) => floor.landmarkId == normalizedId);
+    if (offline == null && snapshot != null && liveFloor == null) {
+      Get.snackbar('Landmark unavailable'.tourText, 'No published floors are available.'.tourText);
+      return;
+    }
     selectedLandmarkId.value = normalizedId;
-    final name = FloorDefinition.landmarkNameFor(normalizedId);
-    final initialFloor = FloorDefinition.initialFloorForLandmark(normalizedId);
+    final name = offline?.landmark.name
+        ?? landmarkMarkers.firstWhereOrNull((marker) => marker.id == normalizedId)?.name
+        ?? FloorDefinition.landmarkNameFor(normalizedId);
+    final initialFloor = offline?.floors.first ?? liveFloor ?? FloorDefinition.initialFloorForLandmark(normalizedId);
     if (Get.routeTree.routes.any((route) => route.name == Routes.floorMap)) {
       Get.toNamed(
         Routes.floorMap,
@@ -389,9 +500,20 @@ class HomeController extends GetxController with WidgetsBindingObserver {
           'landmarkName': name,
           'floorId': initialFloor.id,
           'floorName': initialFloor.displayName,
+          'offlineLandmark': ?offline,
         },
       );
     }
+  }
+
+  Future<void> _enterSavedOrLive(String landmarkId) async {
+    OfflineLandmark? saved;
+    if (Get.isRegistered<OfflineLandmarkStore>()) {
+      try {
+        saved = await Get.find<OfflineLandmarkStore>().get(landmarkId, tourLanguage);
+      } catch (_) {}
+    }
+    if (!isClosed) navigateToLandmarkDetails(landmarkId, offline: saved);
   }
 
   /// Navigation triggered when tapping on the Colosseum ground overlay image.
@@ -421,14 +543,21 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   /// Manually or automatically re-fetches live landmark markers, overlays, and floors from the remote database
   /// and updates local Hive storage.
   Future<void> refreshLandmarks() async {
+    if (_sync case final TourSyncService sync) {
+      await sync.check();
+      return;
+    }
+    await _initPedestrianRoutes(forceRefresh: true);
     try {
-      final liveMarkers = await tourRepository.getLandmarkMarkers(forceRefresh: true);
+      final liveMarkers = await tourRepository.getLandmarkMarkers(lang: tourLanguage,
+        forceRefresh: tourLanguage == 'en');
       landmarkMarkers.assignAll(liveMarkers);
       final liveOverlays = await tourRepository.getLandmarkOverlays(forceRefresh: true);
       _applyOverlays(liveOverlays);
-      final liveFloors = await tourRepository.getFloors(forceRefresh: true);
+      final liveFloors = await tourRepository.getFloors(lang: tourLanguage,
+        forceRefresh: tourLanguage == 'en');
       for (final floor in liveFloors) {
-        tourRepository.getViewpointsByFloor(floor.id, forceRefresh: true);
+        tourRepository.getViewpointsByFloor(floor.id, forceRefresh: true, lang: tourLanguage);
       }
     } catch (_) {}
   }
@@ -523,8 +652,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   @override
   void onClose() {
+    _recordOutdoorEvent('tour_stopped');
+    _outdoorAnalyticsSession = null;
+    _pedestrianRefreshGeneration++;
     WidgetsBinding.instance.removeObserver(this);
-    _periodicSyncTimer?.cancel();
+    _tourUpdates?.cancel();
     _positionSubscription?.cancel();
     _compassSubscription?.cancel();
     compassService.stopListening();

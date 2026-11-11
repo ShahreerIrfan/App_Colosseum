@@ -133,6 +133,23 @@ void main() {
       expect(senate.stopsCount, 1);
     });
 
+    test('keeps a published empty floor under its explicit landmark code', () {
+      final floor = FloorDefinition.parseFloorsFromBundleJson({
+        'floors': [
+          {
+            'id': 'floor_3',
+            'landmarkCode': 'ludus_magnus',
+            'displayName': 'Shaeakhs floor',
+            'viewpoints': [],
+          },
+        ],
+      }).single;
+      final restored = FloorDefinition.fromJson(floor.toJson());
+      expect(restored.landmarkId, 'ludus_magnus');
+      expect(restored.viewpoints, isEmpty);
+      expect(FloorDefinition.floorsForLandmark('ludus_magnus', [restored]), [restored]);
+    });
+
     test('overrides corrupted landmarkId (e.g. colosseum) when floor ID prefix clearly belongs to another monument', () {
       final corruptedArch = FloorDefinition.fromJson({
         'id': 'arch_ground',

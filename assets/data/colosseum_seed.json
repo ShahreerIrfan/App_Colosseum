@@ -15,21 +15,6 @@
       "ko"
     ]
   },
-  "parkConfig": {
-    "configKey": "archaeological_park_colosseum",
-    "centerCoordinates": {
-      "latitude": 41.89021,
-      "longitude": 12.492231
-    },
-    "boundaryRadiusMeters": 600.0,
-    "proximityThresholds": {
-      "colosseum": 120.0,
-      "romanForum": 100.0,
-      "archConstantine": 70.0,
-      "ludusMagnus": 80.0,
-      "templeVenusRome": 80.0
-    }
-  },
   "landmarks": [
     {
       "code": "colosseum",

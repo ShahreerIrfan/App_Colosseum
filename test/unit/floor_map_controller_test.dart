@@ -1,10 +1,32 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:colosseum_client/app/core/utils/geodesic_utils.dart';
 import 'package:colosseum_client/app/data/models/map_view_type.dart';
+import 'package:colosseum_client/app/data/models/floor_definition.dart';
+import 'package:colosseum_client/app/data/models/viewpoint_model.dart';
+import 'package:colosseum_client/app/data/repositories/tour_repository_impl.dart';
 import 'package:colosseum_client/app/data/services/visited_viewpoints_service.dart';
 import 'package:colosseum_client/app/modules/floor_map/controllers/floor_map_controller.dart';
 
 import '../helpers/mock_tts.dart';
+
+class RefreshingFloorRepository extends TourRepositoryImpl {
+  List<ViewpointModel> currentViewpoints = FloorDefinition.underground.viewpoints;
+
+  @override
+  Future<List<FloorDefinition>> getFloors({
+    String lang = 'en',
+    bool forceRefresh = false,
+  }) async => [FloorDefinition.underground];
+
+  @override
+  Future<List<ViewpointModel>> getViewpointsByFloor(
+    String floorId, {
+    String lang = 'en',
+    bool forceRefresh = false,
+  }) async => currentViewpoints;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +41,27 @@ void main() {
 
   tearDown(() {
     Get.reset();
+  });
+
+  test('resuming with an empty floor clears markers, selection and narration', () async {
+    final repository = RefreshingFloorRepository();
+    final controller = FloorMapController(tourRepository: repository);
+    controller.onInit();
+    addTearDown(controller.onClose);
+    await Future<void>.delayed(Duration.zero);
+    controller.selectViewpoint(controller.viewpoints.first);
+    controller.toggleAudio();
+    expect(controller.isPlayingAudio.value, isTrue);
+
+    repository.currentViewpoints = [];
+    controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.viewpoints, isEmpty);
+    expect(controller.selectedViewpoint.value, isNull);
+    expect(controller.tourEngine.viewpoints, isEmpty);
+    expect(controller.itinerarySegments, isEmpty);
+    expect(controller.isPlayingAudio.value, isFalse);
   });
 
   group('FloorMapController Unit Tests', () {
@@ -287,8 +330,9 @@ void main() {
       expect(controller.isDisplacementPaused.value, isTrue); // Automatically pauses live drift
       expect(controller.userLocation.value!.latLng.latitude, closeTo(tappedPoint.latitude, 0.000001));
       expect(controller.userLocation.value!.latLng.longitude, closeTo(tappedPoint.longitude, 0.000001));
-      expect(controller.userLocation.value!.normalizedX, closeTo(controller.viewpoints[1].normalizedX, 0.001));
-      expect(controller.userLocation.value!.normalizedY, closeTo(controller.viewpoints[1].normalizedY, 0.001));
+      final projected = GeodesicUtils.latLngToCanvasOffset(tappedPoint);
+      expect(controller.userLocation.value!.normalizedX, closeTo(projected.dx, 0.001));
+      expect(controller.userLocation.value!.normalizedY, closeTo(projected.dy, 0.001));
     });
 
     test('speaking navigation instruction does not trigger onAudioCompleted or mark stop visited (Bug 1 fixed)', () async {

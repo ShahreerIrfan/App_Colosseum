@@ -40,6 +40,7 @@ class UserLocationModel {
     double? latitude,
     double? longitude,
     double? headingDegrees,
+    bool clearHeading = false,
     double? accuracyMeters,
     DateTime? timestamp,
   }) {
@@ -49,7 +50,7 @@ class UserLocationModel {
       normalizedY: normalizedY ?? this.normalizedY,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
-      headingDegrees: headingDegrees ?? this.headingDegrees,
+      headingDegrees: clearHeading ? null : headingDegrees ?? this.headingDegrees,
       accuracyMeters: accuracyMeters ?? this.accuracyMeters,
       timestamp: timestamp ?? this.timestamp,
     );

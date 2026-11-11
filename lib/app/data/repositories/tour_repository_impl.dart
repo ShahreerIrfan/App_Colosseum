@@ -7,12 +7,14 @@ import '../models/landmark_marker_model.dart';
 import '../models/landmark_overlay_model.dart';
 import '../models/sync_manifest_model.dart';
 import '../models/viewpoint_model.dart';
+import '../models/pedestrian_route_data.dart';
 import 'i_tour_repository.dart';
 
 /// Implementation of [ITourRepository] orchestrating remote syncing with Hive local cache.
 class TourRepositoryImpl implements ITourRepository {
   final ITourRemoteDataSource remoteDataSource;
   final ITourLocalDataSource localDataSource;
+  final _bundleRefreshes = <String, Future<TourSyncResult>>{};
 
   TourRepositoryImpl({
     ITourRemoteDataSource? remoteDataSource,
@@ -21,22 +23,49 @@ class TourRepositoryImpl implements ITourRepository {
         localDataSource = localDataSource ?? TourLocalDataSource();
 
   @override
-  Future<bool> syncTourBundle({String lang = 'en'}) async {
-    try {
-      final remoteManifest = await remoteDataSource.getSyncManifest();
-      final cachedManifest = await localDataSource.getCachedManifest();
+  Future<bool> syncTourBundle({String lang = 'en'}) async =>
+      await refreshTourBundle(lang: lang) == TourSyncResult.updated;
 
-      // Check if cache needs update
-      if (cachedManifest == null ||
-          cachedManifest.dataHash != remoteManifest.dataHash) {
-        final bundle = await remoteDataSource.getTourBundle(lang: lang);
-        await localDataSource.saveTourBundle(bundle, lang: lang);
-        return true;
+  @override
+  Future<DateTime?> getLastBundleDownload({String lang = 'en'}) =>
+      localDataSource.getLastBundleDownload(lang: lang);
+
+  @override
+  Future<TourSyncResult> refreshTourBundle({String lang = 'en', bool force = false,
+    Duration? maxAge}) async {
+    final downloadedAt = maxAge == null ? null : await getLastBundleDownload(lang: lang);
+    final stale = maxAge != null &&
+        (downloadedAt == null || DateTime.now().difference(downloadedAt) >= maxAge);
+    final shouldDownload = force || stale;
+    final running = _bundleRefreshes[lang];
+    if (running != null) {
+      final result = await running;
+      if (!shouldDownload || result != TourSyncResult.unchanged) return result;
+      return refreshTourBundle(lang: lang, force: true);
+    }
+    final refresh = _refreshBundle(lang, force: shouldDownload);
+    _bundleRefreshes[lang] = refresh;
+    try {
+      return await refresh;
+    } finally {
+      _bundleRefreshes.remove(lang);
+    }
+  }
+
+  Future<TourSyncResult> _refreshBundle(String lang, {required bool force}) async {
+    try {
+      if (!force) {
+        final remoteManifest = await remoteDataSource.getSyncManifest();
+        final cachedManifest = await localDataSource.getCachedManifest(lang: lang);
+        if (cachedManifest == remoteManifest) {
+          return TourSyncResult.unchanged;
+        }
       }
-      return false;
+      final bundle = await remoteDataSource.getTourBundle(lang: lang);
+      await localDataSource.saveTourBundle(bundle, lang: lang);
+      return TourSyncResult.updated;
     } catch (_) {
-      // Offline fallback: continue using cached data silently
-      return false;
+      return TourSyncResult.unavailable;
     }
   }
 
@@ -48,10 +77,8 @@ class TourRepositoryImpl implements ITourRepository {
     if (forceRefresh) {
       try {
         final remote = await remoteDataSource.getFloors(lang: lang);
-        if (remote.isNotEmpty) {
-          await localDataSource.saveFloors(remote, lang: lang);
-          return remote;
-        }
+        await localDataSource.saveFloors(remote, lang: lang);
+        return remote;
       } catch (_) {
         await syncTourBundle(lang: lang);
       }
@@ -77,15 +104,13 @@ class TourRepositoryImpl implements ITourRepository {
       try {
         final remote =
             await remoteDataSource.getViewpointsByFloor(floorId, lang: lang);
-        if (remote.isNotEmpty) {
-          await localDataSource.saveViewpointsForFloor(floorId, remote);
-          return remote;
-        }
+        await localDataSource.saveViewpointsForFloor(floorId, remote, lang: lang);
+        return remote;
       } catch (_) {
         await syncTourBundle(lang: lang);
       }
     }
-    final cached = await localDataSource.getCachedViewpointsByFloor(floorId);
+    final cached = await localDataSource.getCachedViewpointsByFloor(floorId, lang: lang);
     if (cached.isNotEmpty) {
       return cached;
     }
@@ -93,7 +118,7 @@ class TourRepositoryImpl implements ITourRepository {
       final remote =
           await remoteDataSource.getViewpointsByFloor(floorId, lang: lang);
       if (remote.isNotEmpty) {
-        await localDataSource.saveViewpointsForFloor(floorId, remote);
+        await localDataSource.saveViewpointsForFloor(floorId, remote, lang: lang);
         return remote;
       }
     } catch (_) {}
@@ -118,8 +143,13 @@ class TourRepositoryImpl implements ITourRepository {
 
   @override
   Future<List<LandmarkMarkerModel>> getLandmarkMarkers({
+    String lang = 'en',
     bool forceRefresh = false,
   }) async {
+    if (lang != 'en') {
+      if (forceRefresh) await syncTourBundle(lang: lang);
+      return localDataSource.getCachedLandmarkMarkers(lang: lang);
+    }
     if (forceRefresh) {
       try {
         final remote = await remoteDataSource.getLandmarkMarkers();
@@ -140,6 +170,15 @@ class TourRepositoryImpl implements ITourRepository {
       await syncTourBundle();
     }
     return localDataSource.getCachedPedestrianStreetSegments();
+  }
+
+  @override
+  Future<List<PedestrianRouteData>> getPedestrianRoutes({
+    String lang = 'en',
+    bool forceRefresh = false,
+  }) async {
+    if (forceRefresh) await syncTourBundle(lang: lang);
+    return localDataSource.getCachedPedestrianRoutes(lang: lang);
   }
 
   @override

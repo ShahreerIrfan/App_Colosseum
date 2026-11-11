@@ -1,18 +1,34 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
-enum TtsSpeechType {
-  none,
-  instruction,
-  narration,
+enum TtsSpeechType { none, instruction, narration }
+
+class OfflineVoiceUnavailable implements Exception {
+  const OfflineVoiceUnavailable();
 }
 
 /// Service managing Text-to-Speech audio guide playback using device native engines.
 class TtsService {
+  static const _voiceTimeout = Duration(seconds: 3);
+  static bool _usingAlternateEngine = false;
   final FlutterTts _flutterTts;
   bool _isInitialized = false;
+  Future<void>? _initialization;
+  bool _voiceAvailable = true;
+  String? _offlineLocale;
+  Future<bool>? _voiceSelection;
+
+  static bool get _isAndroid =>
+      !kIsWeb &&
+      (debugDefaultTargetPlatformOverride == TargetPlatform.android ||
+          (debugDefaultTargetPlatformOverride == null && Platform.isAndroid));
+  static bool get _isIOS =>
+      !kIsWeb &&
+      (debugDefaultTargetPlatformOverride == TargetPlatform.iOS ||
+          (debugDefaultTargetPlatformOverride == null && Platform.isIOS));
 
   int _generation = 0;
   bool _awaitingNativeStart = false;
@@ -34,15 +50,25 @@ class TtsService {
   bool get isSpeakingNarration => _currentSpeechType == TtsSpeechType.narration;
 
   TtsService({FlutterTts? flutterTts})
-      : _flutterTts = flutterTts ?? FlutterTts();
+    : _flutterTts = flutterTts ?? FlutterTts();
 
   /// Initialize TTS engine with language, rate, volume, and callbacks
-  Future<void> init({String languageCode = 'en-US'}) async {
-    if (_isInitialized) return;
+  Future<void> init({String languageCode = 'en-US', bool offlineOnly = false}) {
+    if (offlineOnly) _offlineLocale = languageCode;
+    return _initialization ??= _initialize(languageCode);
+  }
 
+  Future<void> _initialize(String languageCode) async {
     try {
-      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-        await _flutterTts.setLanguage(languageCode);
+      if (_isAndroid || _isIOS) {
+        if (_offlineLocale != null) {
+          _voiceAvailable = false;
+        } else {
+          if (_isAndroid && _usingAlternateEngine) {
+            await _restoreDefaultEngine();
+          }
+          await setLanguage(languageCode);
+        }
         await _flutterTts.setSpeechRate(0.46); // Natural pacing for tours
         await _flutterTts.setVolume(1.0);
         await _flutterTts.setPitch(1.0);
@@ -87,20 +113,142 @@ class TtsService {
           onStart?.call();
         });
 
-        _flutterTts.setProgressHandler((String text, int start, int end, String word) {
+        _flutterTts.setProgressHandler((
+          String text,
+          int start,
+          int end,
+          String word,
+        ) {
           onProgress?.call(start, end, word);
         });
 
         _flutterTts.setErrorHandler((msg) {
+          final instructionDone = _activeInstructionOnDone;
+          final wasNarration = isSpeakingNarration;
+          _instructionSafetyTimer?.cancel();
           _currentSpeechType = TtsSpeechType.none;
           _activeInstructionOnDone = null;
           _activeNarrationOnDone = null;
-          onError?.call(msg);
+          if (wasNarration) {
+            if (_offlineLocale != null) _voiceAvailable = false;
+            onError?.call(msg);
+          }
+          instructionDone?.call();
         });
       }
       _isInitialized = true;
     } catch (e) {
+      _voiceAvailable = false;
       debugPrint('TtsService init error: $e');
+    }
+  }
+
+  Future<bool> _selectOfflineVoice(String locale) async {
+    Future<bool> selectFromCurrentEngine() async {
+      for (final voice in await _offlineVoices(locale, _flutterTts)) {
+        try {
+          final result = await _flutterTts
+              .setVoice(voice)
+              .timeout(_voiceTimeout);
+          if (result == 1 || result == true) return true;
+        } catch (_) {
+          // Another installed voice for this language may still work.
+        }
+      }
+      return false;
+    }
+
+    if (await selectFromCurrentEngine()) return true;
+    if (!_isAndroid) return false;
+    try {
+      final defaultEngine = await _flutterTts.getDefaultEngine.timeout(
+        _voiceTimeout,
+      );
+      final engines = await _flutterTts.getEngines.timeout(_voiceTimeout);
+      if (defaultEngine is! String || engines is! List) return false;
+      for (final engine in engines.whereType<String>()) {
+        if (engine == defaultEngine) continue;
+        _usingAlternateEngine = true;
+        try {
+          await _flutterTts.setEngine(engine).timeout(_voiceTimeout);
+        } catch (_) {
+          break;
+        }
+        if (await selectFromCurrentEngine()) {
+          await _flutterTts.setSpeechRate(0.46).timeout(_voiceTimeout);
+          await _flutterTts.setPitch(1.0).timeout(_voiceTimeout);
+          return true;
+        }
+      }
+      if (_usingAlternateEngine) await _restoreDefaultEngine();
+    } catch (error) {
+      debugPrint('Offline TTS engine selection failed: $error');
+    }
+    return false;
+  }
+
+  Future<void> _restoreDefaultEngine() async {
+    final engine = await _flutterTts.getDefaultEngine.timeout(_voiceTimeout);
+    if (engine is! String || engine.isEmpty) return;
+    await _flutterTts.setEngine(engine).timeout(_voiceTimeout);
+    _usingAlternateEngine = false;
+  }
+
+  static Future<Map<String, String>?> findOfflineVoice(
+    String locale, {
+    FlutterTts? tts,
+  }) async => (await _offlineVoices(locale, tts ?? FlutterTts())).firstOrNull;
+
+  Future<void> _ensureVoice() async {
+    if (!_isInitialized) await init();
+    final locale = _offlineLocale;
+    if (!_voiceAvailable && locale != null) {
+      final selection = _voiceSelection ??= _selectOfflineVoice(locale);
+      try {
+        _voiceAvailable = await selection;
+      } finally {
+        if (identical(_voiceSelection, selection)) _voiceSelection = null;
+      }
+    }
+  }
+
+  static Future<List<Map<String, String>>> _offlineVoices(
+    String locale,
+    FlutterTts tts,
+  ) async {
+    if (!_isAndroid && !_isIOS) return const [];
+    try {
+      final voices = await tts.getVoices.timeout(_voiceTimeout);
+      if (voices is! List) return const [];
+      String normalize(String tag) => tag.toLowerCase().replaceAll('_', '-');
+      final preferred = normalize(locale);
+      final language = preferred.split('-').first;
+      final preferredVoices = <Map<String, String>>[];
+      final fallbackVoices = <Map<String, String>>[];
+      for (final entry in voices.whereType<Map>()) {
+        final tag = entry['locale'];
+        if (tag is! String || entry['name'] is! String) continue;
+        if (_isAndroid &&
+            (entry['network_required'] != '0' ||
+                (entry['features'] as String? ?? '')
+                    .split('\t')
+                    .contains('notInstalled'))) {
+          continue;
+        }
+        final normalized = normalize(tag);
+        if (normalized.split('-').first != language) continue;
+        final voice = <String, String>{
+          'name': entry['name'] as String,
+          'locale': tag,
+        };
+        if (entry['identifier'] case final String identifier) {
+          voice['identifier'] = identifier;
+        }
+        (normalized == preferred ? preferredVoices : fallbackVoices).add(voice);
+      }
+      return [...preferredVoices, ...fallbackVoices];
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -139,8 +287,15 @@ class TtsService {
     _activeNarrationOnDone = null;
 
     try {
-      if (!_isInitialized) {
+      if (_offlineLocale != null) {
+        await _ensureVoice();
+      } else if (!_isInitialized) {
         await init();
+      }
+      if (myGen != _generation) return;
+      if (!_voiceAvailable) {
+        onDone?.call();
+        return;
       }
       if (text.trim().isNotEmpty) {
         if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
@@ -162,14 +317,20 @@ class TtsService {
         }
 
         // Safety fallback timer: ensure onDone always executes even if native TTS drops completion event
-        final estimatedMs = ((text.length / 8.0) * 1000).toInt().clamp(3000, 7000);
-        _instructionSafetyTimer = Timer(Duration(milliseconds: estimatedMs), () {
-          if (myGen == _generation &&
-              _currentSpeechType == TtsSpeechType.instruction &&
-              _activeInstructionOnDone != null) {
-            handleNativeCompletion();
-          }
-        });
+        final estimatedMs = ((text.length / 8.0) * 1000).toInt().clamp(
+          3000,
+          7000,
+        );
+        _instructionSafetyTimer = Timer(
+          Duration(milliseconds: estimatedMs),
+          () {
+            if (myGen == _generation &&
+                _currentSpeechType == TtsSpeechType.instruction &&
+                _activeInstructionOnDone != null) {
+              handleNativeCompletion();
+            }
+          },
+        );
 
         await _flutterTts.speak(text);
       } else {
@@ -194,8 +355,19 @@ class TtsService {
     _activeNarrationOnDone = null;
 
     try {
-      if (!_isInitialized) {
+      if (_offlineLocale != null) {
+        await _ensureVoice();
+      } else if (!_isInitialized) {
         await init();
+      }
+      if (myGen != _generation) return;
+      if (!_voiceAvailable) {
+        onError?.call(
+          _offlineLocale != null
+              ? const OfflineVoiceUnavailable()
+              : 'A device voice for this language is unavailable.',
+        );
+        return;
       }
       if (text.trim().isNotEmpty) {
         // Stop any previous speech first while _currentSpeechType is none on mobile devices,
@@ -212,17 +384,26 @@ class TtsService {
         _activeNarrationOnDone = onDone;
         _activeInstructionOnDone = null;
         _awaitingNativeStart = true;
-        await _flutterTts.speak(text);
+        final playback = _flutterTts.speak(text);
+        final result = _offlineLocale == null
+            ? await playback
+            : await playback.timeout(_voiceTimeout);
+        if (result == 0 || result == false) {
+          throw StateError('The TTS engine rejected playback');
+        }
       } else {
         _currentSpeechType = TtsSpeechType.none;
         onNarrationComplete?.call();
         onDone?.call();
       }
     } catch (e) {
+      if (myGen != _generation) return;
+      if (_offlineLocale != null) _voiceAvailable = false;
       _currentSpeechType = TtsSpeechType.none;
+      _activeNarrationOnDone = null;
+      _awaitingNativeStart = false;
       debugPrint('TtsService speakNarration error: $e');
-      onNarrationComplete?.call();
-      onDone?.call();
+      onError?.call(e);
     }
   }
 
@@ -232,9 +413,12 @@ class TtsService {
   }
 
   /// Speaks text and returns a Future that completes when playback genuinely finishes.
-  Future<void> speakWithCompletion(String text, {Duration timeout = const Duration(seconds: 10)}) async {
+  Future<void> speakWithCompletion(
+    String text, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     if (text.trim().isEmpty) return;
-    
+
     // In unit test environment or headless runners, fallback immediately
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
       return;
@@ -322,8 +506,14 @@ class TtsService {
   /// Sets language (e.g. 'en-US', 'it-IT', 'fr-FR', 'es-ES', 'bn-BD')
   Future<void> setLanguage(String langCode) async {
     try {
-      await _flutterTts.setLanguage(langCode);
+      final available = await _flutterTts.isLanguageAvailable(langCode);
+      _voiceAvailable = available != false;
+      if (_voiceAvailable) {
+        final result = await _flutterTts.setLanguage(langCode);
+        if (result == 0 || result == false) _voiceAvailable = false;
+      }
     } catch (e) {
+      _voiceAvailable = false;
       debugPrint('TtsService setLanguage error: $e');
     }
   }

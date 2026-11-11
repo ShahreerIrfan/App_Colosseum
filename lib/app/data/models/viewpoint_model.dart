@@ -11,19 +11,28 @@ class ViewpointModel {
   final double normalizedX;
   final double normalizedY;
   final String description;
-  final String audioDuration;
+  final String? narrationLanguage;
   final bool isVisited;
   final double? latitude;
   final double? longitude;
   final String? imageAsset;
+  final double? triggerRadiusMeters;
+  final double? targetGazeHeadingDegrees;
 
   /// Gets the real geographic coordinate [LatLng] on the map.
   LatLng get latLng {
-    if (latitude != null && longitude != null && !floorId.startsWith('floor_')) {
+    if (hasGeographicPosition) {
       return LatLng(latitude!, longitude!);
     }
     return GeodesicUtils.canvasOffsetToLatLng(Offset(normalizedX, normalizedY));
   }
+
+  // Older backend records without a position were written as (0, 0).
+  bool get hasGeographicPosition =>
+      latitude != null && longitude != null &&
+      latitude!.isFinite && longitude!.isFinite &&
+      latitude!.abs() <= 90 && longitude!.abs() <= 180 &&
+      (latitude != 0 || longitude != 0);
 
   const ViewpointModel({
     required this.id,
@@ -33,11 +42,13 @@ class ViewpointModel {
     required this.normalizedX,
     required this.normalizedY,
     this.description = '',
-    this.audioDuration = '2 min',
+    this.narrationLanguage,
     this.isVisited = false,
     this.latitude,
     this.longitude,
     this.imageAsset,
+    this.triggerRadiusMeters,
+    this.targetGazeHeadingDegrees,
   });
 
   factory ViewpointModel.fromJson(Map<String, dynamic> json) {
@@ -52,11 +63,13 @@ class ViewpointModel {
       normalizedX: (json['normalizedX'] as num?)?.toDouble() ?? 0.0,
       normalizedY: (json['normalizedY'] as num?)?.toDouble() ?? 0.0,
       description: json['description'] as String? ?? '',
-      audioDuration: json['audioDuration'] as String? ?? '2 min',
+      narrationLanguage: json['narrationLanguage'] as String?,
       isVisited: json['isVisited'] as bool? ?? false,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       imageAsset: _resolveImageAsset(rawId, rawImage),
+      triggerRadiusMeters: (json['triggerRadiusMeters'] as num?)?.toDouble(),
+      targetGazeHeadingDegrees: (json['targetGazeHeadingDegrees'] as num?)?.toDouble(),
     );
   }
 
@@ -131,11 +144,13 @@ class ViewpointModel {
         'normalizedX': normalizedX,
         'normalizedY': normalizedY,
         'description': description,
-        'audioDuration': audioDuration,
+        'narrationLanguage': narrationLanguage,
         'isVisited': isVisited,
         'latitude': latitude,
         'longitude': longitude,
         'imageAsset': imageAsset,
+        'triggerRadiusMeters': triggerRadiusMeters,
+        'targetGazeHeadingDegrees': targetGazeHeadingDegrees,
       };
 
   ViewpointModel copyWith({
@@ -146,7 +161,7 @@ class ViewpointModel {
     double? normalizedX,
     double? normalizedY,
     String? description,
-    String? audioDuration,
+    String? narrationLanguage,
     bool? isVisited,
     double? latitude,
     double? longitude,
@@ -160,11 +175,13 @@ class ViewpointModel {
       normalizedX: normalizedX ?? this.normalizedX,
       normalizedY: normalizedY ?? this.normalizedY,
       description: description ?? this.description,
-      audioDuration: audioDuration ?? this.audioDuration,
+      narrationLanguage: narrationLanguage ?? this.narrationLanguage,
       isVisited: isVisited ?? this.isVisited,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       imageAsset: imageAsset ?? this.imageAsset,
+      triggerRadiusMeters: triggerRadiusMeters,
+      targetGazeHeadingDegrees: targetGazeHeadingDegrees,
     );
   }
 
@@ -180,11 +197,13 @@ class ViewpointModel {
           normalizedX == other.normalizedX &&
           normalizedY == other.normalizedY &&
           description == other.description &&
-          audioDuration == other.audioDuration &&
+          narrationLanguage == other.narrationLanguage &&
           isVisited == other.isVisited &&
           latitude == other.latitude &&
           longitude == other.longitude &&
-          imageAsset == other.imageAsset;
+          imageAsset == other.imageAsset &&
+          triggerRadiusMeters == other.triggerRadiusMeters &&
+          targetGazeHeadingDegrees == other.targetGazeHeadingDegrees;
 
   @override
   int get hashCode => Object.hash(
@@ -195,10 +214,12 @@ class ViewpointModel {
         normalizedX,
         normalizedY,
         description,
-        audioDuration,
+        narrationLanguage,
         isVisited,
         latitude,
         longitude,
         imageAsset,
+        triggerRadiusMeters,
+        targetGazeHeadingDegrees,
       );
 }

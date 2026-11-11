@@ -1,3 +1,4 @@
+import '../../../core/localization/tour_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -13,11 +14,6 @@ class LanguageView extends GetView<LanguageController> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final textTheme = context.textTheme;
-
-    final availableLanguages =
-        controller.languages.where((l) => l.isAvailable).toList();
-    final releasingSoonLanguages =
-        controller.languages.where((l) => !l.isAvailable).toList();
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -58,7 +54,7 @@ class LanguageView extends GetView<LanguageController> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Select Language',
+                    'Select Language'.tourText,
                     style: textTheme.headlineSmall?.copyWith(
                       color: colors.foreground,
                       fontWeight: FontWeight.w700,
@@ -67,15 +63,17 @@ class LanguageView extends GetView<LanguageController> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    'English audio guide is available now.\nAdditional languages will be released soon.',
+                  Obx(() => Text(
+                    controller.languages.where((option) => option.isAvailable).length > 1
+                        ? 'Choose a language for the tour and narration.'.tourText
+                        : 'English audio guide is available now.\nAdditional languages will be released soon.'.tourText,
                     textAlign: TextAlign.center,
                     style: textTheme.bodySmall?.copyWith(
                       color: colors.mutedForeground,
                       fontSize: 13,
                       height: 1.35,
                     ),
-                  ),
+                  )),
                   const SizedBox(height: 12),
                   // Subtle divider
                   Container(
@@ -99,6 +97,8 @@ class LanguageView extends GetView<LanguageController> {
             Expanded(
               child: Obx(() {
                 final selectedCode = controller.selectedLanguageCode.value;
+                final availableLanguages = controller.languages.where((l) => l.isAvailable);
+                final releasingSoonLanguages = controller.languages.where((l) => !l.isAvailable);
 
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 12.0),
@@ -118,7 +118,7 @@ class LanguageView extends GetView<LanguageController> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'AVAILABLE NOW',
+                            'AVAILABLE NOW'.tourText,
                             style: textTheme.labelSmall?.copyWith(
                               color: colors.primary,
                               fontSize: 11,
@@ -134,7 +134,7 @@ class LanguageView extends GetView<LanguageController> {
                       return LanguageTile(
                         title: option.name,
                         nativeName: option.nativeName,
-                        subtitle: 'Full Audio Guide',
+                        subtitle: 'Full Audio Guide'.tourText,
                         flag: option.flag,
                         isSelected: isSelected,
                         isAvailable: true,
@@ -156,7 +156,7 @@ class LanguageView extends GetView<LanguageController> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'RELEASING SOON',
+                            'RELEASING SOON'.tourText,
                             style: textTheme.labelSmall?.copyWith(
                               color: colors.mutedForeground.withValues(alpha: 0.75),
                               fontSize: 11,
@@ -172,7 +172,7 @@ class LanguageView extends GetView<LanguageController> {
                       return LanguageTile(
                         title: option.name,
                         nativeName: option.nativeName,
-                        subtitle: 'Releasing Soon',
+                        subtitle: 'Releasing Soon'.tourText,
                         flag: option.flag,
                         isSelected: isSelected,
                         isAvailable: false,
@@ -194,13 +194,13 @@ class LanguageView extends GetView<LanguageController> {
                     height: 52,
                     child: Obx(() {
                       final selectedLang = controller.selectedLanguage;
-                      final buttonText = selectedLang.code == 'en'
-                          ? 'Continue with English'
-                          : 'Continue with ${selectedLang.name}';
+                      final busy = controller.isSyncing.value;
+                      final buttonText = busy ? 'Downloading…'.tourText
+                          : 'Continue with {language}'.tourTextWith({'language': selectedLang.nativeName});
 
                       return ElevatedButton(
                         key: const Key('language_continue_button'),
-                        onPressed: controller.continueToHome,
+                        onPressed: busy ? null : controller.continueToHome,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colors.primary,
                           foregroundColor: colors.primaryForeground,
@@ -222,8 +222,11 @@ class LanguageView extends GetView<LanguageController> {
                     }),
                   ),
                   const SizedBox(height: 8),
+                  Obx(() => controller.downloadFailed.value
+                      ? Text('Connect to the internet to download this language.'.tourText)
+                      : const SizedBox.shrink()),
                   Text(
-                    'You can change your language anytime in Settings',
+                    'You can change your language anytime in Settings'.tourText,
                     textAlign: TextAlign.center,
                     style: textTheme.bodySmall?.copyWith(
                       color: colors.mutedForeground.withValues(alpha: 0.75),
