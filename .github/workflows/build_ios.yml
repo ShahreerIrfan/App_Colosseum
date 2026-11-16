@@ -35,7 +35,7 @@ jobs:
         run: flutter test
         continue-on-error: true
 
-      - name: Build iOS Application (Unsigned Release)
+      - name: Build iOS Application (Unsigned Release for Physical Device)
         run: |
           flutter build ios --release --no-codesign --no-tree-shake-icons
 
@@ -48,10 +48,24 @@ jobs:
           zip -ry colosseum_client.ipa Payload
           ls -lh colosseum_client.ipa
 
-      - name: Upload IPA Artifact
+      - name: Build iOS Simulator App (for Appetize.io)
+        run: |
+          flutter build ios --simulator --no-tree-shake-icons
+          cd build/ios/iphonesimulator
+          zip -ry colosseum_simulator.zip Runner.app
+          ls -lh colosseum_simulator.zip
+
+      - name: Upload IPA Artifact (for Real iPhone)
         uses: actions/upload-artifact@v4
         with:
           name: colosseum-ios-ipa
           path: build/ios/iphoneos/colosseum_client.ipa
+          retention-days: 7
+
+      - name: Upload Simulator Artifact (for Appetize.io)
+        uses: actions/upload-artifact@v4
+        with:
+          name: colosseum-ios-simulator
+          path: build/ios/iphonesimulator/colosseum_simulator.zip
           retention-days: 7
 
