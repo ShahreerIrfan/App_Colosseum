@@ -4,7 +4,7 @@ abstract class ApiConstants {
 
   /// Centralized base URL for backend API.
   static const String baseUrl = String.fromEnvironment('COLOSSEUM_API_URL',
-    defaultValue: 'http://187.126.3.18:3000');
+    defaultValue: 'http://187.126.3.18:9000');
 
   /// Local development server (active with adb reverse tcp:3000 tcp:3000).
   static const String localBaseUrl = 'http://localhost:3000';

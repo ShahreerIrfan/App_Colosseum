@@ -1,0 +1,54 @@
+name: Build iOS App (.ipa)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build_ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Compile & Package iOS IPA
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Flutter Tests
+        run: flutter test
+
+      - name: Build iOS Application (Unsigned Release)
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package into IPA Archive
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r colosseum_client.ipa Payload
+          ls -lh colosseum_client.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: colosseum-ios-ipa
+          path: build/ios/iphoneos/colosseum_client.ipa
+          retention-days: 7

@@ -49,6 +49,22 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Colosseum Guide uses your location to provide interactive GPS audio tour guidance around the monument.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Colosseum Guide uses your location to provide interactive GPS audio tour guidance around the monument.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Colosseum Guide uses your location to provide interactive GPS audio tour guidance around the monument.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>location</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
