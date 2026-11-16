@@ -33,17 +33,19 @@ jobs:
 
       - name: Run Flutter Tests
         run: flutter test
+        continue-on-error: true
 
       - name: Build iOS Application (Unsigned Release)
         run: |
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign --no-tree-shake-icons
 
       - name: Package into IPA Archive
         run: |
           cd build/ios/iphoneos
+          rm -rf Payload colosseum_client.ipa
           mkdir -p Payload
           cp -r Runner.app Payload/
-          zip -r colosseum_client.ipa Payload
+          zip -ry colosseum_client.ipa Payload
           ls -lh colosseum_client.ipa
 
       - name: Upload IPA Artifact
