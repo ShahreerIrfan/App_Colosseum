@@ -15,7 +15,7 @@ on:
 jobs:
   build-ios:
     name: Compile & Package iOS IPA
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 30
 
     steps:
@@ -52,3 +52,4 @@ jobs:
           name: colosseum-ios-ipa
           path: build/ios/iphoneos/colosseum_client.ipa
           retention-days: 7
+
