@@ -592,27 +592,206 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
         ? targetFloor.displayName
         : (portal.toFloorId == 'floor_1' ? 'Level 1' : portal.toFloorId);
 
-    Get.snackbar(
-      portal.name,
-      'Connects to $targetName. Tap SWITCH to change floor.',
+    if (Get.isSnackbarOpen) {
+      Get.closeCurrentSnackbar();
+    }
+
+    Get.rawSnackbar(
       snackPosition: SnackPosition.TOP,
-      backgroundColor: const Color(0xFFF59E0B),
-      colorText: Colors.white,
-      icon: const Icon(Icons.stairs_rounded, color: Colors.white, size: 28),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      backgroundColor: Colors.transparent,
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      borderRadius: 24,
       duration: const Duration(seconds: 4),
-      mainButton: TextButton(
-        style: TextButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFFB45309),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      animationDuration: const Duration(milliseconds: 320),
+      forwardAnimationCurve: Curves.easeOutCubic,
+      reverseAnimationCurve: Curves.easeInCubic,
+      messageText: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBF5),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: const Color(0xFFAB0D0C).withValues(alpha: 0.22),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        onPressed: () {
-          if (Get.isSnackbarOpen) Get.back();
-          switchFloor(targetFloor.id);
-        },
-        child: const Text('SWITCH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            // Subtle Colosseum watermark on top-right
+            Positioned(
+              right: -8,
+              top: 6,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.10,
+                  child: Image.asset(
+                    'assets/logo/Colosseum.png',
+                    width: 110,
+                    height: 82,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Top maroon header accent strip with centered handle pill
+                Container(
+                  width: double.infinity,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFAB0D0C), Color(0xFFDD1110), Color(0xFFAB0D0C)],
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 34,
+                    height: 3.5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBF5).withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Left Staircase Icon Badge
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFBE7E6),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFFDD1110).withValues(alpha: 0.18),
+                            width: 1.0,
+                          ),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.stairs_rounded,
+                            color: Color(0xFFDD1110),
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Center Title & Description
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              portal.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFAB0D0C),
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.w800,
+                                height: 1.2,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Connects to $targetName. Tap SWITCH to change floor.',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF5A5550),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w500,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Vertical divider
+                      Container(
+                        width: 1.0,
+                        height: 44,
+                        color: const Color(0xFFE5DAD0),
+                      ),
+                      const SizedBox(width: 10),
+                      // Right SWITCH CTA Button
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            if (Get.isSnackbarOpen) {
+                              Get.closeCurrentSnackbar();
+                            }
+                            switchFloor(targetFloor.id);
+                          },
+                          borderRadius: BorderRadius.circular(14),
+                          child: Ink(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 11,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFDD1110), Color(0xFFAB0D0C)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFAB0D0C).withValues(alpha: 0.28),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.swap_horiz_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                SizedBox(width: 5),
+                                Text(
+                                  'SWITCH',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13.0,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
