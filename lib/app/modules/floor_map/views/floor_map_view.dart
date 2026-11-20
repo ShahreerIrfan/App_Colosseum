@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/theme_extensions.dart';
 import '../../../core/utils/geodesic_utils.dart';
 import '../../../core/utils/tour_image_provider.dart';
-import '../../../data/models/floor_definition.dart';
 import '../../../data/models/map_view_type.dart';
 import '../../../data/models/offline_aerial_map.dart';
 import '../../../data/models/tour_navigation_state.dart';
@@ -125,9 +124,7 @@ class FloorMapView extends GetView<FloorMapController> {
                       final isPlaying = controller.isPlayingAudio.value;
                       final currentTargetId =
                           controller.tourState.value.navigationTargetId;
-                      final portals = controller.currentFloor.value.portals.isNotEmpty
-                          ? controller.currentFloor.value.portals
-                          : FloorDefinition.defaultPortalsForFloorId(controller.currentFloor.value.id);
+                      final portals = controller.currentFloor.value.portals;
 
                       return MarkerLayer(
                         markers: [

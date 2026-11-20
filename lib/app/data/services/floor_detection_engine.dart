@@ -98,9 +98,7 @@ class FloorDetectionEngine {
 
     final currentFloor = _availableFloors.where((f) => f.id == _currentFloorId).firstOrNull ??
         FloorDefinition.fromId(_currentFloorId);
-    final activePortals = currentFloor.portals.isNotEmpty
-        ? currentFloor.portals
-        : FloorDefinition.defaultPortalsForFloorId(_currentFloorId);
+    final activePortals = currentFloor.portals;
     if (activePortals.isEmpty) {
       return;
     }

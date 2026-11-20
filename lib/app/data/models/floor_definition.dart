@@ -102,7 +102,6 @@ class FloorDefinition {
 
     final elevation = (json['elevationMeters'] as num?)?.toDouble() ??
         _defaultElevationForFloorId(floorId);
-    final portals = parsedPortals.isNotEmpty ? parsedPortals : defaultPortalsForFloorId(floorId);
 
     return FloorDefinition(
       id: floorId,
@@ -118,7 +117,7 @@ class FloorDefinition {
       mapAsset: assetString,
       semanticLabel: json['semanticLabel'] as String? ?? '',
       elevationMeters: elevation,
-      portals: portals,
+      portals: parsedPortals,
     );
   }
 
@@ -128,67 +127,6 @@ class FloorDefinition {
     if (lower.contains('attic') || lower.contains('terrace')) return 25.0;
     if (lower.contains('floor_2') || lower.contains('level_2')) return 12.0;
     return 0.0;
-  }
-
-  static List<FloorTransitionPortal> defaultPortalsForFloorId(String id) {
-    final lower = id.toLowerCase();
-    if (lower.contains('underground')) {
-      return const [
-        FloorTransitionPortal(
-          id: 'stairs_ug_to_level1',
-          name: 'South Access Staircase to Level 1',
-          fromFloorId: 'floor_underground',
-          toFloorId: 'floor_1',
-          normalizedX: 0.48,
-          normalizedY: 0.22,
-          elevationDeltaMeters: 6.0,
-          isAscending: true,
-          triggerRadiusMeters: 16.0,
-        ),
-      ];
-    }
-    if (lower.contains('floor_1') || lower == 'colosseum' || lower.contains('arena')) {
-      return const [
-        FloorTransitionPortal(
-          id: 'stairs_level1_to_ug',
-          name: 'Stairs down to Underground',
-          fromFloorId: 'floor_1',
-          toFloorId: 'floor_underground',
-          normalizedX: 0.48,
-          normalizedY: 0.22,
-          elevationDeltaMeters: -6.0,
-          isAscending: false,
-          triggerRadiusMeters: 16.0,
-        ),
-        FloorTransitionPortal(
-          id: 'stairs_level1_to_attic',
-          name: 'Staircase up to Attic Terrace',
-          fromFloorId: 'floor_1',
-          toFloorId: 'floor_attic',
-          normalizedX: 0.85,
-          normalizedY: 0.50,
-          elevationDeltaMeters: 25.0,
-          isAscending: true,
-          triggerRadiusMeters: 16.0,
-        ),
-      ];
-    }
-    if (lower.contains('attic') || lower.contains('terrace')) {
-      return const [
-        FloorTransitionPortal(
-          id: 'stairs_attic_to_level1',
-          name: 'Stairs down to Level 1',
-          fromFloorId: 'floor_attic',
-          toFloorId: 'floor_1',
-          normalizedX: 0.85,
-          normalizedY: 0.50,
-          elevationDeltaMeters: -25.0,
-          isAscending: false,
-          triggerRadiusMeters: 16.0,
-        ),
-      ];
-    }
-    return const [];
   }
 
   Map<String, dynamic> toJson() => {
@@ -317,19 +255,6 @@ class FloorDefinition {
     mapAsset: 'underground_map',
     semanticLabel: 'Underground Hypogeum, current floor',
     elevationMeters: -6.0,
-    portals: [
-      FloorTransitionPortal(
-        id: 'stairs_ug_to_level1',
-        name: 'South Access Staircase to Level 1',
-        fromFloorId: 'floor_underground',
-        toFloorId: 'floor_1',
-        normalizedX: 0.48,
-        normalizedY: 0.22,
-        elevationDeltaMeters: 6.0,
-        isAscending: true,
-        triggerRadiusMeters: 16.0,
-      ),
-    ],
   );
 
   static const FloorDefinition defaultFloor1 = FloorDefinition(
@@ -344,30 +269,6 @@ class FloorDefinition {
     mapAsset: 'floor_1',
     semanticLabel: 'Colosseum Level 1',
     elevationMeters: 0.0,
-    portals: [
-      FloorTransitionPortal(
-        id: 'stairs_level1_to_ug',
-        name: 'Stairs down to Underground',
-        fromFloorId: 'floor_1',
-        toFloorId: 'floor_underground',
-        normalizedX: 0.48,
-        normalizedY: 0.22,
-        elevationDeltaMeters: -6.0,
-        isAscending: false,
-        triggerRadiusMeters: 16.0,
-      ),
-      FloorTransitionPortal(
-        id: 'stairs_level1_to_attic',
-        name: 'Staircase up to Attic Terrace',
-        fromFloorId: 'floor_1',
-        toFloorId: 'floor_attic',
-        normalizedX: 0.85,
-        normalizedY: 0.50,
-        elevationDeltaMeters: 25.0,
-        isAscending: true,
-        triggerRadiusMeters: 16.0,
-      ),
-    ],
   );
 
   static const FloorDefinition defaultFloor2 = FloorDefinition(
