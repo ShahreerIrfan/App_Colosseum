@@ -110,7 +110,12 @@ class FloorDetectionEngine {
         continue;
       }
 
-      final distMeters = _calculateCanvasMetricDistance(canvasOffset, portal.canvasOffset);
+      double distMeters;
+      if (portal.coordinates != null && latLng != null && latLng.latitude != 0.0) {
+        distMeters = const Distance().as(LengthUnit.Meter, latLng, portal.coordinates!);
+      } else {
+        distMeters = _calculateCanvasMetricDistance(canvasOffset, portal.canvasOffset);
+      }
       if (distMeters <= portal.triggerRadiusMeters) {
         // Increment dwell confidence in portal zone
         final currentScore = _portalDwellScores[portal.id] ?? 0.0;

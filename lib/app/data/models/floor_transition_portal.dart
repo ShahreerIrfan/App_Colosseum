@@ -22,7 +22,7 @@ class FloorTransitionPortal {
     required this.normalizedX,
     required this.normalizedY,
     this.coordinates,
-    this.triggerRadiusMeters = 8.0,
+    this.triggerRadiusMeters = 16.0,
     this.elevationDeltaMeters = 6.0,
     this.isAscending = true,
   });
@@ -46,7 +46,7 @@ class FloorTransitionPortal {
       normalizedX: (json['normalizedX'] as num?)?.toDouble() ?? 0.5,
       normalizedY: (json['normalizedY'] as num?)?.toDouble() ?? 0.5,
       coordinates: coords,
-      triggerRadiusMeters: (json['triggerRadiusMeters'] as num?)?.toDouble() ?? 8.0,
+      triggerRadiusMeters: (json['triggerRadiusMeters'] as num?)?.toDouble() ?? 16.0,
       elevationDeltaMeters: (json['elevationDeltaMeters'] as num?)?.toDouble() ?? 6.0,
       isAscending: json['isAscending'] as bool? ?? true,
     );
