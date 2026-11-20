@@ -103,4 +103,12 @@ const tourJa = <String, String>{
   'Floor Tour Complete': 'この階のツアーが終了しました',
   'Read the privacy notice': 'プライバシー通知を読む',
   'Could not open the privacy notice.': 'プライバシー通知を開けませんでした。',
+  'Historical Summary': '歴史の概要',
+  'Security & Entry Guidelines': 'セキュリティと入場案内',
+  'Accessible Levels': '見学可能なフロア',
+  'Enter Monument & Explore Floors': 'モニュメントに入場してフロアを見学',
+  'Walking Directions to Gate': '入口への徒歩ルート',
+  'Entrance: {distance}m away': '入口まで約{distance}m',
+  '{distance}m away': '約{distance}m',
+  'Audio Briefing': '音声ガイダンス',
 };

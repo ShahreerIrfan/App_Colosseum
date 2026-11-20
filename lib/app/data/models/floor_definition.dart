@@ -31,7 +31,7 @@ class FloorDefinition {
     required this.itinerary,
     this.center = const LatLng(41.890210, 12.492231),
     this.defaultZoom = 18.6,
-    this.mapNorthOffsetDegrees = -20.0,
+    this.mapNorthOffsetDegrees = 0.0,
     required this.mapAsset,
     required this.semanticLabel,
   });
@@ -82,7 +82,7 @@ class FloorDefinition {
 
     final mapNorthOffset = (json['mapNorthOffsetDegrees'] as num?)?.toDouble() ??
         (calibObj?['mapNorthOffsetDegrees'] as num?)?.toDouble() ??
-        -20.0;
+        0.0;
 
     final assetString = (mapAssetObj?['assetId'] as String?) ??
         (json['mapAsset'] as String?) ??

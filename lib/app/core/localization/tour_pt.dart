@@ -103,4 +103,12 @@ const tourPt = <String, String>{
   'Floor Tour Complete': 'Visita do piso concluída',
   'Read the privacy notice': 'Ler o aviso de privacidade',
   'Could not open the privacy notice.': 'Não foi possível abrir o aviso de privacidade.',
+  'Historical Summary': 'Resumo histórico',
+  'Security & Entry Guidelines': 'Normas de segurança e acesso',
+  'Accessible Levels': 'Níveis acessíveis',
+  'Enter Monument & Explore Floors': 'Entrar no monumento e explorar pisos',
+  'Walking Directions to Gate': 'Direções a pé até à entrada',
+  'Entrance: {distance}m away': 'Entrada a {distance} m',
+  '{distance}m away': 'A {distance} m',
+  'Audio Briefing': 'Apresentação em áudio',
 };

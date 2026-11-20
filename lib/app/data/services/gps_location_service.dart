@@ -518,7 +518,8 @@ class GpsLocationService {
           : const Distance().as(LengthUnit.Meter, landmark.center, point);
       final radius = landmark == null ? geofenceRadiusMeters
           : math.max(geofenceRadiusMeters, math.max(landmark.widthMeters, landmark.heightMeters) / 2);
-      inLocation = distanceToCenter <= radius;
+      final effectiveRadius = _currentResult.isInLocation ? radius + 30.0 : radius;
+      inLocation = distanceToCenter <= effectiveRadius;
 
       if (!inLocation) {
         _lastFilteredX = null;

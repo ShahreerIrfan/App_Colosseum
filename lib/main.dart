@@ -14,8 +14,16 @@ import 'app/routes/app_pages.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
-  await Get.putAsync(() => VisitedViewpointsService().init());
+  try {
+    await Hive.initFlutter();
+  } catch (e) {
+    debugPrint('Hive.initFlutter error: $e');
+  }
+  try {
+    await Get.putAsync(() => VisitedViewpointsService().init());
+  } catch (e) {
+    debugPrint('VisitedViewpointsService init error: $e');
+  }
   final repository = TourRepositoryImpl();
   Get.put<ITourRepository>(repository, permanent: true);
   final downloads = Get.put(OfflineLandmarkStore(), permanent: true);

@@ -103,4 +103,12 @@ const tourDe = <String, String>{
   'Floor Tour Complete': 'Etagenrundgang abgeschlossen',
   'Read the privacy notice': 'Datenschutzhinweis lesen',
   'Could not open the privacy notice.': 'Der Datenschutzhinweis konnte nicht geöffnet werden.',
+  'Historical Summary': 'Historische Übersicht',
+  'Security & Entry Guidelines': 'Sicherheits- & Einlassregeln',
+  'Accessible Levels': 'Zugängliche Ebenen',
+  'Enter Monument & Explore Floors': 'Bauwerk betreten & Ebenen erkunden',
+  'Walking Directions to Gate': 'Fußweg zum Eingang',
+  'Entrance: {distance}m away': 'Eingang {distance} m entfernt',
+  '{distance}m away': '{distance} m entfernt',
+  'Audio Briefing': 'Audio-Einführung',
 };

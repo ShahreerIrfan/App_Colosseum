@@ -196,5 +196,24 @@ void main() {
         expect(vp.latLng.longitude, inInclusiveRange(12.484, 12.490));
       }
     });
+
+    test('verifies Colosseum floor viewpoints distribute around the arena and do NOT overlap', () {
+      final floor1 = FloorDefinition.fromId('floor_1');
+      final viewpoints = floor1.viewpoints;
+      expect(viewpoints.length, 9);
+
+      // Verify each viewpoint evaluates to a distinct coordinate around the arena ring
+      final coordinates = viewpoints.map((vp) => vp.latLng).toList();
+      for (var i = 0; i < coordinates.length; i++) {
+        for (var j = i + 1; j < coordinates.length; j++) {
+          final p1 = coordinates[i];
+          final p2 = coordinates[j];
+          final isSame = (p1.latitude - p2.latitude).abs() < 0.00001 &&
+              (p1.longitude - p2.longitude).abs() < 0.00001;
+          expect(isSame, isFalse,
+              reason: 'Viewpoint ${viewpoints[i].order} and ${viewpoints[j].order} should not overlap');
+        }
+      }
+    });
   });
 }

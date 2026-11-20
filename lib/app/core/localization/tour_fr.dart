@@ -103,4 +103,12 @@ const tourFr = <String, String>{
   'Floor Tour Complete': 'Visite de l’étage terminée',
   'Read the privacy notice': 'Lire l’avis de confidentialité',
   'Could not open the privacy notice.': 'Impossible d’ouvrir l’avis de confidentialité.',
+  'Historical Summary': 'Résumé historique',
+  'Security & Entry Guidelines': 'Consignes de sécurité et d’accès',
+  'Accessible Levels': 'Niveaux accessibles',
+  'Enter Monument & Explore Floors': 'Entrer dans le monument et voir les étages',
+  'Walking Directions to Gate': 'Itinéraire à pied vers l’entrée',
+  'Entrance: {distance}m away': 'Entrée à {distance} m',
+  '{distance}m away': 'À {distance} m',
+  'Audio Briefing': 'Présentation audio',
 };

@@ -157,6 +157,20 @@ abstract final class TourLocalizations {
     'Last download: {time}': 'Ultimo download: {time}',
     'Explore the Colosseum through panoramic views and immersive audio narration. Navigate through 5 iconic stops.': 'Esplora il Colosseo attraverso viste panoramiche e un’audioguida. Visita cinque tappe iconiche.',
     'Optionally share tour activity, such as stops visited and narration completion. Analytics uses a random identifier and does not collect GPS coordinates or your name. Sent events expire after 90 days. Turning this off clears unsent events.': 'Puoi condividere l’attività del tour, come le tappe visitate e gli ascolti completati. Le statistiche usano un identificativo casuale e non raccolgono coordinate GPS o nomi. Gli eventi inviati scadono dopo 90 giorni. Disattivando la condivisione, gli eventi in attesa vengono eliminati.',
+    'Historical Summary': 'Sintesi storica',
+    'Security & Entry Guidelines': 'Norme di sicurezza e accesso',
+    'Accessible Levels': 'Livelli accessibili',
+    'Enter Monument & Explore Floors': 'Entra nel monumento ed esplora i piani',
+    'Walking Directions to Gate': 'Indicazioni verso l’ingresso',
+    'Entrance: {distance}m away': 'Ingresso a {distance} m',
+    '{distance}m away': 'A {distance} m',
+    'Audio Briefing': 'Introduzione audio',
+    'Audio briefing': 'Introduzione audio',
+    'Listen before entering': 'Ascolta prima di entrare',
+    'At a glance': 'In breve',
+    'Before you enter': 'Prima di entrare',
+    'Explore floors': 'Esplora i piani',
+    '{distance} m to entrance': '{distance} m all’ingresso',
   };
 }
 

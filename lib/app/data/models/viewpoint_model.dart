@@ -21,7 +21,12 @@ class ViewpointModel {
 
   /// Gets the real geographic coordinate [LatLng] on the map.
   LatLng get latLng {
-    if (hasGeographicPosition) {
+    final isColosseumCenterDummy = latitude != null &&
+        longitude != null &&
+        (latitude! - 41.89021).abs() < 0.00002 &&
+        (longitude! - 12.492231).abs() < 0.00002;
+
+    if (hasGeographicPosition && !isColosseumCenterDummy) {
       return LatLng(latitude!, longitude!);
     }
     return GeodesicUtils.canvasOffsetToLatLng(Offset(normalizedX, normalizedY));

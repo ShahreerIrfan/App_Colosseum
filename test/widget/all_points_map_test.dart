@@ -19,6 +19,7 @@ import 'package:colosseum_client/app/modules/home/views/allPointsMap.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_map_marker.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_markers_layer.dart';
 import 'package:colosseum_client/app/modules/home/widgets/landmark_overlay_layer.dart';
+import 'package:colosseum_client/app/modules/home/widgets/landmark_detail_card.dart';
 import 'package:colosseum_client/app/modules/floor_map/views/floor_map_view.dart';
 import 'package:colosseum_client/app/routes/app_pages.dart';
 
@@ -184,7 +185,7 @@ void main() {
       // Now Arch of Constantine is the active selected landmark
       expect(controller.selectedLandmarkId.value, 'arch_of_constantine');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Close'));
+      await tester.tap(find.byKey(const Key('close_landmark_card')));
       await tester.pumpAndSettle();
 
       // Tap on Ludus Magnus marker
@@ -236,9 +237,9 @@ void main() {
 
         await tester.tap(colosseumTapFinder);
         await tester.pumpAndSettle();
-        expect(find.text('Update download'), findsOneWidget);
+        expect(find.byType(LandmarkDetailCard), findsOneWidget);
         expect(find.byType(FloorMapView), findsNothing);
-        await tester.tap(find.text('Enter landmark'));
+        await tester.tap(find.byKey(const Key('landmark_card_enter_button')));
         await tester.pumpAndSettle();
 
         expect(find.byType(FloorMapView), findsOneWidget);
@@ -280,8 +281,8 @@ void main() {
 
       await tester.tap(templeTapFinder);
       await tester.pumpAndSettle();
-      expect(find.text('Download for offline use'), findsOneWidget);
-      await tester.tap(find.text('Enter landmark'));
+      expect(find.byType(LandmarkDetailCard), findsOneWidget);
+      await tester.tap(find.byKey(const Key('landmark_card_enter_button')));
       await tester.pumpAndSettle();
 
       // Verify navigated directly to FloorMapView displaying Temple of Venus and Rome

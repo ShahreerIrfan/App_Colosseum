@@ -87,7 +87,7 @@ class TourConfig {
     this.arrivalDwellDuration = const Duration(milliseconds: 1200),
     this.maxJumpDistanceMeters = 15.0,
     this.maxLocationAge = const Duration(seconds: 5),
-    this.maxAcceptableAccuracyMeters = 25.0,
+    this.maxAcceptableAccuracyMeters = 60.0,
     this.headingToleranceDegrees = 20.0,
     this.arenaWidthMeters = 86.0,
     this.arenaHeightMeters = 54.0,

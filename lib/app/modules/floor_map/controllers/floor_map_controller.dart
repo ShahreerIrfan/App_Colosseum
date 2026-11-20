@@ -303,20 +303,32 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
             ?? FloorDefinition.fromId(id);
         currentFloor.value = def;
         floorId.value = def.id;
-        if (offlineLandmark != null) physicalFloorId.value = def.id;
+        physicalFloorId.value = def.id;
         floorName.value = def.displayName;
         if (landmarkId.value.isEmpty || (landmarkId.value == 'colosseum' && def.landmarkId != 'colosseum')) {
           landmarkId.value = def.landmarkId;
           landmarkName.value = def.landmarkName;
         }
+      } else {
+        final def = (offlineLandmark?.floors ?? _sync?.snapshotFor(_tourLanguage)?.floors)
+                ?.firstWhereOrNull((floor) => floor.landmarkId == landmarkId.value)
+            ?? FloorDefinition.initialFloorForLandmark(landmarkId.value, availableFloors);
+        currentFloor.value = def;
+        floorId.value = def.id;
+        physicalFloorId.value = def.id;
+        floorName.value = def.displayName;
       }
       if (args.containsKey('floorName') && args['floorName'] != null) {
         floorName.value = args['floorName'].toString();
       }
-    } else if (floorId.value != 'floor_underground') {
-      final def = FloorDefinition.fromId(floorId.value);
+    } else {
+      final targetFloorId = floorId.value.isNotEmpty ? floorId.value : 'floor_underground';
+      final def = (offlineLandmark?.floors ?? _sync?.snapshotFor(_tourLanguage)?.floors)
+              ?.firstWhereOrNull((floor) => floor.id == targetFloorId)
+          ?? FloorDefinition.fromId(targetFloorId);
       currentFloor.value = def;
       floorId.value = def.id;
+      physicalFloorId.value = def.id;
       floorName.value = def.displayName;
       landmarkId.value = def.landmarkId;
       landmarkName.value = def.landmarkName;
@@ -469,8 +481,8 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
     tourEngine.onAutoPlayViewpoint = (viewpoint) {
       selectedViewpoint.value = viewpoint;
+      isCardCollapsed.value = false;
       if (!_canNarrate(viewpoint)) return;
-      isCardCollapsed.value = true; // Auto-play starts in collapsed mini-player
       isPlayingAudio.value = true;
       _currentSpeechStartOffset = 0;
       _lastSpokenCharIndex = 0;
@@ -512,6 +524,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
   }
 
   void _initCompass() {
+    compassService.setMapNorthOffset(currentFloor.value.mapNorthOffsetDegrees);
     userOrientation.value = compassService.currentState;
     _compassSubscription = compassService.orientationStream.listen(updateOrientation);
     compassService.startListening();
@@ -797,6 +810,10 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
         updated.firstWhereOrNull((viewpoint) => viewpoint.id == selected?.id);
     currentFloor.value = floor.copyWith(viewpoints: updated);
     floorName.value = floor.displayName;
+    compassService.setMapNorthOffset(floor.mapNorthOffsetDegrees);
+    if (physicalFloorId.value == 'floor_underground' || physicalFloorId.value == floor.id) {
+      physicalFloorId.value = floor.id;
+    }
 
     final idx = availableFloors.indexWhere((item) => item.id == floor.id);
     if (idx != -1) availableFloors[idx] = currentFloor.value;
@@ -977,6 +994,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     _currentSpeechStartOffset = 0;
     _lastSpokenCharIndex = 0;
     selectedViewpoint.value = null;
+    isCardCollapsed.value = false;
     isPlayingAudio.value = false;
     audioProgress.value = 0.0;
     ttsService.stop();
@@ -1349,7 +1367,8 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     // 6. Update single source of truth floor state
     currentFloor.value = targetDef;
     floorId.value = targetDef.id;
-    if (offlineLandmark != null) physicalFloorId.value = targetDef.id;
+    physicalFloorId.value = targetDef.id;
+    compassService.setMapNorthOffset(targetDef.mapNorthOffsetDegrees);
     floorName.value = targetDef.displayName;
     landmarkId.value = targetDef.landmarkId;
     if (offlineLandmark case final OfflineLandmark package) {

@@ -103,4 +103,12 @@ const tourEs = <String, String>{
   'Floor Tour Complete': 'Recorrido de la planta completado',
   'Read the privacy notice': 'Leer el aviso de privacidad',
   'Could not open the privacy notice.': 'No se pudo abrir el aviso de privacidad.',
+  'Historical Summary': 'Resumen histórico',
+  'Security & Entry Guidelines': 'Normas de seguridad y acceso',
+  'Accessible Levels': 'Niveles accesibles',
+  'Enter Monument & Explore Floors': 'Entrar al monumento y ver plantas',
+  'Walking Directions to Gate': 'Indicaciones a pie hasta la entrada',
+  'Entrance: {distance}m away': 'Entrada a {distance} m',
+  '{distance}m away': 'A {distance} m',
+  'Audio Briefing': 'Introducción de audio',
 };

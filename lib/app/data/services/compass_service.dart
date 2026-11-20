@@ -25,9 +25,8 @@ class CompassService {
   UserOrientationState get currentState => _currentState;
 
   /// Architectural Map North offset in degrees.
-  /// Colosseum's major axis is rotated by -20.0° relative to true East-West / North.
   /// Setting this allows true geographic heading to project accurately onto the floor plan canvas.
-  final double mapNorthOffsetDegrees;
+  double mapNorthOffsetDegrees;
 
   /// Angular dead-band in degrees. Heading variations smaller than this threshold
   /// are treated as sensor electronic noise and suppressed when stationary.
@@ -46,7 +45,7 @@ class CompassService {
   DateTime? _lastTimestamp;
 
   CompassService({
-    this.mapNorthOffsetDegrees = -20.0,
+    this.mapNorthOffsetDegrees = 0.0,
     this.deadBandDegrees = 1.5,
     this.minAlpha = 0.08,
     this.maxAlpha = 0.65,
@@ -178,6 +177,19 @@ class CompassService {
     } else {
       final t = ((absDeltaDegrees - 25.0) / 35.0).clamp(0.0, 1.0);
       return maxAlpha + (0.85 - maxAlpha) * t;
+    }
+  }
+
+  /// Dynamically updates the architectural map north offset (e.g. from database floor calibration).
+  void setMapNorthOffset(double offset) {
+    if (mapNorthOffsetDegrees == offset) return;
+    mapNorthOffsetDegrees = offset;
+    if (_lastFilteredHeading != null) {
+      final mapHeading = (_lastFilteredHeading! - mapNorthOffsetDegrees + 360.0) % 360.0;
+      _currentState = _currentState.copyWith(
+        mapHeadingDegrees: () => mapHeading,
+      );
+      _orientationController.add(_currentState);
     }
   }
 

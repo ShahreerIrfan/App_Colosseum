@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../data/models/floor_definition.dart';
 import '../../../data/models/landmark_marker_model.dart';
+import '../../../data/models/landmark_onboarding_model.dart';
 import '../../../data/models/landmark_overlay_model.dart';
 import '../../../data/models/map_view_type.dart';
 import '../../../data/models/user_orientation_state.dart';
@@ -17,10 +18,12 @@ import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../data/services/compass_service.dart';
 import '../../../data/services/gps_location_service.dart';
 import '../../../data/services/offline_landmark_store.dart';
+import '../../../data/services/pedestrian_navigation_engine.dart';
 import '../../../data/services/tour_sync_service.dart';
 import '../../../data/models/tour_bundle_model.dart';
 import '../../../data/services/pedestrian_street_router.dart';
 import '../../../data/services/tour_analytics_service.dart';
+import '../../../data/services/tts_service.dart';
 import '../../../routes/app_pages.dart';
 import '../views/allPointsMap.dart';
 
@@ -29,6 +32,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   final ITourRepository tourRepository;
   final GpsLocationService gpsLocationService;
   final CompassService compassService;
+  final TtsService ttsService;
   String ttsLocale = 'en-US';
   String tourLanguage = 'en';
   String? _outdoorAnalyticsSession;
@@ -109,6 +113,43 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   /// Landmark currently within proximity threshold awaiting user action (Enter or Skip).
   final approachingLandmark = Rxn<LandmarkMarkerModel>();
 
+  /// Currently active landmark displayed in the LandmarkDetailCard (if visible).
+  final activeLandmarkForCard = Rxn<LandmarkMarkerModel>();
+
+  /// Whether the LandmarkDetailCard bottom card is currently visible.
+  final isLandmarkCardVisible = false.obs;
+
+  /// Whether the LandmarkDetailCard is collapsed to mini-player mode.
+  final isLandmarkCardCollapsed = false.obs;
+
+  /// Whether audio briefing for active landmark is currently playing.
+  final isLandmarkAudioPlaying = false.obs;
+
+  /// Playback progress of landmark welcome narration (0.0 to 1.0).
+  final landmarkAudioProgress = 0.0.obs;
+
+  /// Set of landmark IDs dismissed by the user to avoid immediate re-prompting.
+  final _dismissedProximityLandmarkIds = <String>{}.obs;
+
+  /// Active route points for walking directions to a specific landmark gate.
+  final landmarkDirectionsRoute = <LatLng>[].obs;
+
+  /// Turn-by-turn navigation engine for outdoor walking routes.
+  late final PedestrianNavigationEngine pedestrianNavEngine;
+  final pedestrianNavStatus = const PedestrianNavStatus().obs;
+  final isVoiceGuidanceMuted = false.obs;
+
+  void toggleVoiceGuidance() {
+    isVoiceGuidanceMuted.toggle();
+    ttsService.isVoiceGuidanceMuted = isVoiceGuidanceMuted.value;
+  }
+
+  Timer? _landmarkAudioProgressTimer;
+  DateTime? _landmarkNarrationStartTime;
+  int _landmarkSpeechStartOffset = 0;
+  int _landmarkLastSpokenCharIndex = 0;
+  static const double _estimatedCharsPerSecond = 14.5;
+
   /// Remaining unvisited and unskipped landmarks in the tour.
   List<LandmarkMarkerModel> get remainingTourLandmarks {
     final visited = visitedLandmarkIds.toSet();
@@ -141,6 +182,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   /// Starts the interactive tour itinerary.
   void startTour() {
+    dismissLandmarkCard();
     if (_outdoorAnalyticsSession != null) _recordOutdoorEvent('tour_stopped');
     _outdoorAnalyticsSession = TourAnalyticsService.newId();
     _recordOutdoorEvent('tour_started');
@@ -149,11 +191,60 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     skippedLandmarkIds.clear();
     hasPromptedLandmarkIds.clear();
     approachingLandmark.value = null;
+
     final location = userLocation.value;
-    if (location != null) checkProximityToLandmarks(location);
+    // When the user starts/views the itinerary, display the pedestrian route over the map.
+    // Do NOT immediately pop up a landmark modal; if the user is already inside proximity
+    // of a landmark at the start, mark it as prompted so it doesn't interrupt the itinerary view.
+    if (location != null) {
+      for (final landmark in remainingTourLandmarks) {
+        final threshold = getProximityThresholdForLandmark(landmark.id);
+        final distance = Geolocator.distanceBetween(
+          location.latitude,
+          location.longitude,
+          landmark.latitude,
+          landmark.longitude,
+        );
+        if (distance <= threshold) {
+          hasPromptedLandmarkIds.add(landmark.id);
+        }
+      }
+    }
+
     try {
       mapController.move(location ?? defaultTourStartLocation, defaultZoom);
     } catch (_) {}
+    _armNextTourNavigation();
+  }
+
+  /// Arms turn-by-turn pedestrian navigation toward the next landmark in the tour.
+  void _armNextTourNavigation() {
+    if (!isTourActive.value) return;
+    final next = remainingTourLandmarks.firstOrNull;
+    if (next != null) {
+      final start = userLocation.value ?? defaultTourStartLocation;
+      final route = _pedestrianRouter.value.routeBetween(start, next.coordinates);
+      if (route.isNotEmpty) {
+        pedestrianNavEngine.startNavigation(route: route, destination: next);
+      }
+    } else {
+      pedestrianNavEngine.stopNavigation();
+    }
+  }
+
+  void _initPedestrianNav() {
+    pedestrianNavEngine = PedestrianNavigationEngine(ttsService: ttsService);
+    pedestrianNavEngine.onStatusChanged = (status) {
+      pedestrianNavStatus.value = status;
+    };
+    pedestrianNavEngine.onArrival = () {
+      final target = pedestrianNavStatus.value.targetLandmark;
+      if (target != null && !hasPromptedLandmarkIds.contains(target.id)) {
+        hasPromptedLandmarkIds.add(target.id);
+        approachingLandmark.value = target;
+        showLandmarkOnboarding(target, autoTriggered: true, autoPlayAudio: true);
+      }
+    };
   }
 
   /// Stops/ends the interactive tour.
@@ -162,6 +253,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _outdoorAnalyticsSession = null;
     isTourActive.value = false;
     approachingLandmark.value = null;
+    pedestrianNavEngine.stopNavigation();
   }
 
   /// Toggles the tour state between started and stopped.
@@ -211,8 +303,32 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       if (distance > threshold * 1.5) {
         approachingLandmark.value = null;
         hasPromptedLandmarkIds.remove(currentLandmark.id);
+        if (activeLandmarkForCard.value?.id == currentLandmark.id) {
+          dismissLandmarkCard();
+        }
       }
       return;
+    }
+
+    // Reset prompted landmarks if user moved away so they can be re-prompted upon re-approach
+    if (hasPromptedLandmarkIds.isNotEmpty) {
+      final toUnprompt = <String>[];
+      for (final id in hasPromptedLandmarkIds) {
+        final landmark = landmarkMarkers.firstWhereOrNull((m) => m.id == id);
+        if (landmark != null) {
+          final threshold = getProximityThresholdForLandmark(id);
+          final dist = Geolocator.distanceBetween(
+            currentPos.latitude,
+            currentPos.longitude,
+            landmark.latitude,
+            landmark.longitude,
+          );
+          if (dist > threshold * 1.4) {
+            toUnprompt.add(id);
+          }
+        }
+      }
+      hasPromptedLandmarkIds.removeAll(toUnprompt);
     }
 
     LandmarkMarkerModel? closestLandmark;
@@ -238,32 +354,259 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     if (closestLandmark != null) {
       hasPromptedLandmarkIds.add(closestLandmark.id);
       approachingLandmark.value = closestLandmark;
+      showLandmarkOnboarding(closestLandmark, autoTriggered: true, autoPlayAudio: true);
     }
   }
 
   /// User action: Enters the approaching landmark.
-  /// Directly navigates to the landmark's detailed view (FloorMapView),
-  /// bypassing the intermediary levels selection view.
+  /// Directly navigates to the landmark's detailed view (FloorMapView).
   void enterApproachingLandmark() {
-    final landmark = approachingLandmark.value;
-    if (landmark == null) return;
-    visitedLandmarkIds.add(landmark.id);
-    _recordOutdoorEvent('landmark_entered', landmark: landmark.id);
-    _finishOutdoorAnalyticsIfDone();
-    visitedLandmarkIds.refresh();
-    approachingLandmark.value = null;
-    unawaited(_enterSavedOrLive(landmark.id));
+    enterLandmarkFromCard();
   }
 
   /// User action: Skips the approaching landmark and continues to next point.
   void skipApproachingLandmark() {
-    final landmark = approachingLandmark.value;
-    if (landmark == null) return;
-    skippedLandmarkIds.add(landmark.id);
-    _recordOutdoorEvent('landmark_skipped', landmark: landmark.id);
-    _finishOutdoorAnalyticsIfDone();
-    skippedLandmarkIds.refresh();
+    final landmark = approachingLandmark.value ?? activeLandmarkForCard.value;
+    if (landmark != null) {
+      if (isTourActive.value) {
+        skippedLandmarkIds.add(landmark.id);
+        _recordOutdoorEvent('landmark_skipped', landmark: landmark.id);
+        _finishOutdoorAnalyticsIfDone();
+        skippedLandmarkIds.refresh();
+        _armNextTourNavigation();
+      }
+      _dismissedProximityLandmarkIds.add(landmark.id);
+    }
     approachingLandmark.value = null;
+    dismissLandmarkCard();
+  }
+
+  /// Returns the calibrated physical outer radius of a monument in meters.
+  static double getLandmarkOuterRadius(String landmarkId) {
+    switch (landmarkId.toLowerCase().trim()) {
+      case 'colosseum':
+      case 'colosseo':
+        return 65.0;
+      case 'arch_of_constantine':
+      case 'arco_di_costantino':
+        return 18.0;
+      case 'ludus_magnus':
+        return 35.0;
+      case 'temple_venus_rome':
+      case 'temple_of_venus_and_rome':
+      case 'tempio_di_venere_e_roma':
+        return 55.0;
+      case 'roman_forum':
+      case 'foro_romano':
+        return 50.0;
+      default:
+        return 40.0;
+    }
+  }
+
+  /// Evaluates exterior proximity to landmarks when active tour is not navigating.
+  /// Triggers LandmarkDetailCard when user is in the 5m - 10m exterior buffer of the monument wall.
+  void evaluateLandmarkProximity(LatLng userPos) {
+    if (isTourActive.value) return;
+
+    // Active card departure check with hysteresis
+    if (isLandmarkCardVisible.value && activeLandmarkForCard.value != null) {
+      final currentLandmark = activeLandmarkForCard.value!;
+      final radius = getLandmarkOuterRadius(currentLandmark.id);
+      final distance = const Distance().as(LengthUnit.Meter, userPos, currentLandmark.coordinates);
+
+      // Auto-dismiss if user walked well past the entrance buffer (radius + 25m)
+      if (distance > radius + 25.0) {
+        dismissLandmarkCard();
+      }
+      return;
+    }
+
+    // Check entrance approach buffer for each monument
+    for (final landmark in landmarkMarkers) {
+      if (_dismissedProximityLandmarkIds.contains(landmark.id)) continue;
+
+      final distance = const Distance().as(LengthUnit.Meter, userPos, landmark.coordinates);
+      final outerRadius = getLandmarkOuterRadius(landmark.id);
+      final bufferMax = outerRadius + 10.0; // 10m outer boundary
+      final bufferMin = outerRadius; // Outer monument perimeter
+
+      // User is within the 5-10m exterior entrance zone
+      if (distance >= (bufferMin - 2.0) && distance <= bufferMax) {
+        approachingLandmark.value = landmark;
+        showLandmarkOnboarding(landmark, autoTriggered: true, autoPlayAudio: true);
+        break;
+      }
+    }
+  }
+
+  /// Displays the rich onboarding & orientation card for a landmark.
+  void showLandmarkOnboarding(
+    LandmarkMarkerModel landmark, {
+    bool autoTriggered = false,
+    bool autoPlayAudio = false,
+  }) {
+    if (activeLandmarkForCard.value?.id != landmark.id) {
+      _stopLandmarkAudioTimer();
+      _landmarkSpeechStartOffset = 0;
+      _landmarkLastSpokenCharIndex = 0;
+      landmarkAudioProgress.value = 0.0;
+      if (isLandmarkAudioPlaying.value) {
+        isLandmarkAudioPlaying.value = false;
+        ttsService.stop();
+      }
+      landmarkDirectionsRoute.clear();
+    }
+
+    activeLandmarkForCard.value = landmark;
+    selectedLandmarkId.value = landmark.id;
+    isLandmarkCardVisible.value = true;
+    isLandmarkCardCollapsed.value = false;
+
+    if (autoPlayAudio) {
+      playLandmarkAudio();
+    }
+  }
+
+  /// Dismisses the landmark onboarding card and stops any active narration.
+  void dismissLandmarkCard() {
+    _stopLandmarkAudioTimer();
+    _landmarkSpeechStartOffset = 0;
+    _landmarkLastSpokenCharIndex = 0;
+    landmarkAudioProgress.value = 0.0;
+    if (isLandmarkAudioPlaying.value) {
+      isLandmarkAudioPlaying.value = false;
+      ttsService.stop();
+    }
+    if (activeLandmarkForCard.value != null) {
+      _dismissedProximityLandmarkIds.add(activeLandmarkForCard.value!.id);
+    }
+    isLandmarkCardVisible.value = false;
+    activeLandmarkForCard.value = null;
+    approachingLandmark.value = null;
+    isLandmarkCardCollapsed.value = false;
+    landmarkDirectionsRoute.clear();
+    if (isTourActive.value) {
+      _armNextTourNavigation();
+    }
+  }
+
+  /// Toggles collapsed (mini-player) and expanded card presentation.
+  void toggleLandmarkCardCollapse() {
+    isLandmarkCardCollapsed.toggle();
+  }
+
+  /// Plays or resumes audio briefing for the currently active landmark.
+  Future<void> playLandmarkAudio() async {
+    final landmark = activeLandmarkForCard.value;
+    if (landmark == null) return;
+    final onboarding = landmark.onboardingModel;
+    final text = onboarding.audioIntroText;
+    if (text.isEmpty) return;
+
+    isLandmarkAudioPlaying.value = true;
+    _startLandmarkAudioProgressTimer(text);
+    await ttsService.speakNarration(text);
+  }
+
+  /// Toggles landmark audio playback between playing and paused with position bookmarking.
+  void toggleLandmarkAudio() async {
+    if (isLandmarkAudioPlaying.value) {
+      _stopLandmarkAudioTimer();
+      isLandmarkAudioPlaying.value = false;
+      await ttsService.stop();
+    } else {
+      final landmark = activeLandmarkForCard.value;
+      if (landmark == null) return;
+      final onboarding = LandmarkOnboardingModel.forLandmark(
+        landmark.id,
+        language: tourLanguage,
+      );
+      final text = onboarding.audioIntroText;
+      if (text.isEmpty) return;
+
+      isLandmarkAudioPlaying.value = true;
+
+      if (_landmarkLastSpokenCharIndex > 0 &&
+          _landmarkLastSpokenCharIndex < text.length) {
+        int resumeIndex = _landmarkLastSpokenCharIndex;
+        if (resumeIndex < text.length && text[resumeIndex] != ' ') {
+          final lastSpace = text.lastIndexOf(' ', resumeIndex);
+          if (lastSpace != -1 && lastSpace >= _landmarkSpeechStartOffset) {
+            resumeIndex = lastSpace + 1;
+          }
+        }
+        _landmarkSpeechStartOffset = resumeIndex;
+        final remainingText = text.substring(_landmarkSpeechStartOffset);
+        _startLandmarkAudioProgressTimer(text);
+        await ttsService.speakNarration(remainingText);
+      } else {
+        _landmarkSpeechStartOffset = 0;
+        _landmarkLastSpokenCharIndex = 0;
+        _startLandmarkAudioProgressTimer(text);
+        await ttsService.speakNarration(text);
+      }
+    }
+  }
+
+  void _startLandmarkAudioProgressTimer(String fullText) {
+    _landmarkAudioProgressTimer?.cancel();
+    _landmarkNarrationStartTime = DateTime.now();
+    _landmarkAudioProgressTimer =
+        Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (!isLandmarkAudioPlaying.value || activeLandmarkForCard.value == null) {
+        _stopLandmarkAudioTimer();
+        return;
+      }
+      if (_landmarkNarrationStartTime != null) {
+        final elapsedSeconds = DateTime.now()
+                .difference(_landmarkNarrationStartTime!)
+                .inMilliseconds /
+            1000.0;
+        final estimatedChars = (_landmarkSpeechStartOffset +
+                (elapsedSeconds * _estimatedCharsPerSecond))
+            .round()
+            .clamp(0, fullText.length);
+        _landmarkLastSpokenCharIndex = estimatedChars;
+        landmarkAudioProgress.value = fullText.isNotEmpty
+            ? (estimatedChars / fullText.length).clamp(0.0, 1.0)
+            : 0.0;
+      }
+    });
+  }
+
+  void _stopLandmarkAudioTimer() {
+    _landmarkAudioProgressTimer?.cancel();
+    _landmarkAudioProgressTimer = null;
+    _landmarkNarrationStartTime = null;
+  }
+
+  /// Action from LandmarkDetailCard: transitions into interior floor map.
+  void enterLandmarkFromCard() {
+    final landmark = activeLandmarkForCard.value ?? approachingLandmark.value;
+    if (landmark == null) return;
+    final id = landmark.id;
+    if (isTourActive.value) {
+      visitedLandmarkIds.add(id);
+      _recordOutdoorEvent('landmark_entered', landmark: id);
+      _finishOutdoorAnalyticsIfDone();
+      visitedLandmarkIds.refresh();
+      approachingLandmark.value = null;
+    }
+    dismissLandmarkCard();
+    unawaited(_enterSavedOrLive(id));
+  }
+
+  /// Calculates and displays pedestrian street walking route to the landmark gate,
+  /// and minimizes (collapses) the card so the user can clearly see the map and route.
+  void getDirectionsToLandmark(LandmarkMarkerModel landmark) {
+    final start = userLocation.value ?? defaultTourStartLocation;
+    final route = _pedestrianRouter.value.routeBetween(start, landmark.coordinates);
+    landmarkDirectionsRoute.assignAll(route);
+    if (route.isNotEmpty) {
+      pedestrianNavEngine.startNavigation(route: route, destination: landmark);
+    }
+    isLandmarkCardCollapsed.value = true;
   }
 
   /// Metric distance from the user's current location to the Colosseum center in meters.
@@ -289,12 +632,17 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     ITourRepository? tourRepository,
     GpsLocationService? gpsLocationService,
     CompassService? compassService,
+    TtsService? ttsService,
   })  : tourRepository = tourRepository ??
             (Get.isRegistered<ITourRepository>()
                 ? Get.find<ITourRepository>()
                 : TourRepositoryImpl()),
         gpsLocationService = gpsLocationService ?? GpsLocationService(),
-        compassService = compassService ?? CompassService();
+        compassService = compassService ?? CompassService(),
+        ttsService = ttsService ??
+            (Get.isRegistered<TtsService>()
+                ? Get.find<TtsService>()
+                : TtsService());
 
   @override
   void onInit() {
@@ -307,6 +655,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       tourLanguage = arguments['language'] as String;
     }
     unawaited(TourAnalyticsService.instance.flush());
+    _initTts();
+    _initPedestrianNav();
     WidgetsBinding.instance.addObserver(this);
     mapController = MapController();
     final sync = _sync;
@@ -322,6 +672,21 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       _initFloors();
     }
     _initLocationTracking();
+  }
+
+  void _initTts() {
+    ttsService.init(languageCode: ttsLocale);
+    ttsService.onNarrationComplete = () {
+      _stopLandmarkAudioTimer();
+      _landmarkSpeechStartOffset = 0;
+      _landmarkLastSpokenCharIndex = 0;
+      isLandmarkAudioPlaying.value = false;
+      landmarkAudioProgress.value = 0.0;
+    };
+    ttsService.onError = (_) {
+      _stopLandmarkAudioTimer();
+      isLandmarkAudioPlaying.value = false;
+    };
   }
 
   void _applyTourSnapshot(TourBundleModel snapshot) {
@@ -627,8 +992,13 @@ class HomeController extends GetxController with WidgetsBindingObserver {
                   final posLatLng = LatLng(pos.latitude, pos.longitude);
                   userLocation.value = posLatLng;
                   locationAccuracy.value = pos.accuracy;
+                  if (pedestrianNavEngine.isNavigating) {
+                    pedestrianNavEngine.updatePosition(posLatLng);
+                  }
                   if (isTourActive.value) {
                     checkProximityToLandmarks(posLatLng);
+                  } else {
+                    evaluateLandmarkProximity(posLatLng);
                   }
                 },
                 onError: (_) {},
@@ -645,8 +1015,15 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     userLocation.value = location;
     if (heading != null) userHeading.value = heading;
     if (accuracy != null) locationAccuracy.value = accuracy;
-    if (location != null && isTourActive.value) {
-      checkProximityToLandmarks(location);
+    if (location != null) {
+      if (pedestrianNavEngine.isNavigating) {
+        pedestrianNavEngine.updatePosition(location);
+      }
+      if (isTourActive.value) {
+        checkProximityToLandmarks(location);
+      } else {
+        evaluateLandmarkProximity(location);
+      }
     }
   }
 
@@ -655,6 +1032,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _recordOutdoorEvent('tour_stopped');
     _outdoorAnalyticsSession = null;
     _pedestrianRefreshGeneration++;
+    _stopLandmarkAudioTimer();
+    pedestrianNavEngine.stopNavigation();
+    ttsService.stop();
     WidgetsBinding.instance.removeObserver(this);
     _tourUpdates?.cancel();
     _positionSubscription?.cancel();

@@ -103,4 +103,12 @@ const tourKo = <String, String>{
   'Floor Tour Complete': '이 층의 투어 완료',
   'Read the privacy notice': '개인정보 처리 안내 읽기',
   'Could not open the privacy notice.': '개인정보 처리 안내를 열 수 없습니다.',
+  'Historical Summary': '역사적 개요',
+  'Security & Entry Guidelines': '보안 및 입장 안내',
+  'Accessible Levels': '관람 가능 층',
+  'Enter Monument & Explore Floors': '유적지 입장 및 층별 관람',
+  'Walking Directions to Gate': '입구까지 도보 길안내',
+  'Entrance: {distance}m away': '입구까지 {distance}m',
+  '{distance}m away': '{distance}m 거리',
+  'Audio Briefing': '오디오 브리핑',
 };

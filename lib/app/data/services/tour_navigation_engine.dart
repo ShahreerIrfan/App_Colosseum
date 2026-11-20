@@ -288,25 +288,52 @@ class TourNavigationEngine {
       _state = _state.copyWith(isLocationUncertain: false);
     }
 
+    // Adaptive Exponential Moving Average (EMA) smoothing for indoor positioning
+    UserLocationModel effectiveLocation = location;
+    if (!isSimulated &&
+        _state.userLocation != null &&
+        _state.userLocation!.floorId == location.floorId) {
+      final prev = _state.userLocation!;
+      // Dynamic smoothing weight: higher responsiveness when accuracy is good, stronger damping when accuracy is noisy
+      final alpha = (15.0 / location.accuracyMeters.clamp(5.0, 60.0)).clamp(0.25, 0.85);
+      final smoothedX = prev.normalizedX * (1 - alpha) + location.normalizedX * alpha;
+      final smoothedY = prev.normalizedY * (1 - alpha) + location.normalizedY * alpha;
+
+      double? smoothedLat;
+      double? smoothedLng;
+      if (prev.latitude != null && location.latitude != null &&
+          prev.longitude != null && location.longitude != null) {
+        smoothedLat = prev.latitude! * (1 - alpha) + location.latitude! * alpha;
+        smoothedLng = prev.longitude! * (1 - alpha) + location.longitude! * alpha;
+      }
+
+      effectiveLocation = location.copyWith(
+        normalizedX: smoothedX,
+        normalizedY: smoothedY,
+        latitude: smoothedLat,
+        longitude: smoothedLng,
+      );
+    }
+
     // 4. Sudden Impossible Jump Detection
     if (!isSimulated && _state.userLocation != null) {
       final prevOffset = Offset(
         _state.userLocation!.normalizedX,
         _state.userLocation!.normalizedY,
       );
-      final newOffset = Offset(location.normalizedX, location.normalizedY);
+      final newOffset = Offset(effectiveLocation.normalizedX, effectiveLocation.normalizedY);
       final previous = _state.userLocation!;
       final jumpDist = previous.latitude != null && previous.longitude != null &&
-              location.latitude != null && location.longitude != null
+              effectiveLocation.latitude != null && effectiveLocation.longitude != null
           ? const Distance(roundResult: false).as(
-              LengthUnit.Meter, previous.latLng, location.latLng,
+              LengthUnit.Meter, previous.latLng, effectiveLocation.latLng,
             )
           : calculateMetricDistance(prevOffset, newOffset);
 
       if (jumpDist > config.maxJumpDistanceMeters) {
         // Mark jump suspicious; invalidate pending arrival dwell
         _state = _state.copyWith(
-          userLocation: () => location,
+          userLocation: () => effectiveLocation,
           arrivalDwellStartedAt: () => null,
         );
         _notifyState();
@@ -315,10 +342,10 @@ class TourNavigationEngine {
     }
 
     // Record user location
-    _state = _state.copyWith(userLocation: () => location);
+    _state = _state.copyWith(userLocation: () => effectiveLocation);
     _canReevaluateHeading = !isSimulated;
 
-    final userOffset = Offset(location.normalizedX, location.normalizedY);
+    final userOffset = Offset(effectiveLocation.normalizedX, effectiveLocation.normalizedY);
 
     // 5. Evaluate Departure from Previous Stop (Hysteresis)
     // When isSimulated is true (developer snap / manual placement), skip departure instruction

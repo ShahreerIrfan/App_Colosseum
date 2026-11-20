@@ -254,6 +254,10 @@ class TtsService {
 
   Timer? _instructionSafetyTimer;
 
+  /// Global mute toggle for spoken turn-by-turn navigation instructions.
+  /// When true, instructions are suppressed from voice while remaining visual on screen.
+  bool isVoiceGuidanceMuted = false;
+
   /// Internal / test handler for native TTS completion events.
   @visibleForTesting
   void handleNativeCompletion() {
@@ -279,6 +283,14 @@ class TtsService {
 
   /// Speaks a navigation voice instruction without triggering narration complete events.
   Future<void> speakInstruction(String text, {VoidCallback? onDone}) async {
+    // Tier-1 Audio Collision Arbiter:
+    // If narration (historical story) is actively playing, or if voice guidance is muted,
+    // do NOT interrupt or talk over the narration. Directions remain visual on the map banner.
+    if (isSpeakingNarration || isVoiceGuidanceMuted) {
+      onDone?.call();
+      return;
+    }
+
     final myGen = ++_generation;
     _instructionSafetyTimer?.cancel();
     _instructionSafetyTimer = null;
@@ -347,6 +359,13 @@ class TtsService {
 
   /// Speaks a viewpoint guide description narration and invokes [onNarrationComplete] when done.
   Future<void> speakNarration(String text, {VoidCallback? onDone}) async {
+    // Cleanly complete any in-flight navigation prompt callback before taking over audio focus
+    if (_currentSpeechType == TtsSpeechType.instruction && _activeInstructionOnDone != null) {
+      final prevOnDone = _activeInstructionOnDone;
+      _activeInstructionOnDone = null;
+      prevOnDone?.call();
+    }
+
     final myGen = ++_generation;
     _instructionSafetyTimer?.cancel();
     _instructionSafetyTimer = null;

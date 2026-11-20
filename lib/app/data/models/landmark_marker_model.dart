@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import '../datasources/local/landmark_onboarding_data.dart';
+import 'landmark_onboarding_model.dart';
 
 /// Reusable data model representing a classic map pin marker with text label and color coding.
 @immutable
@@ -39,6 +41,24 @@ class LandmarkMarkerModel {
   /// Maximum zoom level at which this marker is visible.
   final double maxZoom;
 
+  /// Construction era or archaeological period (e.g. '70 – 80 AD (Flavian Dynasty)').
+  final String? era;
+
+  /// Commissioning architects or emperors.
+  final String? builders;
+
+  /// Concise historical summary for visitor orientation.
+  final String? historicalSummary;
+
+  /// Security, baggage, and entry regulations.
+  final List<String>? securityGuidelines;
+
+  /// Key architectural tiers and accessible floor highlights.
+  final List<String>? levelHighlights;
+
+  /// Spoken audio narration script for automatic proximity greeting.
+  final String? audioIntroText;
+
   /// Optional tap callback for custom marker behavior.
   final VoidCallback? onTap;
 
@@ -51,11 +71,47 @@ class LandmarkMarkerModel {
     this.icon,
     this.imagePath,
     this.thumbnailUrl,
+    this.era,
+    this.builders,
+    this.historicalSummary,
+    this.securityGuidelines,
+    this.levelHighlights,
+    this.audioIntroText,
     this.labelOffset = Offset.zero,
     this.minZoom = 13.0,
     this.maxZoom = 21.0,
     this.onTap,
   });
+
+  /// Resolved onboarding orientation model with live backend overrides and resilient fallbacks.
+  LandmarkOnboardingModel get onboardingModel {
+    final defaultModel = LandmarkOnboardingData.getForLandmark(id);
+    return LandmarkOnboardingModel(
+      landmarkId: id,
+      title: name.isNotEmpty ? name : defaultModel.title,
+      subtitle: (category != null && category!.isNotEmpty)
+          ? category!
+          : defaultModel.subtitle,
+      era: (era != null && era!.isNotEmpty) ? era! : defaultModel.era,
+      builders: (builders != null && builders!.isNotEmpty)
+          ? builders!
+          : defaultModel.builders,
+      historicalSummary: (historicalSummary != null && historicalSummary!.isNotEmpty)
+          ? historicalSummary!
+          : defaultModel.historicalSummary,
+      securityGuidelines:
+          (securityGuidelines != null && securityGuidelines!.isNotEmpty)
+              ? securityGuidelines!
+              : defaultModel.securityGuidelines,
+      levelHighlights: (levelHighlights != null && levelHighlights!.isNotEmpty)
+          ? levelHighlights!
+          : defaultModel.levelHighlights,
+      audioIntroText: (audioIntroText != null && audioIntroText!.isNotEmpty)
+          ? audioIntroText!
+          : defaultModel.audioIntroText,
+      outerRadiusMeters: defaultModel.outerRadiusMeters,
+    );
+  }
 
   /// Canonical set of pre-bundled built-in landmark IDs.
   static const Set<String> builtInIds = {
@@ -68,6 +124,35 @@ class LandmarkMarkerModel {
 
   /// Whether this landmark is one of the 5 built-in classical monuments.
   bool get isBuiltIn => builtInIds.contains(id);
+
+  /// Resolves the primary photo card image URL or fallback for the proximity pop-up card.
+  String get cardImageUrl {
+    if (thumbnailUrl != null && thumbnailUrl!.trim().isNotEmpty) {
+      return thumbnailUrl!.trim();
+    }
+    switch (id) {
+      case 'colosseum':
+      case 'colosseo':
+        return 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&auto=format&fit=crop&q=80';
+      case 'arch_of_constantine':
+      case 'arco_di_costantino':
+      case 'arch-of-constantine':
+        return 'https://res.cloudinary.com/ddt9rog0e/image/upload/v1793117917/colosseum/landmarks/arch_of_constantine/cards/Arch_of_Constantine__Rome__-_South_side__from_Via_triumphalis_ajiyme.jpg';
+      case 'ludus_magnus':
+      case 'ludus-magnus':
+        return 'https://res.cloudinary.com/ddt9rog0e/image/upload/v1793118097/colosseum/landmarks/ludus_magnus/cards/Ludus_magnus_Rome_2006_en686t.jpg';
+      case 'roman_forum':
+      case 'foro_romano':
+      case 'roman-forum':
+        return 'https://res.cloudinary.com/ddt9rog0e/image/upload/v1793117872/colosseum/landmarks/roman_forum/cards/Roman-Forum-1024x683_wq6pg4.jpg';
+      case 'temple_venus_rome':
+      case 'temple-venus-rome':
+      case 'tempio_di_venere_e_roma':
+        return 'https://res.cloudinary.com/ddt9rog0e/image/upload/v1793118042/colosseum/landmarks/temple_venus_rome/cards/3823503951_9dff623ffc_o-20261027-222030_wt8dn4.jpg';
+      default:
+        return assetPath;
+    }
+  }
 
   /// Whether the primary badge image is hosted on a remote network (e.g. Cloudinary).
   bool get isNetworkImage =>
@@ -169,20 +254,83 @@ class LandmarkMarkerModel {
     final rawAsset = json['assetPath'] as String? ??
         json['imagePath'] as String? ??
         json['logoUrl'] as String?;
-    final thumb = json['thumbnailUrl'] as String? ??
-        json['cardUrl'] as String?;
+    final rawThumb = json['thumbnailUrl'] as String? ?? json['cardUrl'] as String?;
+    final thumb = (rawThumb != null && rawThumb.trim().isNotEmpty) ? rawThumb.trim() : null;
+
+    final landmarkId = json['code'] as String? ??
+        json['id'] as String? ??
+        json['landmarkId'] as String? ??
+        '';
+
+    final era = json['era'] as String?;
+    final builders = json['builders'] as String?;
+    final historicalSummary =
+        json['historicalSummary'] as String? ?? json['description'] as String?;
+    final securityGuidelines = (json['securityGuidelines'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toList();
+    final levelHighlights = (json['levelHighlights'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toList();
+    final audioIntroText = json['audioIntroText'] as String?;
+
+    // Auto-register dynamic onboarding data when received from server
+    final hasCustomOnboarding = (json['era'] != null && (json['era'] as String).isNotEmpty) ||
+        (json['builders'] != null && (json['builders'] as String).isNotEmpty) ||
+        (json['historicalSummary'] != null && (json['historicalSummary'] as String).isNotEmpty) ||
+        (json['securityGuidelines'] is List && (json['securityGuidelines'] as List).isNotEmpty) ||
+        (json['levelHighlights'] is List && (json['levelHighlights'] as List).isNotEmpty) ||
+        (json['audioIntroText'] != null && (json['audioIntroText'] as String).isNotEmpty);
+
+    if (hasCustomOnboarding) {
+      final defaultModel = LandmarkOnboardingData.getForLandmark(landmarkId);
+      LandmarkOnboardingData.registerOnboarding(
+        LandmarkOnboardingModel(
+          landmarkId: landmarkId,
+          title: (json['name'] as String?)?.isNotEmpty == true
+              ? json['name'] as String
+              : defaultModel.title,
+          subtitle: (category != null && category.isNotEmpty)
+              ? category
+              : defaultModel.subtitle,
+          era: (era != null && era.isNotEmpty) ? era : defaultModel.era,
+          builders: (builders != null && builders.isNotEmpty)
+              ? builders
+              : defaultModel.builders,
+          historicalSummary:
+              (historicalSummary != null && historicalSummary.isNotEmpty)
+                  ? historicalSummary
+                  : defaultModel.historicalSummary,
+          securityGuidelines:
+              (securityGuidelines != null && securityGuidelines.isNotEmpty)
+                  ? securityGuidelines
+                  : defaultModel.securityGuidelines,
+          levelHighlights:
+              (levelHighlights != null && levelHighlights.isNotEmpty)
+                  ? levelHighlights
+                  : defaultModel.levelHighlights,
+          audioIntroText: (audioIntroText != null && audioIntroText.isNotEmpty)
+              ? audioIntroText
+              : defaultModel.audioIntroText,
+          outerRadiusMeters: defaultModel.outerRadiusMeters,
+        ),
+      );
+    }
 
     return LandmarkMarkerModel(
-      id: json['code'] as String? ??
-          json['id'] as String? ??
-          json['landmarkId'] as String? ??
-          '',
+      id: landmarkId,
       name: json['name'] as String? ?? '',
       coordinates: coords,
       color: markerColor,
       category: category,
       imagePath: rawAsset,
       thumbnailUrl: thumb,
+      era: era,
+      builders: builders,
+      historicalSummary: historicalSummary,
+      securityGuidelines: securityGuidelines,
+      levelHighlights: levelHighlights,
+      audioIntroText: audioIntroText,
       labelOffset: Offset(labelOffsetX.toDouble(), labelOffsetY.toDouble()),
       minZoom: minZ,
       maxZoom: maxZ,
@@ -201,6 +349,12 @@ class LandmarkMarkerModel {
         'imagePath': imagePath,
         'assetPath': assetPath,
         'thumbnailUrl': thumbnailUrl,
+        'era': era,
+        'builders': builders,
+        'historicalSummary': historicalSummary,
+        'securityGuidelines': securityGuidelines,
+        'levelHighlights': levelHighlights,
+        'audioIntroText': audioIntroText,
         'labelOffsetX': labelOffset.dx,
         'labelOffsetY': labelOffset.dy,
         'minZoom': minZoom,
@@ -216,6 +370,12 @@ class LandmarkMarkerModel {
     IconData? icon,
     String? imagePath,
     String? thumbnailUrl,
+    String? era,
+    String? builders,
+    String? historicalSummary,
+    List<String>? securityGuidelines,
+    List<String>? levelHighlights,
+    String? audioIntroText,
     Offset? labelOffset,
     double? minZoom,
     double? maxZoom,
@@ -230,6 +390,12 @@ class LandmarkMarkerModel {
       icon: icon ?? this.icon,
       imagePath: imagePath ?? this.imagePath,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      era: era ?? this.era,
+      builders: builders ?? this.builders,
+      historicalSummary: historicalSummary ?? this.historicalSummary,
+      securityGuidelines: securityGuidelines ?? this.securityGuidelines,
+      levelHighlights: levelHighlights ?? this.levelHighlights,
+      audioIntroText: audioIntroText ?? this.audioIntroText,
       labelOffset: labelOffset ?? this.labelOffset,
       minZoom: minZoom ?? this.minZoom,
       maxZoom: maxZoom ?? this.maxZoom,
