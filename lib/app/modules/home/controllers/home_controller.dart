@@ -701,6 +701,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     }
     unawaited(TourAnalyticsService.instance.flush());
     _initTts();
+    PedestrianStreetRouter.ensureInitialized();
     _initPedestrianNav();
     WidgetsBinding.instance.addObserver(this);
     mapController = MapController();
@@ -738,7 +739,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     if (isClosed || !identical(_sync?.snapshotFor(tourLanguage), snapshot)) return;
     landmarkMarkers.assignAll(snapshot.landmarkMarkers);
     _applyOverlays(snapshot.landmarks);
-    _pedestrianRouter.value.initializeRoutes(snapshot.pedestrianRoutes ?? []);
+    PedestrianStreetRouter.ensureInitialized();
     _pedestrianRouter.refresh();
     final ids = snapshot.landmarkMarkers.map((marker) => marker.id).toSet();
     if (!ids.contains(selectedLandmarkId.value)) selectedLandmarkId.value = null;
