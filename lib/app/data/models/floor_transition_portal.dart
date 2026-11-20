@@ -1,6 +1,8 @@
 import 'dart:ui' show Offset;
 import 'package:latlong2/latlong.dart';
 
+import '../../core/utils/geodesic_utils.dart';
+
 /// Represents a physical staircase, ramp, or portal connecting two architectural floors.
 class FloorTransitionPortal {
   final String id;
@@ -28,6 +30,9 @@ class FloorTransitionPortal {
   });
 
   Offset get canvasOffset => Offset(normalizedX, normalizedY);
+
+  LatLng get latLng =>
+      coordinates ?? GeodesicUtils.canvasOffsetToLatLng(canvasOffset);
 
   factory FloorTransitionPortal.fromJson(Map<String, dynamic> json) {
     LatLng? coords;

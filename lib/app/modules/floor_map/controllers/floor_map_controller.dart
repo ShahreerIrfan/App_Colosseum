@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/geodesic_utils.dart';
 import '../../../data/models/floor_definition.dart';
+import '../../../data/models/floor_transition_portal.dart';
 import '../../../data/models/tour_bundle_model.dart';
 import '../../../data/models/itinerary_segment_model.dart';
 import '../../../data/models/map_view_type.dart';
@@ -582,6 +583,38 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
   void dismissAutoFloorSwitchBanner() {
     showAutoFloorSwitchBanner.value = false;
     autoSwitchBannerFloorName.value = '';
+  }
+
+  void onStaircasePortalTapped(FloorTransitionPortal portal) {
+    final targetFloor = availableFloors.where((f) => f.id == portal.toFloorId).firstOrNull ??
+        FloorDefinition.fromId(portal.toFloorId);
+    final targetName = targetFloor.displayName.isNotEmpty
+        ? targetFloor.displayName
+        : (portal.toFloorId == 'floor_1' ? 'Level 1' : portal.toFloorId);
+
+    Get.snackbar(
+      portal.name,
+      'Connects to $targetName. Tap SWITCH to change floor.',
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: const Color(0xFFF59E0B),
+      colorText: Colors.white,
+      icon: const Icon(Icons.stairs_rounded, color: Colors.white, size: 28),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      duration: const Duration(seconds: 4),
+      mainButton: TextButton(
+        style: TextButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFFB45309),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: () {
+          if (Get.isSnackbarOpen) Get.back();
+          switchFloor(targetFloor.id);
+        },
+        child: const Text('SWITCH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      ),
+    );
   }
 
   void _initCompass() {

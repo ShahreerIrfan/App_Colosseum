@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/theme_extensions.dart';
 import '../../../core/utils/geodesic_utils.dart';
 import '../../../core/utils/tour_image_provider.dart';
+import '../../../data/models/floor_definition.dart';
 import '../../../data/models/map_view_type.dart';
 import '../../../data/models/offline_aerial_map.dart';
 import '../../../data/models/tour_navigation_state.dart';
@@ -118,32 +119,72 @@ class FloorMapView extends GetView<FloorMapController> {
                       );
                     }),
 
-                    // Layer 3: Interactive Viewpoint Markers
+                    // Layer 3: Interactive Viewpoint & Staircase Markers
                     Obx(() {
                       final selectedVp = controller.selectedViewpoint.value;
                       final isPlaying = controller.isPlayingAudio.value;
                       final currentTargetId =
                           controller.tourState.value.navigationTargetId;
+                      final portals = controller.currentFloor.value.portals.isNotEmpty
+                          ? controller.currentFloor.value.portals
+                          : FloorDefinition.defaultPortalsForFloorId(controller.currentFloor.value.id);
 
                       return MarkerLayer(
-                        markers: controller.viewpoints.map((vp) {
-                          final isSelected = selectedVp?.id == vp.id;
-                          final isTarget = currentTargetId == vp.id;
+                        markers: [
+                          ...controller.viewpoints.map((vp) {
+                            final isSelected = selectedVp?.id == vp.id;
+                            final isTarget = currentTargetId == vp.id;
 
-                          return Marker(
-                            point: vp.latLng,
-                            width: 48.0,
-                            height: 48.0,
-                            alignment: Alignment.center,
-                            child: ViewpointMarker(
-                              viewpoint: vp,
-                              isSelected: isSelected,
-                              isPlaying: isSelected && isPlaying,
-                              isTarget: isTarget,
-                              onTap: () => controller.animateToViewpoint(vp),
-                            ),
-                          );
-                        }).toList(),
+                            return Marker(
+                              point: vp.latLng,
+                              width: 48.0,
+                              height: 48.0,
+                              alignment: Alignment.center,
+                              child: ViewpointMarker(
+                                viewpoint: vp,
+                                isSelected: isSelected,
+                                isPlaying: isSelected && isPlaying,
+                                isTarget: isTarget,
+                                onTap: () => controller.animateToViewpoint(vp),
+                              ),
+                            );
+                          }),
+                          ...portals.map((portal) {
+                            return Marker(
+                              point: portal.latLng,
+                              width: 38.0,
+                              height: 38.0,
+                              alignment: Alignment.center,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => controller.onStaircasePortalTapped(portal),
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF59E0B),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.35),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.stairs_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
                       );
                     }),
 
