@@ -311,7 +311,8 @@ class PedestrianStreetRouter {
     return result;
   }
 
-  /// Orders [landmarks] into a continuous nearest-neighbor walking sequence from [userLocation].
+  /// Orders [landmarks] into a continuous nearest-neighbor walking sequence from [userLocation]
+  /// using direct geodesic proximity so the physically closest landmark is always visited first.
   List<LandmarkMarkerModel> orderLandmarksForItinerary(
     LatLng userLocation,
     List<LandmarkMarkerModel> landmarks,
@@ -323,12 +324,9 @@ class PedestrianStreetRouter {
 
     while (unvisited.isNotEmpty) {
       unvisited.sort((a, b) {
-        final distA = walkingDistance(currentPos, a.coordinates);
-        final distB = walkingDistance(currentPos, b.coordinates);
-        final cmp = distA.compareTo(distB);
-        if (cmp != 0) return cmp;
-        return _calculateDistanceMeters(currentPos, a.coordinates)
-            .compareTo(_calculateDistanceMeters(currentPos, b.coordinates));
+        final directA = _calculateDistanceMeters(currentPos, a.coordinates);
+        final directB = _calculateDistanceMeters(currentPos, b.coordinates);
+        return directA.compareTo(directB);
       });
       final next = unvisited.removeAt(0);
       ordered.add(next);

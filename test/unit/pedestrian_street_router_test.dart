@@ -119,6 +119,33 @@ void main() {
         expect(route[i], isNot(equals(route[i + 1])));
       }
     });
+
+    test('orderLandmarksForItinerary selects Colosseum first when user is near North-East Colosseum', () {
+      const userPos = LatLng(41.890650, 12.492950); // North-East of Colosseum
+      final landmarks = <LandmarkMarkerModel>[
+        const LandmarkMarkerModel(
+          id: 'arch_of_constantine',
+          name: 'Arch of Constantine',
+          coordinates: LatLng(41.889762, 12.490667),
+          color: Color(0xFFC88A2E),
+        ),
+        const LandmarkMarkerModel(
+          id: 'colosseum',
+          name: 'Colosseum',
+          coordinates: LatLng(41.890210, 12.492231),
+          color: Color(0xFFC88A2E),
+        ),
+        const LandmarkMarkerModel(
+          id: 'ludus_magnus',
+          name: 'Ludus Magnus',
+          coordinates: LatLng(41.889950, 12.495050),
+          color: Color(0xFFC88A2E),
+        ),
+      ];
+
+      final ordered = router.orderLandmarksForItinerary(userPos, landmarks);
+      expect(ordered.first.id, equals('colosseum'));
+    });
   });
 
   test('removed or disconnected route segments do not generate straight lines', () {

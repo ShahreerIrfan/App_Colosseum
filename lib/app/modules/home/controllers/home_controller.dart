@@ -254,7 +254,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }
 
   /// Arms turn-by-turn pedestrian navigation toward the next landmark in the tour.
-  void _armNextTourNavigation() {
+  void _armNextTourNavigation({bool announceImmediately = true}) {
     if (!isTourActive.value) return;
     final start = userLocation.value ?? defaultTourStartLocation;
     final ordered = _pedestrianRouter.value.orderLandmarksForItinerary(
@@ -268,13 +268,54 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         pedestrianNavEngine.startNavigation(
           route: route,
           destination: next,
-          announceImmediately: true,
+          announceImmediately: announceImmediately,
           totalStops: ordered.length,
         );
       }
     } else {
       pedestrianNavEngine.stopNavigation();
     }
+    _pedestrianRouter.refresh();
+  }
+
+  /// Dynamically re-evaluates which landmark is closest as the user's location moves,
+  /// re-arming the route and voice target if another landmark is now closer or user moved off-route.
+  void _reevaluateActiveTourNavigation(LatLng currentPos) {
+    if (!isTourActive.value) return;
+    final ordered = _pedestrianRouter.value.orderLandmarksForItinerary(
+      currentPos,
+      remainingTourLandmarks,
+    );
+    final closest = ordered.firstOrNull;
+    if (closest == null) {
+      pedestrianNavEngine.stopNavigation();
+      return;
+    }
+
+    final currentTargetId = pedestrianNavStatus.value.targetLandmark?.id;
+    final targetChanged = !pedestrianNavEngine.isNavigating || currentTargetId != closest.id;
+    if (targetChanged || _isOffActiveRoute(currentPos)) {
+      _armNextTourNavigation(announceImmediately: targetChanged);
+    } else {
+      pedestrianNavEngine.updatePosition(currentPos);
+      _pedestrianRouter.refresh();
+    }
+  }
+
+  bool _isOffActiveRoute(LatLng currentPos) {
+    final pts = pedestrianNavEngine.routePoints;
+    if (pts.isEmpty) return true;
+    var minDist = double.infinity;
+    for (final pt in pts) {
+      final d = Geolocator.distanceBetween(
+        currentPos.latitude,
+        currentPos.longitude,
+        pt.latitude,
+        pt.longitude,
+      );
+      if (d < minDist) minDist = d;
+    }
+    return minDist > 25.0;
   }
 
   void _initPedestrianNav() {
@@ -1029,12 +1070,13 @@ class HomeController extends GetxController with WidgetsBindingObserver {
                   final posLatLng = LatLng(pos.latitude, pos.longitude);
                   userLocation.value = posLatLng;
                   locationAccuracy.value = pos.accuracy;
-                  if (pedestrianNavEngine.isNavigating) {
-                    pedestrianNavEngine.updatePosition(posLatLng);
-                  }
                   if (isTourActive.value) {
+                    _reevaluateActiveTourNavigation(posLatLng);
                     checkProximityToLandmarks(posLatLng);
                   } else {
+                    if (pedestrianNavEngine.isNavigating) {
+                      pedestrianNavEngine.updatePosition(posLatLng);
+                    }
                     evaluateLandmarkProximity(posLatLng);
                   }
                 },
@@ -1053,12 +1095,13 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     if (heading != null) userHeading.value = heading;
     if (accuracy != null) locationAccuracy.value = accuracy;
     if (location != null) {
-      if (pedestrianNavEngine.isNavigating) {
-        pedestrianNavEngine.updatePosition(location);
-      }
       if (isTourActive.value) {
+        _reevaluateActiveTourNavigation(location);
         checkProximityToLandmarks(location);
       } else {
+        if (pedestrianNavEngine.isNavigating) {
+          pedestrianNavEngine.updatePosition(location);
+        }
         evaluateLandmarkProximity(location);
       }
     }
