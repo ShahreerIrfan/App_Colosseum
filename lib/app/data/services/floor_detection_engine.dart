@@ -92,16 +92,20 @@ class FloorDetectionEngine {
     LatLng? latLng,
     double accuracyMeters = 5.0,
   }) {
-    if (!isEnabled || _availableFloors.isEmpty || _currentFloorId.isEmpty) {
+    if (!isEnabled || _currentFloorId.isEmpty) {
       return;
     }
 
-    final currentFloor = _availableFloors.where((f) => f.id == _currentFloorId).firstOrNull;
-    if (currentFloor == null || currentFloor.portals.isEmpty) {
+    final currentFloor = _availableFloors.where((f) => f.id == _currentFloorId).firstOrNull ??
+        FloorDefinition.fromId(_currentFloorId);
+    final activePortals = currentFloor.portals.isNotEmpty
+        ? currentFloor.portals
+        : FloorDefinition.defaultPortalsForFloorId(_currentFloorId);
+    if (activePortals.isEmpty) {
       return;
     }
 
-    for (final portal in currentFloor.portals) {
+    for (final portal in activePortals) {
       if (_isPairInCooldown(portal.fromFloorId, portal.toFloorId)) {
         continue;
       }
@@ -110,7 +114,7 @@ class FloorDetectionEngine {
       if (distMeters <= portal.triggerRadiusMeters) {
         // Increment dwell confidence in portal zone
         final currentScore = _portalDwellScores[portal.id] ?? 0.0;
-        final newScore = (currentScore + 0.35).clamp(0.0, 1.0);
+        final newScore = (currentScore + 0.50).clamp(0.0, 1.0);
         _portalDwellScores[portal.id] = newScore;
 
         _evaluateCandidate(portal, newScore);
@@ -179,20 +183,19 @@ class FloorDetectionEngine {
 
     // Trigger threshold: 85% confidence
     if (totalConfidence >= 0.85) {
-      final targetFloor = _availableFloors.where((f) => f.id == portal.toFloorId).firstOrNull;
-      if (targetFloor != null) {
-        _portalDwellScores.remove(portal.id);
-        armCooldown(portal.fromFloorId, portal.toFloorId, duration: const Duration(seconds: 45));
+      final targetFloor = _availableFloors.where((f) => f.id == portal.toFloorId).firstOrNull ??
+          FloorDefinition.fromId(portal.toFloorId);
+      _portalDwellScores.remove(portal.id);
+      armCooldown(portal.fromFloorId, portal.toFloorId, duration: const Duration(seconds: 45));
 
-        final candidate = FloorTransitionCandidate(
-          targetFloor: targetFloor,
-          portal: portal,
-          confidenceScore: totalConfidence,
-          reason: 'Traversed ${portal.name}',
-          detectedAt: now,
-        );
-        onFloorTransitionDetected?.call(candidate);
-      }
+      final candidate = FloorTransitionCandidate(
+        targetFloor: targetFloor,
+        portal: portal,
+        confidenceScore: totalConfidence,
+        reason: 'Traversed ${portal.name}',
+        detectedAt: now,
+      );
+      onFloorTransitionDetected?.call(candidate);
     }
   }
 

@@ -861,23 +861,6 @@ class FloorMapView extends GetView<FloorMapController> {
                 }),
               ),
 
-              // Auto-Floor Switch Banner with 5-Second Undo
-              Positioned(
-                top: 54.0,
-                left: 16.0,
-                right: 16.0,
-                child: Obx(() {
-                  if (!controller.showAutoFloorSwitchBanner.value ||
-                      controller.autoSwitchBannerFloorName.value.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return FloorAutoSwitchBanner(
-                    floorName: controller.autoSwitchBannerFloorName.value,
-                    onUndo: controller.undoAutoFloorSwitch,
-                    onDismiss: controller.dismissAutoFloorSwitchBanner,
-                  );
-                }),
-              ),
 
               Positioned(
                 top: 155,
@@ -1155,6 +1138,24 @@ class FloorMapView extends GetView<FloorMapController> {
                         ),
                       ),
                     ),
+                  );
+                }),
+              ),
+
+              // 10. Auto-Floor Switch Banner with 5-Second Undo (Highest z-index overlay)
+              Positioned(
+                top: controller.isPlaygroundMode.value ? 168.0 : 120.0,
+                left: 16.0,
+                right: 16.0,
+                child: Obx(() {
+                  if (!controller.showAutoFloorSwitchBanner.value ||
+                      controller.autoSwitchBannerFloorName.value.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return FloorAutoSwitchBanner(
+                    floorName: controller.autoSwitchBannerFloorName.value,
+                    onUndo: controller.undoAutoFloorSwitch,
+                    onDismiss: controller.dismissAutoFloorSwitchBanner,
                   );
                 }),
               ),

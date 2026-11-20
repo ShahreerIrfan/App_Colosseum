@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:colosseum_client/app/data/models/floor_definition.dart';
 import 'package:colosseum_client/app/data/models/floor_transition_portal.dart';

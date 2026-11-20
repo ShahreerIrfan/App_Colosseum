@@ -728,6 +728,11 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
     // 5. Update engine location to trigger instant arrival and audio narration
     tourEngine.updateLocation(snappedLoc, isSimulated: true);
+    floorDetectionEngine.updateLocation(
+      canvasOffset: Offset(snappedLoc.normalizedX, snappedLoc.normalizedY),
+      latLng: snappedLoc.latLng,
+      accuracyMeters: snappedLoc.accuracyMeters,
+    );
   }
 
   /// Sets a simulated user location from a tapped geographic coordinate on the satellite map (FoodPanda / Uber style).
