@@ -24,6 +24,8 @@ class LandmarkDetailCard extends StatelessWidget {
   final VoidCallback onEnterMonument;
   final VoidCallback? onSkip;
   final VoidCallback? onDirections;
+  final bool isExcluded;
+  final VoidCallback? onToggleInclude;
 
   const LandmarkDetailCard({
     super.key,
@@ -39,6 +41,8 @@ class LandmarkDetailCard extends StatelessWidget {
     required this.onEnterMonument,
     this.onSkip,
     this.onDirections,
+    this.isExcluded = false,
+    this.onToggleInclude,
   });
 
   @override
@@ -782,10 +786,58 @@ class LandmarkDetailCard extends StatelessWidget {
               const Divider(color: Color(0xFFEFE2D3), height: 1.0),
               const SizedBox(height: 8.0),
 
-              // Action Buttons: Skip | Explore floors | Directions
+              // Action Buttons: Exclude/Include | Skip | Enter | Directions
               Row(
                 children: [
-                  if (onSkip != null) ...[
+                  if (onToggleInclude != null) ...[
+                    Expanded(
+                      flex: 2,
+                      child: OutlinedButton.icon(
+                        key: const Key('landmark_card_toggle_include_button'),
+                        onPressed: onToggleInclude,
+                        icon: Icon(
+                          isExcluded
+                              ? Icons.add_circle_outline_rounded
+                              : Icons.remove_circle_outline_rounded,
+                          size: 16.0,
+                          color: isExcluded
+                              ? const Color(0xFF15803D)
+                              : const Color(0xFFB45309),
+                        ),
+                        label: Text(
+                          isExcluded ? 'Include' : 'Exclude',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isExcluded
+                                ? const Color(0xFF15803D)
+                                : const Color(0xFFB45309),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0,
+                            vertical: 10.0,
+                          ),
+                          backgroundColor: isExcluded
+                              ? const Color(0xFFDCFCE7)
+                              : const Color(0xFFFEF3C7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          side: BorderSide(
+                            color: isExcluded
+                                ? const Color(0xFF16A34A).withValues(alpha: 0.5)
+                                : const Color(0xFFD97706).withValues(alpha: 0.5),
+                            width: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+                  ] else if (onSkip != null) ...[
                     Expanded(
                       flex: 2,
                       child: OutlinedButton(

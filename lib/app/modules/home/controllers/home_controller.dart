@@ -142,6 +142,43 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   void toggleVoiceGuidance() {
     isVoiceGuidanceMuted.toggle();
     ttsService.isVoiceGuidanceMuted = isVoiceGuidanceMuted.value;
+    if (!isVoiceGuidanceMuted.value && pedestrianNavEngine.isNavigating) {
+      pedestrianNavEngine.speakCurrentInstruction();
+    }
+  }
+
+  /// Speaks the active pedestrian navigation instruction on demand.
+  void speakCurrentNavInstruction() {
+    if (!isVoiceGuidanceMuted.value && pedestrianNavEngine.isNavigating) {
+      pedestrianNavEngine.speakCurrentInstruction();
+    }
+  }
+
+  /// Whether [landmarkId] is currently excluded from the itinerary plan.
+  bool isLandmarkExcluded(String landmarkId) {
+    return skippedLandmarkIds.contains(landmarkId);
+  }
+
+  /// Toggles whether [landmarkId] is included in or excluded from the outdoor itinerary.
+  void toggleLandmarkInclusion(String landmarkId) {
+    if (skippedLandmarkIds.contains(landmarkId)) {
+      skippedLandmarkIds.remove(landmarkId);
+    } else {
+      if (remainingTourLandmarks.length <= 1) {
+        Get.snackbar(
+          'Itinerary'.tourText,
+          'At least one landmark must stay in the itinerary.',
+          snackPosition: SnackPosition.TOP,
+          duration: const Duration(seconds: 2),
+        );
+        return;
+      }
+      skippedLandmarkIds.add(landmarkId);
+    }
+    skippedLandmarkIds.refresh();
+    if (isTourActive.value) {
+      _armNextTourNavigation();
+    }
   }
 
   Timer? _landmarkAudioProgressTimer;
@@ -188,7 +225,6 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _recordOutdoorEvent('tour_started');
     isTourActive.value = true;
     visitedLandmarkIds.clear();
-    skippedLandmarkIds.clear();
     hasPromptedLandmarkIds.clear();
     approachingLandmark.value = null;
 
@@ -220,12 +256,21 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   /// Arms turn-by-turn pedestrian navigation toward the next landmark in the tour.
   void _armNextTourNavigation() {
     if (!isTourActive.value) return;
-    final next = remainingTourLandmarks.firstOrNull;
+    final start = userLocation.value ?? defaultTourStartLocation;
+    final ordered = _pedestrianRouter.value.orderLandmarksForItinerary(
+      start,
+      remainingTourLandmarks,
+    );
+    final next = ordered.firstOrNull;
     if (next != null) {
-      final start = userLocation.value ?? defaultTourStartLocation;
       final route = _pedestrianRouter.value.routeBetween(start, next.coordinates);
       if (route.isNotEmpty) {
-        pedestrianNavEngine.startNavigation(route: route, destination: next);
+        pedestrianNavEngine.startNavigation(
+          route: route,
+          destination: next,
+          announceImmediately: true,
+          totalStops: ordered.length,
+        );
       }
     } else {
       pedestrianNavEngine.stopNavigation();
@@ -752,22 +797,13 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Future<void> _initPedestrianRoutes({bool forceRefresh = false}) async {
     final generation = ++_pedestrianRefreshGeneration;
     try {
-      final result = forceRefresh ? await tourRepository.refreshTourBundle(
-        lang: tourLanguage, maxAge: const Duration(hours: 24),
-      ) : null;
-      var routes = await tourRepository.getPedestrianRoutes(lang: tourLanguage);
-      if ((result == TourSyncResult.unavailable || (result == null && routes.isEmpty)) &&
-          Get.isRegistered<OfflineLandmarkStore>()) {
-        try {
-          final saved = await Get.find<OfflineLandmarkStore>().list(tourLanguage);
-          final existing = routes.map((route) => route.waypoints.join('|')).toSet();
-          routes = [...routes, for (final package in saved)
-            for (final route in package.routes)
-              if (existing.add(route.waypoints.join('|'))) route];
-        } catch (_) {}
+      if (forceRefresh) {
+        await tourRepository.refreshTourBundle(
+          lang: tourLanguage, maxAge: const Duration(hours: 24),
+        );
       }
       if (isClosed || generation != _pedestrianRefreshGeneration) return;
-      _pedestrianRouter.value.initializeRoutes(routes);
+      PedestrianStreetRouter.ensureInitialized();
       _pedestrianRouter.refresh();
       final downloadedAt = await tourRepository.getLastBundleDownload(lang: tourLanguage);
       if (!isClosed && generation == _pedestrianRefreshGeneration) {

@@ -25,6 +25,9 @@ class LandmarkMarkersLayer extends StatelessWidget {
   /// Callback when a landmark marker is tapped.
   final ValueChanged<String>? onLandmarkTap;
 
+  /// IDs of landmarks currently excluded from the itinerary.
+  final Set<String> excludedLandmarkIds;
+
   /// Styling configuration for pins and bubbles.
   final LandmarkMarkerStyle style;
 
@@ -34,6 +37,7 @@ class LandmarkMarkersLayer extends StatelessWidget {
     this.selectedLandmarkId,
     required this.currentZoom,
     this.onLandmarkTap,
+    this.excludedLandmarkIds = const {},
     this.style = const LandmarkMarkerStyle(),
   });
 
@@ -125,6 +129,7 @@ class LandmarkMarkersLayer extends StatelessWidget {
             ? (isSelected ? 48.0 : 44.0)
             : (isSelected ? 58.0 : 52.0);
         final extraOffset = collisionOffsets[landmark.id] ?? Offset.zero;
+        final isExcluded = excludedLandmarkIds.contains(landmark.id);
 
         return Marker(
           key: ValueKey('landmark_marker_${landmark.id}'),
@@ -134,17 +139,20 @@ class LandmarkMarkersLayer extends StatelessWidget {
           alignment: Alignment.center,
           child: Transform.translate(
             offset: extraOffset,
-            child: LandmarkMapMarker(
-              landmark: landmark,
-              isSelected: isSelected,
-              currentZoom: currentZoom,
-              style: style,
-              onTap: () {
-                if (onLandmarkTap != null) {
-                  onLandmarkTap!(landmark.id);
-                }
-                landmark.onTap?.call();
-              },
+            child: Opacity(
+              opacity: isExcluded ? 0.45 : 1.0,
+              child: LandmarkMapMarker(
+                landmark: landmark,
+                isSelected: isSelected,
+                currentZoom: currentZoom,
+                style: style,
+                onTap: () {
+                  if (onLandmarkTap != null) {
+                    onLandmarkTap!(landmark.id);
+                  }
+                  landmark.onTap?.call();
+                },
+              ),
             ),
           ),
         );

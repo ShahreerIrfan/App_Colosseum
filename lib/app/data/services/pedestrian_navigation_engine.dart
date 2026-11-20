@@ -85,6 +85,8 @@ class PedestrianNavigationEngine {
   void startNavigation({
     required List<LatLng> route,
     required LandmarkMarkerModel destination,
+    bool announceImmediately = true,
+    int? totalStops,
   }) {
     _routePoints = List.unmodifiable(route);
     _destinationLandmark = destination;
@@ -97,17 +99,37 @@ class PedestrianNavigationEngine {
     _buildSteps();
     if (_steps.isNotEmpty) {
       final first = _steps.first;
+      final totalDist = _calculateTotalRemaining(0);
       _status = PedestrianNavStatus(
         maneuver: first.maneuver,
         instruction: first.instruction,
         distanceToNextTurnMeters: first.distanceToNextMeters,
-        totalRemainingDistanceMeters: _calculateTotalRemaining(0),
+        totalRemainingDistanceMeters: totalDist,
         targetLandmark: destination,
         hasArrived: false,
         currentWaypointIndex: 0,
       );
       onStatusChanged?.call(_status);
+
+      if (announceImmediately) {
+        final distRounded = (totalDist / 5).round() * 5;
+        final stopsPhrase = totalStops != null && totalStops > 1
+            ? 'Starting $totalStops stop itinerary. '
+            : '';
+        final distPhrase = distRounded > 0 ? ', $distRounded meters away' : '';
+        final voicePrompt =
+            '${stopsPhrase}Next stop: ${destination.name}$distPhrase. ${first.instruction}.';
+        ttsService.speakInstruction(voicePrompt);
+      }
     }
+  }
+
+  /// Speaks the active navigation instruction immediately on demand.
+  void speakCurrentInstruction() {
+    if (!_isNavigating || _status.instruction.isEmpty) return;
+    final target = _status.targetLandmark?.name;
+    final prefix = target != null ? 'Next stop: $target. ' : '';
+    ttsService.speakInstruction('$prefix${_status.instruction}.');
   }
 
   void stopNavigation() {

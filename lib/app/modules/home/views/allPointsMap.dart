@@ -173,6 +173,7 @@ class AllPointsMapView extends GetView<HomeController> {
                         markers: controller.landmarkMarkers,
                         selectedLandmarkId: controller.selectedLandmarkId.value,
                         currentZoom: controller.currentZoom.value,
+                        excludedLandmarkIds: controller.skippedLandmarkIds.toSet(),
                         onLandmarkTap: (id) => _showLandmarkActions(context, id),
                       );
                     }),
@@ -275,12 +276,14 @@ class AllPointsMapView extends GetView<HomeController> {
                   final isMuted = controller.isVoiceGuidanceMuted.value;
 
                   return Center(
-                    child: Material(
-                      elevation: 4,
-                      color: colors.card,
-                      borderRadius: AppRadius.borderLg,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: GestureDetector(
+                      onTap: controller.speakCurrentNavInstruction,
+                      child: Material(
+                        elevation: 4,
+                        color: colors.card,
+                        borderRadius: AppRadius.borderLg,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           borderRadius: AppRadius.borderLg,
                           border: Border.all(
@@ -350,6 +353,7 @@ class AllPointsMapView extends GetView<HomeController> {
                           ],
                         ),
                       ),
+                    ),
                     ),
                   );
                 }),
@@ -481,6 +485,8 @@ class AllPointsMapView extends GetView<HomeController> {
                         ? const Distance().as(LengthUnit.Meter, userPos, activeLandmark.coordinates)
                         : null;
                     final onboarding = activeLandmark.onboardingModel;
+                    final isArrivalPrompt =
+                        controller.approachingLandmark.value?.id == activeLandmark.id;
                     return KeyedSubtree(
                       key: ValueKey('landmark_card_${activeLandmark.id}'),
                       child: LandmarkDetailCard(
@@ -495,8 +501,12 @@ class AllPointsMapView extends GetView<HomeController> {
                         onToggleCollapse: controller.toggleLandmarkCardCollapse,
                         onClose: controller.dismissLandmarkCard,
                         onEnterMonument: controller.enterLandmarkFromCard,
-                        onSkip: controller.skipApproachingLandmark,
+                        onSkip: isArrivalPrompt ? controller.skipApproachingLandmark : null,
                         onDirections: () => controller.getDirectionsToLandmark(activeLandmark),
+                        isExcluded: controller.isLandmarkExcluded(activeLandmark.id),
+                        onToggleInclude: isArrivalPrompt
+                            ? null
+                            : () => controller.toggleLandmarkInclusion(activeLandmark.id),
                       ),
                     );
                   }
@@ -779,7 +789,10 @@ class AllPointsMapView extends GetView<HomeController> {
                 children: [
                   Text(
                     remaining.isNotEmpty
-                        ? 'Next: {place}'.tourTextWith({'place': remaining.first.name})
+                        ? 'Next: {place}'.tourTextWith({
+                            'place': controller.pedestrianNavStatus.value.targetLandmark?.name ??
+                                remaining.first.name,
+                          })
                         : 'Tour Complete',
                     style: textTheme.labelLarge?.copyWith(
                       color: colors.foreground,
