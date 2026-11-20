@@ -19,6 +19,7 @@ import '../../../data/models/viewpoint_model.dart';
 import '../../../data/repositories/i_tour_repository.dart';
 import '../../../data/repositories/tour_repository_impl.dart';
 import '../../../data/services/compass_service.dart';
+import '../../../data/services/floor_detection_engine.dart';
 import '../../../data/services/gps_location_service.dart';
 import '../../../data/services/offline_landmark_store.dart';
 import '../../../data/services/tour_sync_service.dart';
@@ -156,6 +157,22 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
   /// Guard to prevent rapid re-entrant floor switches
   final isFloorSwitching = false.obs;
+
+  /// Automatic floor detection engine and undo state
+  final isAutoFloorDetectionEnabled = true.obs;
+  late final FloorDetectionEngine floorDetectionEngine;
+  final showAutoFloorSwitchBanner = false.obs;
+  final autoSwitchBannerFloorName = ''.obs;
+  FloorDefinition? _previousFloorBeforeAutoSwitch;
+  @visibleForTesting
+  FloorDefinition? get previousFloorBeforeAutoSwitch => _previousFloorBeforeAutoSwitch;
+  @visibleForTesting
+  set previousFloorBeforeAutoSwitch(FloorDefinition? value) => _previousFloorBeforeAutoSwitch = value;
+
+  void toggleAutoFloorDetection() {
+    isAutoFloorDetectionEnabled.toggle();
+    floorDetectionEngine.isEnabled = isAutoFloorDetectionEnabled.value;
+  }
 
   /// Per-floor saved camera states
 
@@ -337,6 +354,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     // Initialize Text-to-Speech service, Tour Navigation Engine, Device Compass & GPS
     _initTts();
     _initTour();
+    _initFloorDetectionEngine();
     _initCompass();
     _initGps();
 
@@ -523,6 +541,49 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     };
   }
 
+  void _initFloorDetectionEngine() {
+    floorDetectionEngine = FloorDetectionEngine(
+      currentFloorId: currentFloor.value.id,
+      availableFloors: availableFloors,
+      isEnabled: isAutoFloorDetectionEnabled.value,
+    );
+    floorDetectionEngine.onFloorTransitionDetected = (candidate) {
+      if (!isAutoFloorDetectionEnabled.value) return;
+      _handleAutoFloorTransition(candidate);
+    };
+  }
+
+  void _handleAutoFloorTransition(FloorTransitionCandidate candidate) {
+    if (isFloorSwitching.value) return;
+    _previousFloorBeforeAutoSwitch = currentFloor.value;
+    autoSwitchBannerFloorName.value = candidate.targetFloor.displayName;
+    showAutoFloorSwitchBanner.value = true;
+
+    // Smoothly switch floor to detected floor
+    switchFloor(candidate.targetFloor.id);
+  }
+
+  Future<void> undoAutoFloorSwitch() async {
+    showAutoFloorSwitchBanner.value = false;
+    autoSwitchBannerFloorName.value = '';
+    if (_previousFloorBeforeAutoSwitch != null) {
+      final prev = _previousFloorBeforeAutoSwitch!;
+      final current = currentFloor.value;
+      _previousFloorBeforeAutoSwitch = null;
+
+      // Arm 90s cooldown between these two floors so it won't bounce back immediately
+      floorDetectionEngine.armCooldown(prev.id, current.id, duration: const Duration(seconds: 90));
+
+      // Revert back to previous floor
+      await switchFloor(prev.id);
+    }
+  }
+
+  void dismissAutoFloorSwitchBanner() {
+    showAutoFloorSwitchBanner.value = false;
+    autoSwitchBannerFloorName.value = '';
+  }
+
   void _initCompass() {
     compassService.setMapNorthOffset(currentFloor.value.mapNorthOffsetDegrees);
     userOrientation.value = compassService.currentState;
@@ -553,6 +614,11 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
         );
         userLocation.value = loc;
         tourEngine.updateLocation(loc);
+        floorDetectionEngine.updateLocation(
+          canvasOffset: Offset(loc.normalizedX, loc.normalizedY),
+          latLng: loc.latLng,
+          accuracyMeters: loc.accuracyMeters,
+        );
       } else {
         userLocation.value = null;
       }
@@ -694,6 +760,11 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     isUserInLocation.value = true;
     userLocation.value = simulatedLoc;
     tourEngine.updateLocation(simulatedLoc, isSimulated: true);
+    floorDetectionEngine.updateLocation(
+      canvasOffset: Offset(simulatedLoc.normalizedX, simulatedLoc.normalizedY),
+      latLng: simulatedLoc.latLng,
+      accuracyMeters: simulatedLoc.accuracyMeters,
+    );
   }
 
   /// Resets the local playground reference origin to current GPS location.
@@ -883,6 +954,11 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
       isUserInLocation.value = true;
       userLocation.value = location;
       tourEngine.updateLocation(location);
+      floorDetectionEngine.updateLocation(
+        canvasOffset: Offset(location.normalizedX, location.normalizedY),
+        latLng: location.latLng,
+        accuracyMeters: location.accuracyMeters,
+      );
     } else {
       isUserInLocation.value = false;
       userLocation.value = null;
@@ -1410,6 +1486,12 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
     // Update GPS service tracking floor calibration
     gpsService.startTracking(floorId: targetDef.id);
+
+    // Sync floor context to auto-detection engine
+    floorDetectionEngine.setFloorContext(
+      currentFloorId: targetDef.id,
+      availableFloors: availableFloors,
+    );
 
     // Subtle safety buffer to disable repeated rapid switching
     await Future<void>.delayed(const Duration(milliseconds: 150));

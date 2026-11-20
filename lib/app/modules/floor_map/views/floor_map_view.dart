@@ -11,6 +11,7 @@ import '../../../data/models/map_view_type.dart';
 import '../../../data/models/offline_aerial_map.dart';
 import '../../../data/models/tour_navigation_state.dart';
 import '../controllers/floor_map_controller.dart';
+import '../widgets/floor_auto_switch_banner.dart';
 import '../widgets/floor_bottom_bar.dart';
 import '../widgets/floor_progress_indicator.dart';
 import '../widgets/floor_selection_menu.dart';
@@ -856,6 +857,24 @@ class FloorMapView extends GetView<FloorMapController> {
                         ],
                       ),
                     ),
+                  );
+                }),
+              ),
+
+              // Auto-Floor Switch Banner with 5-Second Undo
+              Positioned(
+                top: 54.0,
+                left: 16.0,
+                right: 16.0,
+                child: Obx(() {
+                  if (!controller.showAutoFloorSwitchBanner.value ||
+                      controller.autoSwitchBannerFloorName.value.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return FloorAutoSwitchBanner(
+                    floorName: controller.autoSwitchBannerFloorName.value,
+                    onUndo: controller.undoAutoFloorSwitch,
+                    onDismiss: controller.dismissAutoFloorSwitchBanner,
                   );
                 }),
               ),

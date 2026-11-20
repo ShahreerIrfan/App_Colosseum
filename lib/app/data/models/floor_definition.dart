@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:latlong2/latlong.dart';
 
+import '../models/floor_transition_portal.dart';
 import '../models/itinerary_segment_model.dart';
 import '../models/viewpoint_model.dart';
 
@@ -20,6 +21,8 @@ class FloorDefinition {
   final double mapNorthOffsetDegrees;
   final String mapAsset;
   final String semanticLabel;
+  final double elevationMeters;
+  final List<FloorTransitionPortal> portals;
 
   const FloorDefinition({
     required this.id,
@@ -34,6 +37,8 @@ class FloorDefinition {
     this.mapNorthOffsetDegrees = 0.0,
     required this.mapAsset,
     required this.semanticLabel,
+    this.elevationMeters = 0.0,
+    this.portals = const [],
   });
 
   factory FloorDefinition.fromJson(Map<String, dynamic> json) {
@@ -88,8 +93,19 @@ class FloorDefinition {
         (json['mapAsset'] as String?) ??
         'level_1_map';
 
+    final floorId = json['id'] as String? ?? json['floorId'] as String? ?? 'floor_underground';
+
+    final rawPortals = json['portals'] as List<dynamic>? ?? [];
+    final parsedPortals = rawPortals
+        .map((p) => FloorTransitionPortal.fromJson(Map<String, dynamic>.from(p as Map)))
+        .toList();
+
+    final elevation = (json['elevationMeters'] as num?)?.toDouble() ??
+        _defaultElevationForFloorId(floorId);
+    final portals = parsedPortals.isNotEmpty ? parsedPortals : _defaultPortalsForFloorId(floorId);
+
     return FloorDefinition(
-      id: json['id'] as String? ?? json['floorId'] as String? ?? 'floor_underground',
+      id: floorId,
       landmarkId: parsedLandmarkId,
       displayName: json['displayName'] as String? ?? json['floorName'] as String? ?? '',
       shortName: json['shortName'] as String? ?? '',
@@ -101,7 +117,74 @@ class FloorDefinition {
       mapNorthOffsetDegrees: mapNorthOffset,
       mapAsset: assetString,
       semanticLabel: json['semanticLabel'] as String? ?? '',
+      elevationMeters: elevation,
+      portals: portals,
     );
+  }
+
+  static double _defaultElevationForFloorId(String id) {
+    final lower = id.toLowerCase();
+    if (lower.contains('underground') || lower.contains('hypogeum')) return -6.0;
+    if (lower.contains('attic') || lower.contains('terrace')) return 25.0;
+    if (lower.contains('floor_2') || lower.contains('level_2')) return 12.0;
+    return 0.0;
+  }
+
+  static List<FloorTransitionPortal> _defaultPortalsForFloorId(String id) {
+    final lower = id.toLowerCase();
+    if (lower.contains('underground')) {
+      return const [
+        FloorTransitionPortal(
+          id: 'stairs_ug_to_level1',
+          name: 'South Access Staircase to Level 1',
+          fromFloorId: 'floor_underground',
+          toFloorId: 'floor_1',
+          normalizedX: 0.50,
+          normalizedY: 0.20,
+          elevationDeltaMeters: 6.0,
+          isAscending: true,
+        ),
+      ];
+    }
+    if (lower.contains('floor_1') || lower == 'colosseum' || lower.contains('arena')) {
+      return const [
+        FloorTransitionPortal(
+          id: 'stairs_level1_to_ug',
+          name: 'Stairs down to Underground',
+          fromFloorId: 'floor_1',
+          toFloorId: 'floor_underground',
+          normalizedX: 0.50,
+          normalizedY: 0.20,
+          elevationDeltaMeters: -6.0,
+          isAscending: false,
+        ),
+        FloorTransitionPortal(
+          id: 'stairs_level1_to_attic',
+          name: 'Staircase up to Attic Terrace',
+          fromFloorId: 'floor_1',
+          toFloorId: 'floor_attic',
+          normalizedX: 0.85,
+          normalizedY: 0.50,
+          elevationDeltaMeters: 25.0,
+          isAscending: true,
+        ),
+      ];
+    }
+    if (lower.contains('attic') || lower.contains('terrace')) {
+      return const [
+        FloorTransitionPortal(
+          id: 'stairs_attic_to_level1',
+          name: 'Stairs down to Level 1',
+          fromFloorId: 'floor_attic',
+          toFloorId: 'floor_1',
+          normalizedX: 0.85,
+          normalizedY: 0.50,
+          elevationDeltaMeters: -25.0,
+          isAscending: false,
+        ),
+      ];
+    }
+    return const [];
   }
 
   Map<String, dynamic> toJson() => {
@@ -122,6 +205,8 @@ class FloorDefinition {
         'mapNorthOffsetDegrees': mapNorthOffsetDegrees,
         'mapAsset': mapAsset,
         'semanticLabel': semanticLabel,
+        'elevationMeters': elevationMeters,
+        'portals': portals.map((p) => p.toJson()).toList(),
       };
 
   FloorDefinition copyWith({
@@ -137,6 +222,8 @@ class FloorDefinition {
     double? mapNorthOffsetDegrees,
     String? mapAsset,
     String? semanticLabel,
+    double? elevationMeters,
+    List<FloorTransitionPortal>? portals,
   }) {
     return FloorDefinition(
       id: id ?? this.id,
@@ -148,10 +235,11 @@ class FloorDefinition {
       itinerary: itinerary ?? this.itinerary,
       center: center ?? this.center,
       defaultZoom: defaultZoom ?? this.defaultZoom,
-      mapNorthOffsetDegrees:
-          mapNorthOffsetDegrees ?? this.mapNorthOffsetDegrees,
+      mapNorthOffsetDegrees: mapNorthOffsetDegrees ?? this.mapNorthOffsetDegrees,
       mapAsset: mapAsset ?? this.mapAsset,
       semanticLabel: semanticLabel ?? this.semanticLabel,
+      elevationMeters: elevationMeters ?? this.elevationMeters,
+      portals: portals ?? this.portals,
     );
   }
 

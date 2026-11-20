@@ -837,5 +837,24 @@ void main() {
       expect(controller.currentFloor.value.displayName, 'Gladiator Arena & Cavea');
       controller.onClose();
     });
+
+    test('auto floor detection undo reverts to previous floor and closes banner', () async {
+      final controller = FloorMapController();
+      controller.onInit();
+      final undergroundFloor = controller.currentFloor.value;
+      await controller.switchFloor('floor_2');
+      expect(controller.currentFloor.value.id, 'floor_2');
+
+      controller.showAutoFloorSwitchBanner.value = true;
+      controller.autoSwitchBannerFloorName.value = 'Level 2 - Colonnade';
+      controller.previousFloorBeforeAutoSwitch = undergroundFloor;
+
+      expect(controller.showAutoFloorSwitchBanner.value, isTrue);
+      await controller.undoAutoFloorSwitch();
+
+      expect(controller.showAutoFloorSwitchBanner.value, isFalse);
+      expect(controller.currentFloor.value.id, undergroundFloor.id);
+      controller.onClose();
+    });
   });
 }
