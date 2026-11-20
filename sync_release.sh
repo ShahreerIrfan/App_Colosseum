@@ -5,9 +5,9 @@
 # ==============================================================================
 set -euo pipefail
 
-CLIENT_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/ColosseumClient"
-RELEASE_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/release"
-PROJECT_RELEASE_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/Colosseum/project/release_apks"
+CLIENT_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/colosseum2/App_Colosseum"
+RELEASE_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/colosseum2/release"
+PROJECT_RELEASE_DIR="/mnt/503ADFEC3ADFCD5A/code/Android/colosseum2/App_Colosseum/release_apks"
 VERSION=$(grep 'version: ' "${CLIENT_DIR}/pubspec.yaml" | awk '{print $2}' | cut -d'+' -f1)
 BUILD_NUM=$(grep 'version: ' "${CLIENT_DIR}/pubspec.yaml" | awk '{print $2}' | cut -d'+' -f2)
 TARGET_APK_NAME="colosseum-guide-v${VERSION}-${BUILD_NUM}-universal-release.apk"
