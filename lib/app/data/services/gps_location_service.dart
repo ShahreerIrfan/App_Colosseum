@@ -58,6 +58,7 @@ class GpsLocationService {
   /// Current anchor coordinate on Colosseum canvas (defaults to ENTRY gate)
   Offset _playgroundAnchorCanvas = defaultCanvasEntry;
   Offset get playgroundAnchorCanvas => _playgroundAnchorCanvas;
+  LatLng? _playgroundAnchorLatLng;
 
   /// Whether physical walking displacement is paused (allowing physical relocation without moving the puck)
   bool _isDisplacementPaused = false;
@@ -66,9 +67,12 @@ class GpsLocationService {
   /// Frozen canvas offset when displacement is paused
   Offset? _frozenCanvasOffset;
   Offset? get frozenCanvasOffset => _frozenCanvasOffset;
+  LatLng? _frozenLatLng;
 
   double? _lastFilteredX;
   double? _lastFilteredY;
+  double? _lastFilteredLat;
+  double? _lastFilteredLng;
 
   /// Last anchor position used for deadband speed filtering to eliminate stationary GPS jitter
   Position? _lastAnchorPosition;
@@ -127,13 +131,23 @@ class GpsLocationService {
   }
 
   /// Resets or sets the local playground reference origin anchor.
-  void resetPlaygroundOrigin({double? lat, double? lng, Offset canvasAnchor = defaultCanvasEntry}) {
+  void resetPlaygroundOrigin({
+    double? lat,
+    double? lng,
+    Offset canvasAnchor = defaultCanvasEntry,
+    LatLng? anchorLatLng,
+  }) {
     _playgroundOriginLat = lat;
     _playgroundOriginLng = lng;
     _playgroundAnchorCanvas = canvasAnchor;
+    _playgroundAnchorLatLng =
+        anchorLatLng ?? GeodesicUtils.canvasOffsetToLatLng(canvasAnchor);
     _frozenCanvasOffset = canvasAnchor;
+    _frozenLatLng = _playgroundAnchorLatLng;
     _lastFilteredX = canvasAnchor.dx;
     _lastFilteredY = canvasAnchor.dy;
+    _lastFilteredLat = _playgroundAnchorLatLng!.latitude;
+    _lastFilteredLng = _playgroundAnchorLatLng!.longitude;
     _lastAnchorPosition = null;
   }
 
@@ -145,6 +159,10 @@ class GpsLocationService {
     _frozenCanvasOffset = (_lastFilteredX != null && _lastFilteredY != null)
         ? Offset(_lastFilteredX!, _lastFilteredY!)
         : _playgroundAnchorCanvas;
+    _frozenLatLng = (_lastFilteredLat != null && _lastFilteredLng != null)
+        ? LatLng(_lastFilteredLat!, _lastFilteredLng!)
+        : (_playgroundAnchorLatLng ??
+            GeodesicUtils.canvasOffsetToLatLng(_frozenCanvasOffset!));
 
     if (_currentResult.userLocation != null) {
       _safeAddResult(
@@ -153,6 +171,8 @@ class GpsLocationService {
           userLocation: _currentResult.userLocation!.copyWith(
             normalizedX: _frozenCanvasOffset!.dx,
             normalizedY: _frozenCanvasOffset!.dy,
+            latitude: _frozenLatLng!.latitude,
+            longitude: _frozenLatLng!.longitude,
           ),
           distanceToCenterMeters: _currentResult.distanceToCenterMeters,
           errorMessage: _currentResult.errorMessage,
@@ -164,7 +184,7 @@ class GpsLocationService {
   }
 
   /// Resets physical ground origin to the next incoming GPS fix and resumes displacement relative to frozen/target position.
-  void resumeDisplacement({Offset? customAnchorCanvas}) {
+  void resumeDisplacement({Offset? customAnchorCanvas, LatLng? customAnchorLatLng}) {
     _isDisplacementPaused = false;
     _lastAnchorPosition = null;
     if (customAnchorCanvas != null) {
@@ -173,8 +193,19 @@ class GpsLocationService {
     } else if (_frozenCanvasOffset != null) {
       _playgroundAnchorCanvas = _frozenCanvasOffset!;
     }
+    if (customAnchorLatLng != null) {
+      _playgroundAnchorLatLng = customAnchorLatLng;
+      _frozenLatLng = customAnchorLatLng;
+    } else if (_frozenLatLng != null) {
+      _playgroundAnchorLatLng = _frozenLatLng;
+    } else {
+      _playgroundAnchorLatLng ??=
+          GeodesicUtils.canvasOffsetToLatLng(_playgroundAnchorCanvas);
+    }
     _lastFilteredX = _playgroundAnchorCanvas.dx;
     _lastFilteredY = _playgroundAnchorCanvas.dy;
+    _lastFilteredLat = _playgroundAnchorLatLng!.latitude;
+    _lastFilteredLng = _playgroundAnchorLatLng!.longitude;
     // Clear origin so next incoming GPS fix becomes the new physical ground anchor
     _playgroundOriginLat = null;
     _playgroundOriginLng = null;
@@ -186,6 +217,8 @@ class GpsLocationService {
           userLocation: _currentResult.userLocation!.copyWith(
             normalizedX: _playgroundAnchorCanvas.dx,
             normalizedY: _playgroundAnchorCanvas.dy,
+            latitude: _playgroundAnchorLatLng!.latitude,
+            longitude: _playgroundAnchorLatLng!.longitude,
           ),
           distanceToCenterMeters: _currentResult.distanceToCenterMeters,
           errorMessage: _currentResult.errorMessage,
@@ -197,24 +230,32 @@ class GpsLocationService {
   }
 
   /// Snaps the local playground anchor to a specific canvas coordinate (e.g. a Viewpoint or Entry).
-  void snapToCanvasOffset(Offset canvasOffset, {String floorId = 'floor_underground'}) {
+  void snapToCanvasOffset(
+    Offset canvasOffset, {
+    String floorId = 'floor_underground',
+    LatLng? latLng,
+  }) {
     _trackingMode = GpsTrackingMode.localPlayground;
+    final resolvedLatLng =
+        latLng ?? GeodesicUtils.canvasOffsetToLatLng(canvasOffset);
     _playgroundAnchorCanvas = canvasOffset;
+    _playgroundAnchorLatLng = resolvedLatLng;
     _frozenCanvasOffset = canvasOffset;
+    _frozenLatLng = resolvedLatLng;
     _lastFilteredX = canvasOffset.dx;
     _lastFilteredY = canvasOffset.dy;
+    _lastFilteredLat = resolvedLatLng.latitude;
+    _lastFilteredLng = resolvedLatLng.longitude;
     _playgroundOriginLat = null;
     _playgroundOriginLng = null;
     _lastAnchorPosition = null;
-
-    final latLng = GeodesicUtils.canvasOffsetToLatLng(canvasOffset);
 
     final userLoc = UserLocationModel(
       floorId: floorId,
       normalizedX: canvasOffset.dx,
       normalizedY: canvasOffset.dy,
-      latitude: latLng.latitude,
-      longitude: latLng.longitude,
+      latitude: resolvedLatLng.latitude,
+      longitude: resolvedLatLng.longitude,
       accuracyMeters: 2.0,
       timestamp: DateTime.now(),
     );
@@ -466,17 +507,22 @@ class GpsLocationService {
         : (positionSmoothingAlpha * 0.50).clamp(0.15, 0.30);
 
     Offset targetCanvasOffset;
+    LatLng targetLatLng;
     double? distanceToCenter;
     bool inLocation;
 
     if (_trackingMode == GpsTrackingMode.localPlayground) {
-      // If displacement is paused, keep location frozen at _frozenCanvasOffset
+      // If displacement is paused, keep location frozen at _frozenCanvasOffset / _frozenLatLng
       if (_isDisplacementPaused) {
         final frozenOffset = _frozenCanvasOffset ?? _playgroundAnchorCanvas;
+        final frozenCoords = _frozenLatLng ??
+            GeodesicUtils.canvasOffsetToLatLng(frozenOffset);
         final userLoc = UserLocationModel(
           floorId: floorId,
           normalizedX: frozenOffset.dx,
           normalizedY: frozenOffset.dy,
+          latitude: frozenCoords.latitude,
+          longitude: frozenCoords.longitude,
           accuracyMeters: position.accuracy,
           timestamp: position.timestamp,
         );
@@ -499,6 +545,21 @@ class GpsLocationService {
         _playgroundOriginLng = position.longitude;
       }
 
+      final anchorLatLng = _playgroundAnchorLatLng ??
+          GeodesicUtils.canvasOffsetToLatLng(_playgroundAnchorCanvas);
+      const metersPerDegreeLat = 111139.0;
+      final dNorth = (position.latitude - _playgroundOriginLat!) * metersPerDegreeLat;
+      final dEast = (position.longitude - _playgroundOriginLng!) *
+          metersPerDegreeLat *
+          math.cos(_playgroundOriginLat! * math.pi / 180.0);
+      targetLatLng = LatLng(
+        anchorLatLng.latitude + (dNorth / metersPerDegreeLat),
+        anchorLatLng.longitude +
+            (dEast /
+                (metersPerDegreeLat *
+                    math.cos(anchorLatLng.latitude * math.pi / 180.0))),
+      );
+
       targetCanvasOffset = projectPlaygroundToCanvas(
         currentLat: position.latitude,
         currentLng: position.longitude,
@@ -513,6 +574,7 @@ class GpsLocationService {
       // --- ABSOLUTE COLOSSEUM GEOFENCE MODE ---
       final landmark = _offlineLandmark;
       final point = LatLng(position.latitude, position.longitude);
+      targetLatLng = point;
       distanceToCenter = landmark == null
           ? calculateDistanceToCenter(position.latitude, position.longitude)
           : const Distance().as(LengthUnit.Meter, landmark.center, point);
@@ -524,6 +586,8 @@ class GpsLocationService {
       if (!inLocation) {
         _lastFilteredX = null;
         _lastFilteredY = null;
+        _lastFilteredLat = null;
+        _lastFilteredLng = null;
         _safeAddResult(
           GpsLocationResult(
             isInLocation: false,
@@ -559,15 +623,27 @@ class GpsLocationService {
         : _lastFilteredY! +
             (targetCanvasOffset.dy - _lastFilteredY!) * effectiveAlpha;
 
+    final smoothedLat = _lastFilteredLat == null
+        ? targetLatLng.latitude
+        : _lastFilteredLat! +
+            (targetLatLng.latitude - _lastFilteredLat!) * effectiveAlpha;
+
+    final smoothedLng = _lastFilteredLng == null
+        ? targetLatLng.longitude
+        : _lastFilteredLng! +
+            (targetLatLng.longitude - _lastFilteredLng!) * effectiveAlpha;
+
     _lastFilteredX = smoothedX;
     _lastFilteredY = smoothedY;
+    _lastFilteredLat = smoothedLat;
+    _lastFilteredLng = smoothedLng;
 
     final userLoc = UserLocationModel(
       floorId: floorId,
       normalizedX: smoothedX,
       normalizedY: smoothedY,
-      latitude: _trackingMode == GpsTrackingMode.colosseumGeofence ? position.latitude : null,
-      longitude: _trackingMode == GpsTrackingMode.colosseumGeofence ? position.longitude : null,
+      latitude: smoothedLat,
+      longitude: smoothedLng,
       accuracyMeters: position.accuracy,
       timestamp: position.timestamp,
     );

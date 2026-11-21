@@ -797,7 +797,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
   }
 
   void _initCompass() {
-    compassService.setMapNorthOffset(currentFloor.value.mapNorthOffsetDegrees);
+    compassService.setMapNorthOffset(0.0);
     userOrientation.value = compassService.currentState;
     _compassSubscription = compassService.orientationStream.listen(updateOrientation);
     compassService.startListening();
@@ -920,7 +920,11 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
     // 4. Update GPS service and local reactive coordinates
     final canvasOffset = Offset(targetVp.normalizedX, targetVp.normalizedY);
-    gpsService.snapToCanvasOffset(canvasOffset, floorId: floorId.value);
+    gpsService.snapToCanvasOffset(
+      canvasOffset,
+      floorId: floorId.value,
+      latLng: targetVp.latLng,
+    );
     gpsService.pauseDisplacement();
 
     final snappedLoc = UserLocationModel(
@@ -961,7 +965,11 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     isDisplacementPaused.value = true;
     isPlaygroundMode.value = true;
 
-    gpsService.snapToCanvasOffset(canvasOffset, floorId: floorId.value);
+    gpsService.snapToCanvasOffset(
+      canvasOffset,
+      floorId: floorId.value,
+      latLng: point,
+    );
 
     final simulatedLoc = UserLocationModel(
       floorId: floorId.value,
@@ -1098,7 +1106,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
         updated.firstWhereOrNull((viewpoint) => viewpoint.id == selected?.id);
     currentFloor.value = floor.copyWith(viewpoints: updated);
     floorName.value = floor.displayName;
-    compassService.setMapNorthOffset(floor.mapNorthOffsetDegrees);
+    compassService.setMapNorthOffset(0.0);
     if (physicalFloorId.value == 'floor_underground' || physicalFloorId.value == floor.id) {
       physicalFloorId.value = floor.id;
     }
@@ -1238,7 +1246,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
   void updateOrientation(UserOrientationState state) {
     userOrientation.value = state;
     if (isUserInLocation.value && userLocation.value != null) {
-      final displayHeading = state.mapHeadingDegrees ?? state.headingDegrees;
+      final displayHeading = state.headingDegrees ?? state.mapHeadingDegrees;
       userLocation.value = userLocation.value!.copyWith(
         headingDegrees: displayHeading, clearHeading: displayHeading == null,
       );
@@ -1396,8 +1404,8 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
   /// Gets the live effective heading in degrees from compass or user location.
   double? get effectiveHeading =>
-      userOrientation.value.mapHeadingDegrees ??
       userOrientation.value.headingDegrees ??
+      userOrientation.value.mapHeadingDegrees ??
       userLocation.value?.headingDegrees;
 
   /// Handles camera movement changes on the satellite map.
@@ -1661,7 +1669,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     currentFloor.value = targetDef;
     floorId.value = targetDef.id;
     physicalFloorId.value = targetDef.id;
-    compassService.setMapNorthOffset(targetDef.mapNorthOffsetDegrees);
+    compassService.setMapNorthOffset(0.0);
     floorName.value = targetDef.displayName;
     landmarkId.value = targetDef.landmarkId;
     if (offlineLandmark case final OfflineLandmark package) {

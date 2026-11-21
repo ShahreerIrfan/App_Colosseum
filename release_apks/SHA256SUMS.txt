@@ -1,0 +1,2 @@
+f99844a00c67983ab74acd877a5a4bab89ff8f17f7b22e6c75728f801c2e0d73  colosseum-guide-v1.0.0-3-universal-release.apk
+f99844a00c67983ab74acd877a5a4bab89ff8f17f7b22e6c75728f801c2e0d73  colosseum-guide-v1.0.0-universal-release.apk

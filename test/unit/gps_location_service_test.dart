@@ -276,5 +276,36 @@ void main() {
       deadbandService.dispose();
       await streamController.close();
     });
+
+    test('11. Playground mode preserves 1:1 true North-East geographic displacement toward Viewpoint 100', () async {
+      final playgroundService = GpsLocationService(
+        initialMode: GpsTrackingMode.localPlayground,
+        positionSmoothingAlpha: 1.0,
+      );
+      playgroundService.resetPlaygroundOrigin();
+
+      // Initial fix at local origin
+      playgroundService.setMockPosition(
+        latitude: 23.810300,
+        longitude: 90.412500,
+        accuracy: 2.0,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final startLatLng = playgroundService.currentResult.userLocation!.latLng;
+
+      // Walk 12m North and 7m East in real world toward Viewpoint 100 (41.89025, 12.49282)
+      playgroundService.setMockPosition(
+        latitude: 23.810300 + (12.0 / 111139.0),
+        longitude: 90.412500 + (7.0 / (111139.0 * 0.91496)),
+        accuracy: 2.0,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final movedLatLng = playgroundService.currentResult.userLocation!.latLng;
+
+      expect(movedLatLng.latitude, greaterThan(startLatLng.latitude));
+      expect(movedLatLng.longitude, greaterThan(startLatLng.longitude));
+
+      playgroundService.dispose();
+    });
   });
 }
