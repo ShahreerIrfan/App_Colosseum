@@ -918,6 +918,16 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
   Future<void> _startAutoPlayNarration(ViewpointModel viewpoint) async {
     if (!_canNarrate(viewpoint)) return;
+    // Wait for any active navigation/greeting TTS to finish before playing card audio
+    if (ttsService.currentSpeechType == TtsSpeechType.instruction) {
+      await ttsService.waitForInstructionToFinish();
+      if (isClosed ||
+          selectedViewpoint.value?.id != viewpoint.id ||
+          !tourState.value.isAutoPlayEnabled ||
+          isPlayingAudio.value) {
+        return;
+      }
+    }
     isPlayingAudio.value = true;
     _currentSpeechStartOffset = 0;
     _lastSpokenCharIndex = 0;

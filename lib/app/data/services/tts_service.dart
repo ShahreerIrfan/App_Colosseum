@@ -129,6 +129,7 @@ class TtsService {
           _currentSpeechType = TtsSpeechType.none;
           _activeInstructionOnDone = null;
           _activeNarrationOnDone = null;
+          _completeInstructionWaiter();
           if (wasNarration) {
             if (_offlineLocale != null) _voiceAvailable = false;
             onError?.call(msg);
@@ -253,6 +254,26 @@ class TtsService {
   }
 
   Timer? _instructionSafetyTimer;
+  Completer<void>? _instructionCompleter;
+
+  void _completeInstructionWaiter() {
+    final completer = _instructionCompleter;
+    _instructionCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  /// Waits for any currently speaking navigation instruction to finish before
+  /// starting card narration. Returns immediately if no instruction is active.
+  Future<void> waitForInstructionToFinish() async {
+    final completer = _instructionCompleter;
+    if (_currentSpeechType == TtsSpeechType.instruction &&
+        completer != null &&
+        !completer.isCompleted) {
+      await completer.future;
+    }
+  }
 
   /// Global mute toggle for spoken turn-by-turn navigation instructions.
   /// When true, instructions are suppressed from voice while remaining visual on screen.
@@ -271,6 +292,7 @@ class TtsService {
     if (type == TtsSpeechType.instruction) {
       final cb = _activeInstructionOnDone;
       _activeInstructionOnDone = null;
+      _completeInstructionWaiter();
       cb?.call();
     } else if (type == TtsSpeechType.narration) {
       final cb = _activeNarrationOnDone;
@@ -317,6 +339,8 @@ class TtsService {
           if (myGen != _generation) return;
         }
 
+        _completeInstructionWaiter();
+        _instructionCompleter = Completer<void>();
         _currentSpeechType = TtsSpeechType.instruction;
         _activeInstructionOnDone = onDone;
         _activeNarrationOnDone = null;
@@ -337,8 +361,7 @@ class TtsService {
           Duration(milliseconds: estimatedMs),
           () {
             if (myGen == _generation &&
-                _currentSpeechType == TtsSpeechType.instruction &&
-                _activeInstructionOnDone != null) {
+                _currentSpeechType == TtsSpeechType.instruction) {
               handleNativeCompletion();
             }
           },
@@ -352,6 +375,7 @@ class TtsService {
     } catch (e) {
       _instructionSafetyTimer?.cancel();
       _currentSpeechType = TtsSpeechType.none;
+      _completeInstructionWaiter();
       debugPrint('TtsService speakInstruction error: $e');
       onDone?.call();
     }
@@ -518,6 +542,7 @@ class TtsService {
     _currentSpeechType = TtsSpeechType.none;
     _activeInstructionOnDone = null;
     _activeNarrationOnDone = null;
+    _completeInstructionWaiter();
     onStop?.call();
     try {
       await _flutterTts.stop();
