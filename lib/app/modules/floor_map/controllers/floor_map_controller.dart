@@ -847,20 +847,21 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     if (viewpoints.isEmpty) return;
 
     final locOffset = Offset(loc.normalizedX, loc.normalizedY);
-    ViewpointModel? nearestCandidate;
+    final hasUserGps = loc.latitude != null && loc.longitude != null;
+    ViewpointModel? nearestInRange;
     double nearestDist = double.infinity;
 
     for (final vp in viewpoints) {
-      final geoDist = const Distance(roundResult: false).as(
-        LengthUnit.Meter,
-        loc.latLng,
-        vp.latLng,
-      );
-      final canvasDist = tourEngine.calculateMetricDistance(
-        locOffset,
-        Offset(vp.normalizedX, vp.normalizedY),
-      );
-      final dist = math.min(geoDist, canvasDist);
+      final dist = (hasUserGps && vp.hasGeographicPosition)
+          ? const Distance(roundResult: false).as(
+              LengthUnit.Meter,
+              loc.latLng,
+              vp.latLng,
+            )
+          : tourEngine.calculateMetricDistance(
+              locOffset,
+              Offset(vp.normalizedX, vp.normalizedY),
+            );
       final configured = vp.triggerRadiusMeters;
       final triggerRadius = math.max(
         (configured != null && configured.isFinite && configured > 0) ? configured : 6.0,
@@ -868,39 +869,42 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
       );
 
       // Clear trigger memory once user physically departs (> triggerRadius + 4m)
-      if (_backupTriggeredViewpointIds.contains(vp.id)) {
-        if (dist > triggerRadius + 4.0) {
-          _backupTriggeredViewpointIds.remove(vp.id);
-        }
-        continue;
+      if (_backupTriggeredViewpointIds.contains(vp.id) &&
+          dist > triggerRadius + 4.0) {
+        _backupTriggeredViewpointIds.remove(vp.id);
       }
 
       if (dist <= triggerRadius && dist < nearestDist) {
         nearestDist = dist;
-        nearestCandidate = vp;
+        nearestInRange = vp;
       }
     }
 
-    if (nearestCandidate == null) {
+    if (nearestInRange == null) {
       _cancelBackupProximityWatchdog();
       return;
     }
 
-    // If Solution 1 or manual selection already opened this viewpoint's card, record & stop watchdog
-    if (selectedViewpoint.value?.id == nearestCandidate.id) {
-      _backupTriggeredViewpointIds.add(nearestCandidate.id);
+    // Strict nearest-viewpoint ownership: if the closest viewpoint in range has already
+    // been triggered or is currently open, do not let an overlapping neighbor hijack it.
+    if (selectedViewpoint.value?.id == nearestInRange.id) {
+      _backupTriggeredViewpointIds.add(nearestInRange.id);
+      _cancelBackupProximityWatchdog();
+      return;
+    }
+    if (_backupTriggeredViewpointIds.contains(nearestInRange.id)) {
       _cancelBackupProximityWatchdog();
       return;
     }
 
     // Already counting down for this exact viewpoint
-    if (_pendingBackupViewpointId == nearestCandidate.id &&
+    if (_pendingBackupViewpointId == nearestInRange.id &&
         _backupProximityTimer?.isActive == true) {
       return;
     }
 
     _cancelBackupProximityWatchdog();
-    final candidate = nearestCandidate;
+    final candidate = nearestInRange;
     _pendingBackupViewpointId = candidate.id;
     _backupProximityTimer = Timer(const Duration(milliseconds: 1500), () {
       _backupProximityTimer = null;

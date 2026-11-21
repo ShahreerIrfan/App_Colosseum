@@ -898,5 +898,19 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 1650));
       expect(controller.selectedViewpoint.value?.id, 'vp_103');
     });
+
+    test('Solution 2 uses geodesic GPS distance over mismatched canvas coords (15m south of 100 does not trigger 101)', () async {
+      final controller = FloorMapController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+
+      // ~15m south of Stop 100 (41.89012, 12.49280) is ~30m from Stop 101 in GPS,
+      // even though rotated canvas projection lands near Stop 101's schematic (0.88, 0.38).
+      for (int i = 0; i < 6; i++) {
+        controller.updateGpsPosition(41.89012, 12.49280);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 1650));
+      expect(controller.selectedViewpoint.value, isNull);
+    });
   });
 }
