@@ -247,6 +247,9 @@ void main() {
       await tester.tap(find.byKey(const Key('reset_origin_button')));
       await tester.pump(const Duration(milliseconds: 100));
       expect(controller.isPlaygroundMode.value, isTrue);
+
+      // Drain any active arrival/backup proximity timers started by resetting origin near Stop 100
+      await tester.pump(const Duration(seconds: 2));
     },
   );
 

@@ -1,6 +1,7 @@
 import '../../../core/localization/tour_localizations.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
@@ -521,6 +522,8 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
         final reachedVp =
             viewpoints.firstWhereOrNull((vp) => vp.id == state.reachedViewpointId);
         if (reachedVp != null) {
+          _backupTriggeredViewpointIds.add(reachedVp.id);
+          _cancelBackupProximityWatchdog();
           selectedViewpoint.value = reachedVp;
           isCardCollapsed.value = false;
         }
@@ -823,6 +826,103 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
   /// Whether physical ground walking displacement is paused in field test mode (allows relocating without moving the map puck)
   final isDisplacementPaused = false.obs;
 
+  /// Backup Solution 2 (Any-Viewpoint Proximity Watchdog):
+  /// Independently watches proximity to ALL viewpoints on the current floor so that
+  /// approaching ANY viewpoint (even out of sequential order, e.g., Stop 103 while target is 100)
+  /// automatically opens its card if Solution 1 has not opened it within 1.5s.
+  Timer? _backupProximityTimer;
+  String? _pendingBackupViewpointId;
+  final Set<String> _backupTriggeredViewpointIds = <String>{};
+
+  void _cancelBackupProximityWatchdog({bool clearHistory = false}) {
+    _backupProximityTimer?.cancel();
+    _backupProximityTimer = null;
+    _pendingBackupViewpointId = null;
+    if (clearHistory) {
+      _backupTriggeredViewpointIds.clear();
+    }
+  }
+
+  void _evaluateBackupProximityWatchdog(UserLocationModel loc) {
+    if (viewpoints.isEmpty) return;
+
+    final locOffset = Offset(loc.normalizedX, loc.normalizedY);
+    ViewpointModel? nearestCandidate;
+    double nearestDist = double.infinity;
+
+    for (final vp in viewpoints) {
+      final geoDist = const Distance(roundResult: false).as(
+        LengthUnit.Meter,
+        loc.latLng,
+        vp.latLng,
+      );
+      final canvasDist = tourEngine.calculateMetricDistance(
+        locOffset,
+        Offset(vp.normalizedX, vp.normalizedY),
+      );
+      final dist = math.min(geoDist, canvasDist);
+      final configured = vp.triggerRadiusMeters;
+      final triggerRadius = math.max(
+        (configured != null && configured.isFinite && configured > 0) ? configured : 6.0,
+        8.0,
+      );
+
+      // Clear trigger memory once user physically departs (> triggerRadius + 4m)
+      if (_backupTriggeredViewpointIds.contains(vp.id)) {
+        if (dist > triggerRadius + 4.0) {
+          _backupTriggeredViewpointIds.remove(vp.id);
+        }
+        continue;
+      }
+
+      if (dist <= triggerRadius && dist < nearestDist) {
+        nearestDist = dist;
+        nearestCandidate = vp;
+      }
+    }
+
+    if (nearestCandidate == null) {
+      _cancelBackupProximityWatchdog();
+      return;
+    }
+
+    // If Solution 1 or manual selection already opened this viewpoint's card, record & stop watchdog
+    if (selectedViewpoint.value?.id == nearestCandidate.id) {
+      _backupTriggeredViewpointIds.add(nearestCandidate.id);
+      _cancelBackupProximityWatchdog();
+      return;
+    }
+
+    // Already counting down for this exact viewpoint
+    if (_pendingBackupViewpointId == nearestCandidate.id &&
+        _backupProximityTimer?.isActive == true) {
+      return;
+    }
+
+    _cancelBackupProximityWatchdog();
+    final candidate = nearestCandidate;
+    _pendingBackupViewpointId = candidate.id;
+    _backupProximityTimer = Timer(const Duration(milliseconds: 1500), () {
+      _backupProximityTimer = null;
+      _pendingBackupViewpointId = null;
+      if (isClosed) return;
+      _backupTriggeredViewpointIds.add(candidate.id);
+      if (selectedViewpoint.value?.id != candidate.id) {
+        selectedViewpoint.value = candidate;
+        isCardCollapsed.value = false;
+        if (tourState.value.isAutoPlayEnabled &&
+            !isPlayingAudio.value &&
+            _canNarrate(candidate)) {
+          isPlayingAudio.value = true;
+          _currentSpeechStartOffset = 0;
+          _lastSpokenCharIndex = 0;
+          audioProgress.value = 0.0;
+          ttsService.speakNarration(candidate.description);
+        }
+      }
+    });
+  }
+
   void _initGps() {
     isUserInLocation.value = gpsService.currentResult.isInLocation;
     isPlaygroundMode.value = gpsService.isPlaygroundMode;
@@ -840,6 +940,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
         );
         userLocation.value = loc;
         tourEngine.updateLocation(loc);
+        _evaluateBackupProximityWatchdog(loc);
         floorDetectionEngine.updateLocation(
           canvasOffset: Offset(loc.normalizedX, loc.normalizedY),
           latLng: loc.latLng,
@@ -1215,6 +1316,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
       if (Get.isRegistered<OfflineLandmarkStore>()) Get.find<OfflineLandmarkStore>().unpin(package);
     }
     _stopAudioProgressTimer();
+    _cancelBackupProximityWatchdog(clearHistory: true);
     tourEngine.dispose();
     _gpsSubscription?.cancel();
     gpsService.dispose();
@@ -1246,6 +1348,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
       );
       userLocation.value = loc;
       tourEngine.updateLocation(loc);
+      _evaluateBackupProximityWatchdog(loc);
     } else {
       userLocation.value = null;
     }
@@ -1674,6 +1777,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
 
     // 3. Pause old-floor navigation guidance
     tourEngine.onUserStopOrCloseAudio();
+    _cancelBackupProximityWatchdog(clearHistory: true);
 
     // 4. Clear selected old-floor viewpoint card
     selectedViewpoint.value = null;

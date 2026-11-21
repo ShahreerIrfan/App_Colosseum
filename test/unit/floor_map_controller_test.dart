@@ -856,5 +856,47 @@ void main() {
       expect(controller.currentFloor.value.id, undergroundFloor.id);
       controller.onClose();
     });
+
+    test('Solution 2 backup proximity opens out-of-order Viewpoint 103 even when target is 100, with walk-away reset', () async {
+      final controller = FloorMapController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+
+      // Confirm sequential target is Viewpoint 100 and 100..102 are unvisited
+      expect(controller.tourState.value.navigationTargetId, 'vp_100');
+      final vp103 = controller.viewpoints.firstWhere((vp) => vp.id == 'vp_103');
+      final vp100 = controller.viewpoints.firstWhere((vp) => vp.id == 'vp_100');
+
+      // Walk directly to Viewpoint 103 without visiting 100, 101, 102
+      controller.updateGpsPosition(vp103.latitude!, vp103.longitude!);
+      expect(controller.selectedViewpoint.value, isNull);
+
+      // Wait past Solution 2's 1.5s watchdog delay
+      await Future<void>.delayed(const Duration(milliseconds: 1650));
+
+      expect(controller.selectedViewpoint.value?.id, 'vp_103');
+      expect(controller.isCardCollapsed.value, isFalse);
+
+      // Close card while still standing at Viewpoint 103 -> should NOT re-open immediately
+      controller.deselectViewpoint();
+      controller.updateGpsPosition(vp103.latitude!, vp103.longitude!);
+      await Future<void>.delayed(const Duration(milliseconds: 1650));
+      expect(controller.selectedViewpoint.value, isNull);
+
+      // Walk away (> triggerRadius + 4m) to Viewpoint 100 (feed multiple fixes for GPS smoothing filter), close, then return to 103
+      for (int i = 0; i < 6; i++) {
+        controller.updateGpsPosition(vp100.latitude!, vp100.longitude!);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 1650));
+      expect(controller.selectedViewpoint.value?.id, 'vp_100');
+      controller.deselectViewpoint();
+
+      // Returning to Viewpoint 103 should re-arm and auto-open 103 again
+      for (int i = 0; i < 6; i++) {
+        controller.updateGpsPosition(vp103.latitude!, vp103.longitude!);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 1650));
+      expect(controller.selectedViewpoint.value?.id, 'vp_103');
+    });
   });
 }
