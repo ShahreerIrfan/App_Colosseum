@@ -1,6 +1,8 @@
 import '../../../core/localization/tour_localizations.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -1045,6 +1047,39 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         : MapViewType.general;
   }
 
+  Timer? _locationPollTimer;
+  bool _isPollingLocation = false;
+
+  void _handleLivePosition(Position pos) {
+    final posLatLng = LatLng(pos.latitude, pos.longitude);
+    userLocation.value = posLatLng;
+    locationAccuracy.value = pos.accuracy;
+    if (isTourActive.value) {
+      _reevaluateActiveTourNavigation(posLatLng);
+      checkProximityToLandmarks(posLatLng);
+    } else {
+      if (pedestrianNavEngine.isNavigating) {
+        pedestrianNavEngine.updatePosition(posLatLng);
+      }
+      evaluateLandmarkProximity(posLatLng);
+    }
+  }
+
+  LocationSettings _buildHomeLocationSettings() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        intervalDuration: const Duration(milliseconds: 1000),
+        distanceFilter: 0,
+        forceLocationManager: true,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 0,
+    );
+  }
+
   void _initLocationTracking() {
     try {
       _compassSubscription = compassService.orientationStream.listen((state) {
@@ -1059,29 +1094,33 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       Geolocator.isLocationServiceEnabled().then((enabled) {
         if (enabled) {
           gpsLocationService.checkAndRequestPermissions().then((granted) {
-            if (granted) {
+            if (granted && !isClosed) {
+              final settings = _buildHomeLocationSettings();
               _positionSubscription = Geolocator.getPositionStream(
-                locationSettings: const LocationSettings(
-                  accuracy: LocationAccuracy.bestForNavigation,
-                  distanceFilter: 2,
-                ),
+                locationSettings: settings,
               ).listen(
-                (pos) {
-                  final posLatLng = LatLng(pos.latitude, pos.longitude);
-                  userLocation.value = posLatLng;
-                  locationAccuracy.value = pos.accuracy;
-                  if (isTourActive.value) {
-                    _reevaluateActiveTourNavigation(posLatLng);
-                    checkProximityToLandmarks(posLatLng);
-                  } else {
-                    if (pedestrianNavEngine.isNavigating) {
-                      pedestrianNavEngine.updatePosition(posLatLng);
-                    }
-                    evaluateLandmarkProximity(posLatLng);
-                  }
-                },
+                _handleLivePosition,
                 onError: (_) {},
               );
+              if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+                _locationPollTimer?.cancel();
+                _locationPollTimer = Timer.periodic(
+                  const Duration(seconds: 1),
+                  (_) async {
+                    if (isClosed || _isPollingLocation) return;
+                    _isPollingLocation = true;
+                    try {
+                      final pos = await Geolocator.getCurrentPosition(
+                        locationSettings: settings,
+                      );
+                      if (!isClosed) _handleLivePosition(pos);
+                    } catch (_) {
+                    } finally {
+                      _isPollingLocation = false;
+                    }
+                  },
+                );
+              }
             }
           }).catchError((_) {});
         }
@@ -1117,6 +1156,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     ttsService.stop();
     WidgetsBinding.instance.removeObserver(this);
     _tourUpdates?.cancel();
+    _locationPollTimer?.cancel();
     _positionSubscription?.cancel();
     _compassSubscription?.cancel();
     compassService.stopListening();
