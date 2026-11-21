@@ -250,6 +250,7 @@ void main() {
 
       // Drain any active arrival/backup proximity timers started by resetting origin near Stop 100
       await tester.pump(const Duration(seconds: 2));
+      Get.delete<FloorMapController>(force: true);
     },
   );
 
@@ -340,6 +341,7 @@ void main() {
       expect(controller.userLocation.value?.latLng.latitude, originalLocation?.latLng.latitude);
       expect(controller.userLocation.value?.latLng.longitude, originalLocation?.latLng.longitude);
       await tester.pump(const Duration(seconds: 2));
+      Get.delete<FloorMapController>(force: true);
     },
   );
 

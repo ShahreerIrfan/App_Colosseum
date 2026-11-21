@@ -369,9 +369,11 @@ class TtsService {
     final myGen = ++_generation;
     _instructionSafetyTimer?.cancel();
     _instructionSafetyTimer = null;
-    _currentSpeechType = TtsSpeechType.none;
+    // Claim narration focus synchronously before any await so concurrent
+    // speakInstruction() calls yield immediately instead of bumping _generation.
+    _currentSpeechType = TtsSpeechType.narration;
     _activeInstructionOnDone = null;
-    _activeNarrationOnDone = null;
+    _activeNarrationOnDone = onDone;
 
     try {
       if (_offlineLocale != null) {
@@ -381,6 +383,8 @@ class TtsService {
       }
       if (myGen != _generation) return;
       if (!_voiceAvailable) {
+        _currentSpeechType = TtsSpeechType.none;
+        _activeNarrationOnDone = null;
         onError?.call(
           _offlineLocale != null
               ? const OfflineVoiceUnavailable()

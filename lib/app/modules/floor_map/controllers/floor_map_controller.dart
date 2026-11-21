@@ -502,12 +502,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     tourEngine.onAutoPlayViewpoint = (viewpoint) {
       selectedViewpoint.value = viewpoint;
       isCardCollapsed.value = false;
-      if (!_canNarrate(viewpoint)) return;
-      isPlayingAudio.value = true;
-      _currentSpeechStartOffset = 0;
-      _lastSpokenCharIndex = 0;
-      audioProgress.value = 0.0;
-      ttsService.speakNarration(viewpoint.description);
+      _startAutoPlayNarration(viewpoint);
     };
 
     tourEngine.onStateChanged = (state) {
@@ -914,17 +909,27 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
       if (selectedViewpoint.value?.id != candidate.id) {
         selectedViewpoint.value = candidate;
         isCardCollapsed.value = false;
-        if (tourState.value.isAutoPlayEnabled &&
-            !isPlayingAudio.value &&
-            _canNarrate(candidate)) {
-          isPlayingAudio.value = true;
-          _currentSpeechStartOffset = 0;
-          _lastSpokenCharIndex = 0;
-          audioProgress.value = 0.0;
-          ttsService.speakNarration(candidate.description);
+        if (tourState.value.isAutoPlayEnabled && !isPlayingAudio.value) {
+          _startAutoPlayNarration(candidate);
         }
       }
     });
+  }
+
+  Future<void> _startAutoPlayNarration(ViewpointModel viewpoint) async {
+    if (!_canNarrate(viewpoint)) return;
+    isPlayingAudio.value = true;
+    _currentSpeechStartOffset = 0;
+    _lastSpokenCharIndex = 0;
+    audioProgress.value = 0.0;
+    _startAudioProgressTimer();
+    await ttsService.speakNarration(viewpoint.description);
+    if (!isClosed &&
+        !ttsService.isSpeakingNarration &&
+        selectedViewpoint.value?.id == viewpoint.id) {
+      isPlayingAudio.value = false;
+      _stopAudioProgressTimer();
+    }
   }
 
   void _initGps() {
