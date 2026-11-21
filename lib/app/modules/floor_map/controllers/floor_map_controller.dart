@@ -444,8 +444,8 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
       tourEngine.onUserStopOrCloseAudio();
     };
     ttsService.onStart = () {
-      isPlayingAudio.value = true;
       if (ttsService.currentSpeechType == TtsSpeechType.narration) {
+        isPlayingAudio.value = true;
         narrationError.value = null;
         final id = selectedViewpoint.value?.id;
         if (id != null && id != _trackedNarration) {

@@ -912,5 +912,18 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 1650));
       expect(controller.selectedViewpoint.value, isNull);
     });
+
+    test('ttsService.onStart during instruction does not stick isPlayingAudio to true', () {
+      final controller = FloorMapController();
+      controller.onInit();
+      addTearDown(controller.onClose);
+
+      expect(controller.ttsService.currentSpeechType.name, 'none');
+      expect(controller.isPlayingAudio.value, isFalse);
+
+      // Simulate native TTS onStart firing while speech type is not narration
+      controller.ttsService.onStart?.call();
+      expect(controller.isPlayingAudio.value, isFalse);
+    });
   });
 }
