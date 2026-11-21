@@ -1,4 +1,5 @@
 import '../../core/localization/tour_localizations.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
@@ -25,6 +26,32 @@ class TourNavigationEngine {
   bool get _hasExit => _exitLocation != null;
   bool _canReevaluateHeading = false;
   final Set<String> _announcedApproachViewpointIds = <String>{};
+  Timer? _arrivalDwellTimer;
+
+  void _cancelArrivalDwellTimer() {
+    _arrivalDwellTimer?.cancel();
+    _arrivalDwellTimer = null;
+  }
+
+  void _scheduleArrivalDwellTimer(Offset userOffset) {
+    _cancelArrivalDwellTimer();
+    _arrivalDwellTimer = Timer(config.arrivalDwellDuration, () {
+      _arrivalDwellTimer = null;
+      if (_state.navigationStatus == TourNavigationStatus.arrivalPending &&
+          _state.userLocation != null) {
+        final latestOffset = Offset(
+          _state.userLocation!.normalizedX,
+          _state.userLocation!.normalizedY,
+        );
+        _evaluateTargetProximity(latestOffset, DateTime.now(), useLiveTimer: false);
+      }
+    });
+  }
+
+  /// Releases any pending dwell timers.
+  void dispose() {
+    _cancelArrivalDwellTimer();
+  }
 
   /// Callbacks for engine events
   void Function(String text, {VoidCallback? onDone})? onSpeakInstruction;
@@ -55,6 +82,7 @@ class TourNavigationEngine {
     _exitLocation = exitLocation;
     _canReevaluateHeading = false;
     _announcedApproachViewpointIds.clear();
+    _cancelArrivalDwellTimer();
 
     // Sort viewpoints by order if present
     _orderViewpoints();
@@ -355,7 +383,12 @@ class TourNavigationEngine {
     }
 
     // 6. Evaluate Target Proximity & Arrival
-    _evaluateTargetProximity(userOffset, currentTime, isSimulated: isSimulated);
+    _evaluateTargetProximity(
+      userOffset,
+      currentTime,
+      isSimulated: isSimulated,
+      useLiveTimer: now == null && !isSimulated,
+    );
   }
 
   void _evaluateDeparture(Offset userOffset, DateTime currentTime) {
@@ -423,6 +456,7 @@ class TourNavigationEngine {
     Offset userOffset,
     DateTime currentTime, {
     bool isSimulated = false,
+    bool useLiveTimer = true,
   }) {
     if (_state.navigationTargetId == null) return;
 
@@ -443,7 +477,11 @@ class TourNavigationEngine {
               arrivalDwellStartedAt: () => currentTime,
               navigationStatus: TourNavigationStatus.arrivalPending,
             );
+            if (useLiveTimer) {
+              _scheduleArrivalDwellTimer(userOffset);
+            }
           } else if (isExitDwellConfirmed) {
+            _cancelArrivalDwellTimer();
             if (_state.navigationStatus != TourNavigationStatus.itineraryComplete) {
               _state = _state.copyWith(
                 navigationStatus: TourNavigationStatus.itineraryComplete,
@@ -506,6 +544,7 @@ class TourNavigationEngine {
     if (distToTarget > approachRadius + 2.0) {
       if (_state.navigationStatus == TourNavigationStatus.approaching ||
           _state.navigationStatus == TourNavigationStatus.arrivalPending) {
+        _cancelArrivalDwellTimer();
         _state = _state.copyWith(
           arrivalDwellStartedAt: () => null,
           navigationStatus: TourNavigationStatus.navigating,
@@ -514,6 +553,7 @@ class TourNavigationEngine {
     }
     // 2. Inside Approach Radius (arrivalRadius < dist <= approachRadius)
     else if (distToTarget > arrivalRadius && distToTarget <= approachRadius) {
+      _cancelArrivalDwellTimer();
       _state = _state.copyWith(arrivalDwellStartedAt: () => null);
       if (_state.navigationStatus != TourNavigationStatus.approaching &&
           !isAtOrExploring) {
@@ -549,8 +589,12 @@ class TourNavigationEngine {
           arrivalDwellStartedAt: () => currentTime,
           navigationStatus: TourNavigationStatus.arrivalPending,
         );
+        if (useLiveTimer) {
+          _scheduleArrivalDwellTimer(userOffset);
+        }
       } else if (isDwellSatisfied) {
         // ARRIVAL CONFIRMED!
+        _cancelArrivalDwellTimer();
         _announcedApproachViewpointIds.add(targetVp.id);
         _state = _state.copyWith(
           navigationStatus: TourNavigationStatus.arrived,

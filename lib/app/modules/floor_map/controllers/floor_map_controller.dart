@@ -510,7 +510,21 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
     };
 
     tourEngine.onStateChanged = (state) {
+      final prevReachedId = tourState.value.reachedViewpointId;
       tourState.value = state;
+      if (!state.isExplicitlyClosed &&
+          state.reachedViewpointId != null &&
+          state.reachedViewpointId != prevReachedId &&
+          (state.navigationStatus == TourNavigationStatus.arrived ||
+              state.navigationStatus == TourNavigationStatus.viewpointAudioPlaying ||
+              state.navigationStatus == TourNavigationStatus.waitingAtViewpoint)) {
+        final reachedVp =
+            viewpoints.firstWhereOrNull((vp) => vp.id == state.reachedViewpointId);
+        if (reachedVp != null) {
+          selectedViewpoint.value = reachedVp;
+          isCardCollapsed.value = false;
+        }
+      }
       if (_hasFloorTourActivity && state.navigationStatus == TourNavigationStatus.itineraryComplete) {
         _recordFloorEvent('tour_completed');
         _floorAnalyticsSession = null;
@@ -1201,6 +1215,7 @@ class FloorMapController extends GetxController with WidgetsBindingObserver {
       if (Get.isRegistered<OfflineLandmarkStore>()) Get.find<OfflineLandmarkStore>().unpin(package);
     }
     _stopAudioProgressTimer();
+    tourEngine.dispose();
     _gpsSubscription?.cancel();
     gpsService.dispose();
     _compassSubscription?.cancel();

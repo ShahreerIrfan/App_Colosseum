@@ -37,6 +37,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final controller = Get.put(FloorMapController());
+      addTearDown(() => Get.delete<FloorMapController>(force: true));
 
       await tester.pumpWidget(
         GetMaterialApp(
@@ -196,6 +197,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final controller = Get.put(FloorMapController());
+      addTearDown(() => Get.delete<FloorMapController>(force: true));
 
       await tester.pumpWidget(
         GetMaterialApp(
@@ -256,6 +258,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final controller = Get.put(FloorMapController());
+      addTearDown(() => Get.delete<FloorMapController>(force: true));
 
       await tester.pumpWidget(
         GetMaterialApp(
@@ -309,6 +312,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final controller = Get.put(FloorMapController());
+      addTearDown(() => Get.delete<FloorMapController>(force: true));
 
       await tester.pumpWidget(
         GetMaterialApp(
@@ -332,6 +336,7 @@ void main() {
       // Location must remain unchanged
       expect(controller.userLocation.value?.latLng.latitude, originalLocation?.latLng.latitude);
       expect(controller.userLocation.value?.latLng.longitude, originalLocation?.latLng.longitude);
+      await tester.pump(const Duration(seconds: 2));
     },
   );
 
@@ -343,6 +348,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final controller = Get.put(FloorMapController());
+      addTearDown(() => Get.delete<FloorMapController>(force: true));
 
       await tester.pumpWidget(
         GetMaterialApp(
@@ -418,6 +424,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final controller = Get.put(FloorMapController());
+      addTearDown(() => Get.delete<FloorMapController>(force: true));
 
       await tester.pumpWidget(
         GetMaterialApp(

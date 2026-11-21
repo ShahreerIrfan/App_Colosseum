@@ -262,6 +262,45 @@ void main() {
       expect(engine.state.armedAutoPlayViewpointId, isNull); // Disarmed!
     });
 
+    test('8b. Arrival dwell timer auto-confirms arrival while user stands completely still without new GPS updates', () async {
+      final quickEngine = TourNavigationEngine(
+        config: const TourConfig(
+          approachRadiusMeters: 8.0,
+          arrivalRadiusMeters: 4.0,
+          arrivalDwellDuration: Duration(milliseconds: 80),
+        ),
+        onSpeakInstruction: (text, {onDone}) {
+          spokenInstructions.add(text);
+          onDone?.call();
+        },
+        onAutoPlayViewpoint: (vp) {
+          autoPlayedIds.add(vp.id);
+        },
+      );
+      quickEngine.startTour(
+        floorId: 'floor_underground',
+        viewpoints: testViewpoints,
+      );
+      spokenInstructions.clear();
+
+      // Single update inside arrival radius with no subsequent updates (user stands still)
+      quickEngine.updateLocation(UserLocationModel(
+        floorId: 'floor_underground',
+        normalizedX: 0.80,
+        normalizedY: 0.50,
+        accuracyMeters: 1.5,
+        timestamp: DateTime.now(),
+      ));
+      expect(quickEngine.state.navigationStatus, equals(TourNavigationStatus.arrivalPending));
+      expect(autoPlayedIds, isEmpty);
+
+      // Wait for active dwell timer to fire without feeding any extra GPS update
+      await Future<void>.delayed(const Duration(milliseconds: 140));
+      expect(quickEngine.state.reachedViewpointId, equals('vp_100'));
+      expect(autoPlayedIds, contains('vp_100'));
+      quickEngine.dispose();
+    });
+
     test('9. Auto-play triggers once and does NOT duplicate on boundary location fluctuations', () {
       engine.startTour(
         floorId: 'floor_underground',
